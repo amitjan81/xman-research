@@ -10,12 +10,51 @@ Append-only is enforced *in the database*, by triggers that abort every ``UPDATE
 ``DELETE`` against both tables. A convention-only "append-only" log is not append-only;
 it is a habit. Rows can still be removed by someone with a ``sqlite3`` shell and intent
 — that is the deferred tamper-evidence problem (spec §7), and the MVP deliberately does
-not solve it. What the triggers do buy is that no *accident*, and no ordinary code path,
-can rewrite history.
+not solve it.
+
+**The precise reach of the triggers, because the obvious reading of them is wrong.**
+``INSERT OR REPLACE`` resolves a conflict by deleting the existing row and inserting the
+new one, and SQLite fires that delete's ``BEFORE DELETE`` trigger **only when
+``PRAGMA recursive_triggers`` is ON**. It is OFF by default. Without it, the single most
+common upsert idiom in Python silently rewrote a logged trial, and — worse — rewrote a
+registered hypothesis's mechanism and thresholds *in place, under the same id*, which is
+the "changed a threshold after seeing the result" lie this package exists to prevent. It
+needed no intent; the idiom does it by accident.
+
+:class:`TrialLog` therefore turns ``recursive_triggers`` ON for its own connection. Note
+what that does and does not buy: **the pragma is connection-scoped and is not stored in
+the database file.** Every connection this class opens is protected, on this file, in
+this process, for as long as this process lives. A *foreign* connection — a ``sqlite3``
+shell, a pandas ``read_sql`` helper, another program's ORM — starts with the pragma OFF
+and can still ``INSERT OR REPLACE`` over a row. Ordinary code paths inside this package
+cannot rewrite history; the file itself is not armoured, and only tamper-evidence
+(spec §7) would make it so.
+
+The cheap partial defence against exactly that: :meth:`TrialLog.get_hypothesis`
+re-derives the content id of every record it reads and refuses it if the stored id
+disagrees. A hypothesis rewritten through a foreign connection keeps its old id while
+its content changes, so the mismatch is detectable on read even though the write could
+not be blocked.
 
 Schema note for the deferred hash chain: rows are self-contained and nothing depends on
 the column set, so a later ``chain_prev``/``chain_hash`` pair can be added by migration
 without touching what is written here.
+
+Two limits of the *count* that no code in this module can close, stated here because
+C6's deflated-Sharpe correction consumes the number as authoritative:
+
+* **The count is authoritative only if the researcher amends rather than re-registers.**
+  :meth:`~xman_research.hypothesis.HypothesisRecord.amend` keeps the family and its
+  accumulated trials; constructing a fresh record instead mints a new id with no parent,
+  a new family, and a count of zero. Because ``name`` and ``notes`` are id-bearing, even
+  a *cosmetic* rewording of the same hypothesis produces a different record — which is
+  correct for content-addressing and is a live way to reset the multiple-testing burden
+  without meaning to.
+* **Nothing binds an evaluation to a canonical database.** ``open_session`` takes a path,
+  so 200 trials against ``scratch.db`` followed by the winner against ``research.db``
+  leaves the second file reporting a count of 1. C6 should read its database path from
+  configuration rather than accept it as an argument, so that "which log" is not a
+  per-call decision the researcher makes while looking at their results.
 """
 
 from __future__ import annotations
@@ -31,7 +70,7 @@ from pathlib import Path
 from types import MappingProxyType, TracebackType
 from typing import Any
 
-from xman_research._canonical import json_safe
+from xman_research._canonical import json_safe, safe_json_dumps, safe_repr
 from xman_research.clock import Clock, require_aware
 from xman_research.code_version import CodeVersion, CodeVersionProvider
 from xman_research.hypothesis import HypothesisRecord
@@ -39,6 +78,8 @@ from xman_research.hypothesis import HypothesisRecord
 __all__ = [
     "AppendOnlyViolation",
     "DataWindow",
+    "LogIntegrityError",
+    "SchemaVersionError",
     "TrialLog",
     "TrialOutcome",
     "TrialRecord",
@@ -54,6 +95,20 @@ AppendOnlyViolation = sqlite3.IntegrityError
 
 class UnknownHypothesisError(LookupError):
     """Raised when a trial or a query names a hypothesis that was never registered."""
+
+
+class LogIntegrityError(RuntimeError):
+    """Raised when the log's own invariants do not hold — evidence of tampering.
+
+    Two conditions raise it: a stored hypothesis whose content no longer hashes to the
+    id it is filed under, and a parent chain that contains a cycle. Neither is
+    constructible through this API, so either one means the file was written by
+    something else.
+    """
+
+
+class SchemaVersionError(RuntimeError):
+    """Raised when the database was written by a different version of this schema."""
 
 
 class TrialOutcome(StrEnum):
@@ -214,9 +269,14 @@ class TrialLog:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.execute("PRAGMA journal_mode = WAL")
+        # Without this, INSERT OR REPLACE deletes the conflicting row *without* firing
+        # the BEFORE DELETE triggers, and both append-only and hypothesis immutability
+        # are defeated by the ordinary upsert idiom. See the module docstring for what
+        # this does and does not cover — it is connection-scoped, not stored in the file.
+        self._conn.execute("PRAGMA recursive_triggers = ON")
         with self._conn:
             self._conn.executescript(_SCHEMA)
-            self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            self._stamp_schema_version()
 
     # ---------------------------------------------------------------- lifecycle
 
@@ -290,7 +350,7 @@ class TrialLog:
         ).fetchone()
         if row is None:
             raise UnknownHypothesisError(f"no hypothesis registered with id {hypothesis_id!r}")
-        return HypothesisRecord(
+        record = HypothesisRecord(
             name=row["name"],
             mechanism=row["mechanism"],
             null_hypothesis=row["null_hypothesis"],
@@ -301,11 +361,35 @@ class TrialLog:
             notes=row["notes"],
             parent_id=row["parent_id"],
         )
+        # The id is derived from the content, so re-deriving it on read is a free
+        # integrity check: a record rewritten in place — which this connection's
+        # triggers prevent, but a foreign connection's do not — keeps the id it is
+        # filed under while its content changes, and that is what this catches.
+        if record.id != hypothesis_id:
+            raise LogIntegrityError(
+                f"hypothesis {hypothesis_id!r} does not hash to its stored id (content "
+                f"hashes to {record.id!r}). The record was rewritten after registration; "
+                "the trials filed against this id were run on a different hypothesis "
+                "than the one stored."
+            )
+        return record
 
     def family_ids(self, hypothesis_id: str) -> tuple[str, ...]:
         """Every hypothesis in ``hypothesis_id``'s amendment tree, including itself."""
         self._require_hypothesis(hypothesis_id)
         rows = self._conn.execute(_FAMILY_SQL, (hypothesis_id,)).fetchall()
+        if not rows:
+            # A cyclic parent chain has no root, so ``roots`` is empty and the whole
+            # family collapses to nothing — and an empty family means a count of *zero*,
+            # the most flattering answer the multiple-testing correction could be given.
+            # Cycles are unconstructible through this API, so reaching here means the
+            # file was written by something else; say so instead of returning the number
+            # that makes every result look best.
+            raise LogIntegrityError(
+                f"hypothesis {hypothesis_id!r} is registered but its family resolved to "
+                "no members: the parent chain contains a cycle. Refusing to report a "
+                "trial count that would silently be zero."
+            )
         return tuple(sorted(row["id"] for row in rows))
 
     # ------------------------------------------------------------------ trials
@@ -328,14 +412,29 @@ class TrialLog:
         trial *starts* so the running evaluation can refer to itself. Supplying it
         cannot change how many trials exist — a duplicate id is rejected by the unique
         constraint, and every call appends exactly one row.
+
+        **Everything past the hypothesis and window checks degrades rather than raises.**
+        This method is called from a ``finally`` after the evaluation body has run, so an
+        exception here does not fail a trial — it deletes one: the researcher keeps the
+        result and the log never hears about it. An unrecognised ``outcome``, a
+        non-string ``notes``, a param holding a circular reference: each of those used to
+        cost the whole row, and each is now recorded approximately, with a note saying so.
+        The two things that *do* still raise are checked before the body ever runs, by
+        the callers in :mod:`xman_research.evaluation`.
         """
         self._require_hypothesis(hypothesis_id)
         if not isinstance(data_window, DataWindow):
             raise TypeError(f"data_window must be a DataWindow, got {type(data_window).__name__}")
-        resolved_outcome = TrialOutcome(outcome)
+        resolved_outcome, outcome_note = _coerce_outcome(outcome)
         version = self._code_version()
         row_id = trial_id or new_trial_id()
         created_at = self._timestamp()
+        safe_params = json_safe(_safe_mapping(params))
+        safe_metrics = json_safe(_safe_mapping(metrics))
+        safe_error = _coerce_text(error)
+        safe_notes = _coerce_text(notes)
+        if outcome_note is not None:
+            safe_notes = outcome_note if not safe_notes else f"{safe_notes}; {outcome_note}"
         with self._conn:
             self._conn.execute(
                 """
@@ -348,28 +447,31 @@ class TrialLog:
                     row_id,
                     hypothesis_id,
                     created_at,
-                    json.dumps(json_safe(dict(params)), sort_keys=True),
+                    safe_json_dumps(safe_params),
                     data_window.start.isoformat(),
                     data_window.end.isoformat(),
                     version.sha,
                     int(version.dirty),
-                    json.dumps(json_safe(dict(metrics)), sort_keys=True),
+                    safe_json_dumps(safe_metrics),
                     str(resolved_outcome),
-                    error,
-                    notes,
+                    safe_error,
+                    safe_notes,
                 ),
             )
+        # The returned record is what was *stored*, not what was passed: if a param
+        # degraded to a repr on the way in, the caller should see the degraded form
+        # rather than an in-memory copy that flatters the row.
         return TrialRecord(
             trial_id=row_id,
             hypothesis_id=hypothesis_id,
             created_at=datetime.fromisoformat(created_at),
-            params=MappingProxyType(dict(params)),
+            params=MappingProxyType(dict(safe_params)),
             data_window=data_window,
             code_version=version,
-            metrics=MappingProxyType(dict(metrics)),
+            metrics=MappingProxyType(dict(safe_metrics)),
             outcome=resolved_outcome,
-            error=error,
-            notes=notes,
+            error=safe_error,
+            notes=safe_notes,
         )
 
     def trials(self, hypothesis_id: str) -> tuple[TrialRecord, ...]:
@@ -418,6 +520,24 @@ class TrialLog:
 
     # ----------------------------------------------------------------- internals
 
+    def _stamp_schema_version(self) -> None:
+        """Stamp the schema version, or refuse a file written by a different one.
+
+        Stamping unconditionally would relabel a database this code cannot actually
+        read as one it can, which turns a loud open-time failure into quiet
+        mis-parsing of an append-only record.
+        """
+        found = int(self._conn.execute("PRAGMA user_version").fetchone()[0])
+        if found == SCHEMA_VERSION:
+            return
+        if found != 0:
+            raise SchemaVersionError(
+                f"{self._db_path} was written with schema version {found}, but this code "
+                f"speaks version {SCHEMA_VERSION}. Refusing to open it rather than "
+                "guessing at the column meanings of a record that is meant to be evidence."
+            )
+        self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
     def _require_hypothesis(self, hypothesis_id: str) -> None:
         if not self.has_hypothesis(hypothesis_id):
             raise UnknownHypothesisError(
@@ -430,8 +550,46 @@ class TrialLog:
 
 
 def new_trial_id() -> str:
-    """Mint an identity for a trial that is about to run."""
-    return f"t_{uuid.uuid4().hex[:16]}"
+    """Mint an identity for a trial that is about to run.
+
+    Full 128 bits of the uuid, not a truncation: ``trial_id`` carries a UNIQUE
+    constraint, so a collision is not a cosmetic clash — it is an ``INSERT`` that
+    fails, in a ``finally``, for a trial that already ran. That is the same lost-row
+    failure the rest of this module works to make unreachable.
+    """
+    return f"t_{uuid.uuid4().hex}"
+
+
+def _coerce_outcome(outcome: TrialOutcome | str) -> tuple[TrialOutcome, str | None]:
+    """Resolve ``outcome``, degrading an unrecognised value instead of raising.
+
+    ``TrialOutcome(outcome)`` raises on anything unexpected, and this runs after the
+    evaluation body — so a context whose ``outcome`` was assigned some other value used
+    to lose the row entirely. ``ERROR`` is the honest landing place: the run did not
+    produce a result this log can vouch for, and the original value is kept in the note.
+    """
+    try:
+        return TrialOutcome(outcome), None
+    except (ValueError, TypeError):
+        return (
+            TrialOutcome.ERROR,
+            f"unrecognised outcome {safe_repr(outcome)}; recorded as error",
+        )
+
+
+def _coerce_text(value: Any) -> str | None:
+    """A value bound into a TEXT column, or ``None`` — never something sqlite3 refuses."""
+    if value is None or isinstance(value, str):
+        return value
+    return safe_repr(value)
+
+
+def _safe_mapping(value: Any) -> dict[Any, Any]:
+    """``dict(value)`` that cannot raise, for params and metrics off the context."""
+    try:
+        return dict(value)
+    except Exception:
+        return {"__unmappable__": safe_repr(value)}
 
 
 def _row_to_trial(row: sqlite3.Row) -> TrialRecord:

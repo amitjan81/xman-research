@@ -21,6 +21,19 @@ reset the multiple-testing burden.
 
 The id is content-addressed: the same record content is always the same id, and any
 change of content is a different id.
+
+**The limit that follows from that, and it is the sharpest one in this package.** The
+family trial count is authoritative only if the researcher *amends*. :meth:`amend` keeps
+the parent link, so the amendment's trials and the original's are counted together.
+Constructing a fresh :class:`HypothesisRecord` instead — the thing a researcher does
+naturally when they sit down the next morning and retype their idea — mints an id with
+no parent, a new family, and a count of zero. And because **every** field is id-bearing,
+including ``name`` and ``notes``, even a purely cosmetic rewording produces a different
+record: "H1 — index VRP" and "H1 — index variance risk premium" are two hypotheses as far
+as the count is concerned. This is correct behaviour for a content-addressed id and it is
+a live way to reset the multiple-testing burden without meaning to. No code in this
+package can distinguish it from genuinely new research; C6 consumes the count as
+authoritative, so the discipline it rests on has to be understood by whoever reads it.
 """
 
 from __future__ import annotations
@@ -36,7 +49,14 @@ from xman_research._canonical import canonical_json, json_safe
 __all__ = ["HypothesisRecord", "HypothesisValidationError"]
 
 ID_PREFIX = "h_"
-ID_HEX_LENGTH = 16
+# 128 bits of the digest. 64 was enough for any plausible number of hypotheses, but the
+# id is the join key between a record and its trials, and widening it costs nothing.
+ID_HEX_LENGTH = 32
+
+# A hypothesis whose thresholds nest deeper than this is not a decision criterion, and
+# a cyclic one cannot be frozen at all. Refused at construction, where nothing is at
+# stake — unlike the trial-log path, where refusing to serialise would cost a row.
+MAX_FREEZE_DEPTH = 60
 
 
 class HypothesisValidationError(ValueError):
@@ -52,6 +72,35 @@ def _require_prose(value: Any, field_name: str) -> str:
     return value.strip()
 
 
+def _deep_freeze(value: Any, field_name: str, depth: int = 0) -> Any:
+    """Recursively replace containers with immutable equivalents.
+
+    Freezing only the top level is not freezing: ``thresholds={"bands": inner}`` would
+    keep ``inner`` as the caller's own dict, so mutating it afterwards would change the
+    record's content while :attr:`HypothesisRecord.id` — derived from that content at
+    construction — stayed put. The record would then persist under an id that no longer
+    describes it, which is the "changed a threshold after seeing the result" failure the
+    content-addressed id exists to make impossible.
+    """
+    if depth >= MAX_FREEZE_DEPTH:
+        raise HypothesisValidationError(
+            f"{field_name} nests deeper than {MAX_FREEZE_DEPTH} levels, or contains a "
+            "cycle; a decision criterion that deep cannot be read, let alone judged."
+        )
+    if isinstance(value, Mapping):
+        return MappingProxyType(
+            {
+                key: _deep_freeze(item, field_name, depth + 1)
+                for key, item in sorted(value.items(), key=lambda kv: str(kv[0]))
+            }
+        )
+    if isinstance(value, list | tuple):
+        return tuple(_deep_freeze(item, field_name, depth + 1) for item in value)
+    if isinstance(value, set | frozenset):
+        return frozenset(_deep_freeze(item, field_name, depth + 1) for item in value)
+    return value
+
+
 def _freeze_mapping(value: Any, field_name: str) -> Mapping[str, Any]:
     if value is None:
         return MappingProxyType({})
@@ -63,7 +112,7 @@ def _freeze_mapping(value: Any, field_name: str) -> Mapping[str, Any]:
     for key, item in value.items():
         if not isinstance(key, str) or not key.strip():
             raise HypothesisValidationError(f"{field_name} has a blank key: {key!r}")
-        frozen[key.strip()] = item
+        frozen[key.strip()] = _deep_freeze(item, field_name, 1)
     return MappingProxyType(dict(sorted(frozen.items())))
 
 
@@ -145,6 +194,15 @@ class HypothesisRecord:
         unknown = set(changes) - {f.name for f in fields(self) if f.init}
         if unknown:
             raise HypothesisValidationError(f"unknown field(s) for amend: {sorted(unknown)}")
+        if "parent_id" in changes:
+            # Silently ignoring it would let a caller believe they had re-parented the
+            # amendment — and the parent chain is what makes the family trial count
+            # span a campaign. Every other unrecognised field raises; so does this one.
+            raise HypothesisValidationError(
+                "parent_id cannot be set through amend: the parent of an amendment is "
+                "always the record it was amended from. Construct a HypothesisRecord "
+                "directly if you need a different parent."
+            )
         base: dict[str, Any] = {
             f.name: getattr(self, f.name) for f in fields(self) if f.init and f.name != "parent_id"
         }

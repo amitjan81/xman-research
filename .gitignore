@@ -16,5 +16,7 @@ __pycache__/
 
 # Local research databases
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3

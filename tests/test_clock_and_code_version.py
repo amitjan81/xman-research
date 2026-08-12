@@ -109,6 +109,41 @@ def test_an_untracked_file_counts_as_dirty(tmp_path: Path) -> None:
     assert GitCodeVersion(repo)().dirty is True
 
 
-def test_git_version_is_cached_per_instance(tmp_path: Path) -> None:
-    provider = GitCodeVersion(tmp_path)
-    assert provider() is provider()
+def test_git_version_is_re_read_on_every_call(tmp_path: Path) -> None:
+    """The flagship workflow is a notebook, and notebooks outlive their code.
+
+    This test replaces one that asserted the opposite (``provider() is provider()``).
+    That test passed against a provider which read the tree once and answered from cache
+    for the life of the instance — so a session that started clean recorded
+    ``dirty=False`` against a stale sha for every trial run after an edit, however many
+    hours later. A row that asserts reproducibility it does not have is worse than one
+    with no provenance: it is believed. The cache was the defect; the old test ratified it.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def run(*args: str) -> None:
+        subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+    run("init", "-q")
+    run("config", "user.email", "test@example.invalid")
+    run("config", "user.name", "Test")
+    (repo / "strategy.py").write_text("DELTA = 0.30\n")
+    run("add", "strategy.py")
+    run("commit", "-qm", "first")
+
+    provider = GitCodeVersion(repo)
+    before = provider()
+    assert before.dirty is False
+
+    # The %autoreload edit, mid-session, read back through the *same* provider instance.
+    (repo / "strategy.py").write_text("DELTA = 0.25\n")
+    after = provider()
+    assert after.dirty is True, "an edited tree must not keep reporting the clean flag"
+    assert after.sha == before.sha
+
+    run("add", "strategy.py")
+    run("commit", "-qm", "second")
+    committed = provider()
+    assert committed.dirty is False
+    assert committed.sha != before.sha, "a new commit must be visible to the same provider"

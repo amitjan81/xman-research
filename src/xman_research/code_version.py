@@ -54,19 +54,23 @@ class StaticCodeVersion:
 class GitCodeVersion:
     """Read HEAD and the dirty flag from a git working tree.
 
-    The result is cached for the life of the instance: a research session is short,
-    the tree does not change under it, and re-forking ``git`` on every evaluation is
-    pure overhead. Construct a new provider if the tree really has moved.
+    **Read fresh on every call, deliberately not cached.** The flagship workflow is a
+    notebook, which lives for hours and has its code edited underneath it — ``%autoreload``
+    exists precisely because that is normal. A provider that answered once at session
+    start would keep reporting the sha and ``dirty=False`` it saw then, so a trial run
+    against edited code would be recorded as reproducible from a commit that never
+    contained it. A row that asserts reproducibility it does not have is worse than a
+    row with no provenance at all: the first is believed.
+
+    The cost of being right is two ``git`` forks (~10 ms) per evaluation, against
+    evaluations measured in seconds. That is not a trade worth thinking about twice.
     """
 
     def __init__(self, repo_root: Path | str | None = None) -> None:
         self._repo_root = Path(repo_root) if repo_root is not None else Path.cwd()
-        self._cached: CodeVersion | None = None
 
     def __call__(self) -> CodeVersion:
-        if self._cached is None:
-            self._cached = self._read()
-        return self._cached
+        return self._read()
 
     def _read(self) -> CodeVersion:
         sha = self._git("rev-parse", "HEAD")

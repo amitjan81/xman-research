@@ -151,3 +151,77 @@ def test_equality_and_hashing_are_by_id() -> None:
     assert make() == make()
     assert len({make(), make(), make(thresholds={"deflated_sharpe": 1.0})}) == 2
     assert make() != "h_not_a_record"
+
+
+# ----------------------------------------------- deep immutability (finding M-4)
+
+
+def test_nested_mappings_are_frozen_too() -> None:
+    """Freezing only the top level is not freezing.
+
+    ``_freeze_mapping`` took a shallow copy, so a nested dict stayed the caller's own
+    object: mutating it afterwards changed the record's content while ``id`` — derived
+    from that content at construction — stayed put. The record then no longer hashed to
+    the id it was persisted under, which is the drift the content-addressed id exists to
+    make impossible.
+    """
+    inner = {"lower": 0.0, "upper": 1.0}
+    record = make(thresholds={"deflated_sharpe": 0.0, "bands": inner})
+
+    with pytest.raises(TypeError):
+        record.thresholds["bands"]["lower"] = 9.9  # type: ignore[index]
+
+
+def test_mutating_a_nested_source_dict_cannot_drift_the_id() -> None:
+    inner = {"lower": 0.0}
+    record = make(thresholds={"deflated_sharpe": 0.0, "bands": inner})
+    original_id = record.id
+
+    inner["lower"] = 99.0
+
+    assert record.thresholds["bands"] == {"lower": 0.0}
+    assert record.id == original_id
+    assert record._derive_id() == record.id, "content must still hash to the stored id"
+
+
+def test_nested_lists_are_frozen_as_tuples() -> None:
+    strikes = [100, 200]
+    record = make(thresholds={"deflated_sharpe": 0.0}, entry_rule={"strikes": strikes})
+    strikes.append(300)
+
+    assert record.entry_rule["strikes"] == (100, 200)
+    assert record._derive_id() == record.id
+
+
+def test_freezing_refuses_a_cyclic_threshold() -> None:
+    """Refused at construction, where nothing is at stake — no trial has run yet."""
+    cyclic: dict = {"lower": 0.0}
+    cyclic["self"] = cyclic
+    with pytest.raises(HypothesisValidationError, match=r"nests deeper|cycle"):
+        make(thresholds={"deflated_sharpe": 0.0, "bands": cyclic})
+
+
+# -------------------------------------------------------- ids and amendment nits
+
+
+def test_the_id_is_128_bits_wide() -> None:
+    """The id is the join key between a record and its trials; width is free."""
+    record = make()
+    assert record.id.startswith("h_")
+    assert len(record.id) == len("h_") + 32
+    int(record.id[2:], 16)
+
+
+def test_amend_refuses_a_parent_id_rather_than_discarding_it() -> None:
+    """It used to be dropped in silence, while every other unknown field raised.
+
+    The parent chain is what makes the family count span a campaign, so a caller who
+    believes they re-parented an amendment and has not is left with a count that is
+    wrong in the direction that flatters them.
+    """
+    record = make()
+    with pytest.raises(HypothesisValidationError, match="parent_id"):
+        record.amend(parent_id="h_somewhere_else", notes="v2")
+
+    amended = record.amend(notes="v2")
+    assert amended.parent_id == record.id

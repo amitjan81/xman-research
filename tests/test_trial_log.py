@@ -12,7 +12,9 @@ from xman_research import (
     AppendOnlyViolation,
     DataWindow,
     HypothesisRecord,
+    LogIntegrityError,
     ManualClock,
+    SchemaVersionError,
     StaticCodeVersion,
     TrialLog,
     TrialOutcome,
@@ -66,7 +68,16 @@ def test_hypothesis_rows_are_immutable_too(log: TrialLog, h1: HypothesisRecord) 
 def test_enforcement_survives_a_reopen(
     db_path: Path, clock: ManualClock, code_version: StaticCodeVersion, h1: HypothesisRecord
 ) -> None:
-    """The triggers live in the file, so a fresh connection inherits them."""
+    """A fresh :class:`TrialLog` inherits the triggers, because they live in the file.
+
+    Note precisely what does and does not carry across, because the obvious reading of
+    this test is too generous. The trigger *definitions* are persisted, so plain UPDATE
+    and DELETE are refused on any connection at all. The ``recursive_triggers`` pragma
+    that makes ``INSERT OR REPLACE`` fire those same triggers is **connection-scoped and
+    is not stored in the file** — every :class:`TrialLog` sets it for itself, and
+    ``test_a_foreign_connection_without_the_pragma_can_still_replace`` demonstrates the
+    gap that leaves, which the module docstring discloses.
+    """
     with TrialLog(db_path, clock=clock, code_version=code_version) as first:
         first.register_hypothesis(h1)
         append(first, h1)
@@ -324,3 +335,248 @@ def test_clock_is_never_the_wall_clock(
 
     assert stamped == pinned
     assert stamped < datetime.now(UTC) - timedelta(days=365)
+
+
+# ------------------------------------------------- INSERT OR REPLACE (finding C-1)
+
+
+def _replace_trial(conn: sqlite3.Connection, row: object, *, metrics_json: str) -> None:
+    """Re-insert an existing trial row's primary key with different content.
+
+    Both the ``seq`` primary key and the ``trial_id`` unique key are reused on purpose:
+    the statement has to create a genuine conflict, or ``INSERT OR REPLACE`` simply
+    inserts a second row and the test would pass while proving nothing.
+    """
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO trials (
+            seq, trial_id, hypothesis_id, created_at, params_json, window_start,
+            window_end, code_sha, code_dirty, metrics_json, outcome, error, notes
+        ) SELECT seq, trial_id, hypothesis_id, created_at, params_json, window_start,
+            window_end, code_sha, code_dirty, ?, outcome, error, 'REWRITTEN'
+        FROM trials WHERE trial_id = ?
+        """,
+        (metrics_json, row.trial_id),  # type: ignore[attr-defined]
+    )
+
+
+def test_insert_or_replace_on_trials_is_refused(log: TrialLog, h1: HypothesisRecord) -> None:
+    """The idiom that defeated append-only without anybody intending to.
+
+    ``INSERT OR REPLACE`` resolves its conflict by deleting the existing row, and SQLite
+    fires that delete's BEFORE DELETE trigger only when ``recursive_triggers`` is ON.
+    With the pragma off — the default — this statement silently rewrote a logged trial's
+    metrics, which is the whole property of the module gone to a common upsert.
+    """
+    log.register_hypothesis(h1)
+    original = append(log, h1)
+
+    with pytest.raises(AppendOnlyViolation, match="append-only"):
+        _replace_trial(log._conn, original, metrics_json='{"sharpe": 99.0}')
+
+    assert log.count_trials(h1.id) == 1
+    stored = log.trials(h1.id)[0]
+    assert stored.metrics == {"sharpe": 1.2}, "the logged result must be exactly as written"
+    assert stored.notes is None
+
+
+def test_insert_or_replace_on_hypotheses_is_refused(log: TrialLog, h1: HypothesisRecord) -> None:
+    """The worse half: a registered hypothesis rewritten in place, under the same id.
+
+    This is precisely the "change a threshold after seeing the result" move the record
+    is content-addressed to prevent, and it needed neither an UPDATE nor a new id.
+    """
+    log.register_hypothesis(h1)
+
+    with pytest.raises(AppendOnlyViolation, match="immutable"):
+        log._conn.execute(
+            """
+            INSERT OR REPLACE INTO hypotheses (
+                id, parent_id, name, mechanism, null_hypothesis, thresholds_json,
+                predictors_json, entry_rule_json, exit_rule_json, notes, registered_at
+            ) SELECT id, parent_id, name, 'A DIFFERENT MECHANISM', null_hypothesis,
+                '{"deflated_sharpe": -99.0}', predictors_json, entry_rule_json,
+                exit_rule_json, notes, registered_at
+            FROM hypotheses WHERE id = ?
+            """,
+            (h1.id,),
+        )
+
+    stored = log.get_hypothesis(h1.id)
+    assert stored.mechanism == h1.mechanism
+    assert stored.thresholds["deflated_sharpe"] == 0.0
+    assert stored.id == h1.id
+
+
+def test_a_foreign_connection_without_the_pragma_can_still_replace(
+    db_path: Path, clock: ManualClock, code_version: StaticCodeVersion, h1: HypothesisRecord
+) -> None:
+    """The disclosed limit, pinned as a test so the docstring cannot quietly go stale.
+
+    ``recursive_triggers`` is connection-scoped and is not persisted in the file, so a
+    connection this package did not open — a ``sqlite3`` shell, another program's ORM —
+    starts with it OFF and can replace a row. What the package *can* still do is notice
+    afterwards, because the hypothesis id is derived from the content: see the
+    integrity check below.
+    """
+    with TrialLog(db_path, clock=clock, code_version=code_version) as log:
+        log.register_hypothesis(h1)
+
+    foreign = sqlite3.connect(str(db_path))
+    try:
+        with foreign:  # no PRAGMA recursive_triggers here — that is the point
+            foreign.execute(
+                """
+                INSERT OR REPLACE INTO hypotheses (
+                    id, parent_id, name, mechanism, null_hypothesis, thresholds_json,
+                    predictors_json, entry_rule_json, exit_rule_json, notes, registered_at
+                ) SELECT id, parent_id, name, 'A DIFFERENT MECHANISM', null_hypothesis,
+                    thresholds_json, predictors_json, entry_rule_json, exit_rule_json,
+                    notes, registered_at
+                FROM hypotheses WHERE id = ?
+                """,
+                (h1.id,),
+            )
+        rewritten = foreign.execute(
+            "SELECT mechanism FROM hypotheses WHERE id = ?", (h1.id,)
+        ).fetchone()[0]
+    finally:
+        foreign.close()
+
+    assert rewritten == "A DIFFERENT MECHANISM", "the file itself is not armoured"
+
+    with (
+        TrialLog(db_path, clock=clock, code_version=code_version) as reopened,
+        pytest.raises(LogIntegrityError, match="does not hash to its stored id"),
+    ):
+        reopened.get_hypothesis(h1.id)
+
+
+def test_get_hypothesis_accepts_an_untampered_record(log: TrialLog, h1: HypothesisRecord) -> None:
+    """Guards the guard: the integrity check must not reject honest records."""
+    log.register_hypothesis(h1)
+    assert log.get_hypothesis(h1.id) == h1
+
+
+# ----------------------------------------------------- schema version (finding m-13)
+
+
+def test_a_foreign_schema_version_is_refused(
+    db_path: Path, clock: ManualClock, code_version: StaticCodeVersion
+) -> None:
+    """Stamping unconditionally relabels a file this code cannot read as one it can."""
+    with TrialLog(db_path, clock=clock, code_version=code_version):
+        pass
+    stamper = sqlite3.connect(str(db_path))
+    try:
+        stamper.execute("PRAGMA user_version = 7")
+    finally:
+        stamper.close()
+
+    with pytest.raises(SchemaVersionError, match="schema version 7"):
+        TrialLog(db_path, clock=clock, code_version=code_version)
+
+
+def test_reopening_the_current_version_is_fine(
+    db_path: Path, clock: ManualClock, code_version: StaticCodeVersion, h1: HypothesisRecord
+) -> None:
+    with TrialLog(db_path, clock=clock, code_version=code_version) as first:
+        first.register_hypothesis(h1)
+        append(first, h1)
+    with TrialLog(db_path, clock=clock, code_version=code_version) as second:
+        assert second.count_trials(h1.id) == 1
+
+
+# ------------------------------------------------------- cyclic family (finding m-12)
+
+
+def test_a_cyclic_parent_chain_is_refused_rather_than_counted_as_zero(
+    db_path: Path, clock: ManualClock, code_version: StaticCodeVersion
+) -> None:
+    """A cycle used to resolve to an empty family, and an empty family counts zero.
+
+    Zero is the most flattering answer the multiple-testing correction could possibly be
+    handed, so a corrupt chain must not silently produce it. Cycles are unconstructible
+    through the API — this test builds one by writing behind it with foreign keys off,
+    which is exactly the "written by something else" case the guard is for.
+    """
+    log = TrialLog(db_path, clock=clock, code_version=code_version)
+    try:
+        # PRAGMA foreign_keys is a no-op inside a transaction, so it is set outside one.
+        log._conn.execute("PRAGMA foreign_keys = OFF")
+        for ident, parent in (("h_aaa", "h_bbb"), ("h_bbb", "h_aaa")):
+            log._conn.execute(
+                """
+                INSERT INTO hypotheses (
+                    id, parent_id, name, mechanism, null_hypothesis, thresholds_json,
+                    predictors_json, entry_rule_json, exit_rule_json, notes, registered_at
+                ) VALUES (?, ?, 'n', 'm', 'nh', '{}', '[]', '{}', '{}', '', ?)
+                """,
+                (ident, parent, "2026-08-12T09:15:00+00:00"),
+            )
+        log._conn.commit()
+
+        with pytest.raises(LogIntegrityError, match="cycle"):
+            log.family_ids("h_aaa")
+        with pytest.raises(LogIntegrityError, match="cycle"):
+            log.count_family_trials("h_aaa")
+    finally:
+        log.close()
+
+
+# ------------------------------------- the append never loses a row (finding C-2)
+
+
+def test_an_unrecognised_outcome_is_recorded_as_error_not_dropped(
+    log: TrialLog, h1: HypothesisRecord
+) -> None:
+    """``TrialOutcome(outcome)`` used to raise here — from a ``finally``, after the run."""
+    log.register_hypothesis(h1)
+    record = append(log, h1, outcome="garbage")
+
+    assert record.outcome is TrialOutcome.ERROR
+    assert "garbage" in (record.notes or "")
+    assert log.count_trials(h1.id) == 1
+    assert log.trials(h1.id)[0].outcome is TrialOutcome.ERROR
+
+
+def test_non_text_notes_and_error_do_not_cost_the_row(log: TrialLog, h1: HypothesisRecord) -> None:
+    """sqlite3 refuses to bind an arbitrary object; that refusal used to delete a trial."""
+    log.register_hypothesis(h1)
+    append(log, h1, notes=object(), error=object())
+
+    stored = log.trials(h1.id)[0]
+    assert log.count_trials(h1.id) == 1
+    assert isinstance(stored.notes, str) and "object object" in stored.notes
+    assert isinstance(stored.error, str)
+
+
+def test_a_circular_param_is_logged_approximately(log: TrialLog, h1: HypothesisRecord) -> None:
+    """A config dict holding a back-reference is an ordinary input, not a hostile one."""
+    log.register_hypothesis(h1)
+    config: dict = {"name": "sweep"}
+    config["self"] = config
+    append(log, h1, params={"cfg": config, "delta": 0.30})
+
+    stored = log.trials(h1.id)[0]
+    assert log.count_trials(h1.id) == 1
+    assert stored.params["delta"] == 0.30
+    assert "circular" in stored.params["cfg"]["self"]
+
+
+def test_an_unmappable_params_object_is_logged_approximately(
+    log: TrialLog, h1: HypothesisRecord
+) -> None:
+    log.register_hypothesis(h1)
+    append(log, h1, params=object())
+
+    stored = log.trials(h1.id)[0]
+    assert log.count_trials(h1.id) == 1
+    assert "__unmappable__" in stored.params
+
+
+def test_trial_ids_are_full_width(log: TrialLog, h1: HypothesisRecord) -> None:
+    """A trial_id collision is a failed INSERT in a finally — a lost row, not a clash."""
+    log.register_hypothesis(h1)
+    record = append(log, h1)
+    assert len(record.trial_id) == len("t_") + 32

@@ -26,8 +26,14 @@ addopts = "-q"
 line-length = 100
 src = ["src", "tests"]
 # The exploratory trees and the markdown specs predate this package and are explicitly
-# out of scope: ruff formats python blocks inside .md, and rewriting the specs' code
-# samples is not this component's business.
+# out of scope: rewriting prior research is not this component's business.
+#
+# The "*.md" entry is load-bearing and was verified, not assumed. `ruff format` reformats
+# Python code blocks *embedded in Markdown* (confirmed on ruff 0.16.2: dropping this entry
+# and running `ruff format .` rewrote 345 lines of RESEARCH_SUMMARY.md's code samples —
+# quote style, line wrapping — none of it this package's code). Do not remove it on the
+# reasoning that "ruff only looks at .py files"; that was true of older versions and is
+# not true here.
 extend-exclude = ["lib", "research", "strategies", "forex", "symbolSchemaFile", "*.md"]
 
 [tool.ruff.lint]

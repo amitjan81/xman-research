@@ -14,7 +14,9 @@ from __future__ import annotations
 import importlib
 import inspect
 import pkgutil
+import sys
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -27,30 +29,39 @@ import xman_research
 FORBIDDEN_SUBSTRINGS = ("count", "n_trials", "num_trials", "ntrials", "trials")
 
 
-def package_modules() -> list[Any]:
-    """Every public module in the package, not only what ``__init__`` re-exports.
+def package_modules(package: Any = xman_research) -> list[Any]:
+    """Every public module in the package, at any depth, not only what ``__init__`` re-exports.
 
     Walking the package rather than ``__all__`` is the difference between a guard that
     keeps working and one that quietly stops: the likeliest future breach is a *new*
     module — ``xman_research.validation.deflated_sharpe(sharpe, n_trials=...)`` — that
     nobody thought to re-export. The guard has to see it on the day it is written.
+
+    ``walk_packages``, not ``iter_modules``: the latter does not descend into
+    subpackages, so the guard's own stated threat — which is written as living in a
+    ``validation`` subpackage — would have walked straight past it. The guard was
+    checking exactly the modules that already existed.
+    ``test_the_walker_would_catch_a_nested_offender`` is the proof it now descends.
     """
-    modules = [xman_research]
-    for found in pkgutil.iter_modules(xman_research.__path__):
-        if found.name.startswith("_"):
+    modules = [package]
+    prefix = f"{package.__name__}."
+    for found in pkgutil.walk_packages(package.__path__, prefix):
+        # The last segment, not the dotted path: with a prefix every name contains dots,
+        # so testing the whole string would stop excluding private modules.
+        if any(part.startswith("_") for part in found.name.split(".")):
             continue
-        modules.append(importlib.import_module(f"xman_research.{found.name}"))
+        modules.append(importlib.import_module(found.name))
     return modules
 
 
-def public_callables() -> Iterator[tuple[str, Any]]:
+def public_callables(package: Any = xman_research) -> Iterator[tuple[str, Any]]:
     seen: set[tuple[str, str]] = set()
-    for module in package_modules():
+    for module in package_modules(package):
         for name, obj in inspect.getmembers(module):
             if name.startswith("_"):
                 continue
             origin = getattr(obj, "__module__", "")
-            if not isinstance(origin, str) or not origin.startswith("xman_research"):
+            if not isinstance(origin, str) or not origin.startswith(package.__name__):
                 continue
             key = (origin, name)
             if key in seen:
@@ -118,3 +129,69 @@ def test_no_public_name_offers_to_set_a_count() -> None:
             leaf.startswith(("set_", "override_", "assert_", "declare_", "force_"))
             and ("trial" in leaf or "count" in leaf)
         ), f"{qualified_name} looks like a way to assert a trial count"
+
+
+def offending_parameters(qualified_name: str, function: Any) -> list[str]:
+    """The check itself, factored out so the guard can be run against a fake package."""
+    try:
+        signature = inspect.signature(function)
+    except (ValueError, TypeError):  # pragma: no cover - builtins without signatures
+        return []
+    offending = []
+    for parameter_name in signature.parameters:
+        lowered = parameter_name.lower()
+        if any(token in lowered for token in FORBIDDEN_SUBSTRINGS):
+            offending.append(f"{qualified_name}:{parameter_name}")
+    return offending
+
+
+def test_the_walker_would_catch_a_nested_offender(tmp_path: Path) -> None:
+    """The mutation test: prove the guard fails when the thing it guards against exists.
+
+    A guard that has only ever been observed passing is not evidence of anything — and
+    this one was, until now, structurally incapable of failing in the way its own
+    docstring describes. It enumerated with ``pkgutil.iter_modules``, which does not
+    descend, so the breach it names — ``validation.deflated_sharpe(sharpe, n_trials=...)``
+    in a *subpackage* — would have gone unseen.
+
+    So: build that exact offender as a real, importable package, run the real
+    enumeration and the real check over it, and assert they flag it. If the walker ever
+    stops descending, this test fails while every other test in the file still passes.
+    """
+    root = tmp_path / "probe_pkg"
+    (root / "validation").mkdir(parents=True)
+    (root / "__init__.py").write_text("")
+    (root / "validation" / "__init__.py").write_text("")
+    (root / "validation" / "deflated_sharpe.py").write_text(
+        "def deflated_sharpe(sharpe: float, n_trials: int = 1) -> float:\n"
+        "    return sharpe / n_trials\n"
+    )
+
+    sys.path.insert(0, str(tmp_path))
+    try:
+        probe = importlib.import_module("probe_pkg")
+        enumerated = dict(public_callables(probe))
+        offenders = [
+            hit
+            for name, function in enumerated.items()
+            for hit in offending_parameters(name, function)
+        ]
+    finally:
+        sys.path.remove(str(tmp_path))
+        for name in [n for n in sys.modules if n.startswith("probe_pkg")]:
+            del sys.modules[name]
+
+    assert any("validation.deflated_sharpe" in name for name in enumerated), (
+        "the walker did not descend into the subpackage — this is the m-11 defect, and "
+        "it means the guard cannot see the breach it was written to catch"
+    )
+    assert offenders, "the check did not flag n_trials= on a nested public callable"
+    assert any("n_trials" in hit for hit in offenders)
+
+
+def test_the_real_package_is_still_clean_under_the_same_check() -> None:
+    """The other half of the mutation test: the same machinery, applied for real."""
+    offenders = [
+        hit for name, function in public_callables() for hit in offending_parameters(name, function)
+    ]
+    assert offenders == []
