@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Version** | **0.3** (post-review revision) |
+| **Version** | **0.4** (hypothesis engine absorbed) |
 | **Status** | Proposed — for owner review against FRD v0.2 |
 | **Date** | 11 August 2026 |
-| **Baseline** | FRD v0.2 (post-review revision, Aug 2026); constraints C1–C7 binding |
+| **Baseline** | FRD **v0.3** (consolidated, Aug 2026) — `Options_Research_Platform_FRD.md` in this repository; constraints C1–C7 binding |
 | **Audience** | Platform owner/operator; AI implementation agents; future reviewers |
 | **HLD/LLD line** | This document decides **containers (things that run or store data), dataset lifecycles, the port/adapter seams, and irreversible technology choices**. Schemas, table DDL, API signatures, class design, configuration formats and per-component algorithms are LLD, to be recorded as ADRs and phase specifications as each component enters build. |
 
@@ -13,6 +13,7 @@
 
 | Version | Date | Summary of change |
 |---|---|---|
+| **0.4** | 12 Aug 2026 | **Hypothesis engine absorbed.** FRD v0.3 consolidated the hypothesis engine into the requirements baseline; its eight requirement modules had no owning container here. §8.5 added, assigning them — **two new containers (Regime Detector, split training/inference; Allocator, inside the Lifecycle Controller because it gates live emission), with the remaining six modules extending existing containers rather than adding their own.** Records the impact on four existing components: the workers gain a leakage detector, a naive-benchmark harness and a physical-measure simulated null while **losing the gate evaluator** to the Lifecycle Controller; the controller becomes the platform's busiest component and its widest blast radius; the Signal Runtime gains causal regime inference and the exposure multiplier; Monitoring gains the multiplier itself as a second subject, since nothing otherwise watches a control that only ever reduces exposure. Container diagram updated. |
 | **0.3** | 11 Aug 2026 | **Second review round (Fable) + two owner decisions.** *Owner decisions:* capture phased to indices first with stock underlyings deferred, recorded with permanent-forfeiture-of-history as accepted risk (AD-21); single host / single disk confirmed, so live-trading IO protection is not structural — residual risk accepted with four compensating controls and a named dedicated-disk revisit trigger (AD-20). *Critical fixed:* §8.2 had sized a 10-underlying index corpus while the FRD scopes index **and** stock derivatives (180+ NSE underlyings); sizing now states both scopes, and capture feasibility against vendor rate limits is raised as an open item. *Majors fixed:* claim plane respecified by responsibility with leases, an artefact path and a separate worker identity (AD-23); Lifecycle Controller added to the deployment diagram — previously in no slice — and the claim arrow repointed to it; gate evaluation made the Lifecycle Controller's alone so the container computing a result never judges it (AD-22); Universe Resolver settled in the PIT Lake; backup anchor target now **must** be write-once, with a threat model naming the operator's future self as primary adversary (AD-24); hourly ledger increments added so QAS-09's 1 h RPO has a mechanism; hash-chain continuity reconciled against monthly-rolling stores; four unowned requirements given owning blocks — FR-VAL-08 leakage detector, FR-BT-02 statutory cost schedule, FR-FWD-01 paper fill simulator, FR-SIG-01 online feature writer; DuckDB justification corrected from ASOF join to knowledge-time version resolution, with the spike rewritten to test the right query shape; compaction designed rather than assumed away (AD-25); schema evolution and the platform's own SDLC added (AD-26). *Self-correction:* §7.8's Tier-2 arithmetic is now derived rather than asserted, and states plainly that its 3 min/path assumption is unsupported for the positional strategies tiering exists to serve. |
 | **0.2** | 11 Aug 2026 | **First review round.** Replaced the axis-2 scale seam: SQLite CAS queue over a shared network mount was invalid (fcntl locking is documented as broken on NFS; a CAS claim is read-modify-write; the same file family holds the hash-chained ledgers) — superseded by an HTTP claim plane (AD-04a). Added the two-tier validation protocol after the CPCV compute plan was shown not to close, and because the vectorised backend's speedup does not apply to positional strategies (§7.8, AD-17). Separated code parity from data parity: added the live-observed dataset family and corrected AD-06's overclaim (AD-18). Split Redis into production and research instances so the live path's inputs are not writable by autonomous AI agents (AD-19). Added physical-separation guidance for live-trading protection, cgroup IO control being the weak controller (AD-20). Mandated SQLite backup via the backup API or `VACUUM INTO` rather than file copy, a ledgers-then-lake backup ordering, and a non-blocking trial-ledger write path. |
 | **0.1** | 11 Aug 2026 | Initial high level design against FRD v0.2. 18 sections; 7 diagrams (4 block, 3 sequence); 13 containers; 12 quality attribute scenarios; 16 architectural decisions; bidirectional requirements coverage for all 12 FR modules and NFR-01…10. |
@@ -172,13 +173,14 @@ flowchart TB
         ONL[("Online Feature Store<br>Redis hash, PRODUCTION instance<br>writable only by capture user")]
     end
     subgraph RES["Research plane"]
+        RGD["Regime Detector<br>training only, batch"]
         WS["Research Workspace<br>JupyterLab + Research SDK"]
         WRK["Backtest and Validation Workers<br>CAS-claim fleet, Python"]
         AI["AI Assist Layer<br>langgraph multi-role agents"]
     end
     subgraph PROD["Production plane"]
-        SRT["Signal Runtime<br>paper + live evaluation daemon"]
-        LCC["Lifecycle Controller + API<br>FastAPI: gates, promote, rollback, kill"]
+        SRT["Signal Runtime<br>paper + live evaluation daemon<br>+ regime inference (causal)"]
+        LCC["Lifecycle Controller + API<br>FastAPI: gates, promote, rollback,<br>kill, claim plane, ALLOCATOR"]
         MON["Monitoring and Feedback Service"]
         GWY["xman Webhook Gateway<br>transactional outbox"]
     end
@@ -196,9 +198,11 @@ flowchart TB
     LCC -->|"gate + lifecycle records"| REG
     MON -->|"drift, decay, review packs"| REG
     OPS -->|"schedules, backups"| REG
+    RGD -->|"trained detector artefact"| SRT
+    RGD -->|"regime series / Parquet"| LAKE
 ```
 
-*Diagram 2 — Container view. **Type/scope**: C4 level-2, whole system, 13 containers. **Legend**: rectangles = running processes (technology named inside); cylinders = data stores; subgraph frames = logical planes (not deployment units — see Diagram 4); arrows = primary data/control flows labelled `intent / mechanism`; unlabelled mechanism = in-process SQL/file IO. All containers are Python 3.12 in one uv workspace unless stated. Acronyms: PIT = point-in-time; QC = quality control; CAS = compare-and-swap; SDK = software development kit.*
+*Diagram 2 — Container view. **Type/scope**: C4 level-2, whole system, 14 containers (13 at v0.3, plus the Regime Detector; the Allocator sits inside the Lifecycle Controller rather than beside it — see §8.5). **Legend**: rectangles = running processes (technology named inside); cylinders = data stores; subgraph frames = logical planes (not deployment units — see Diagram 4); arrows = primary data/control flows labelled `intent / mechanism`; unlabelled mechanism = in-process SQL/file IO. All containers are Python 3.12 in one uv workspace unless stated. Acronyms: PIT = point-in-time; QC = quality control; CAS = compare-and-swap; SDK = software development kit.*
 
 Per-container: responsibility, technology, data owned, key interfaces.
 
@@ -402,6 +406,46 @@ One level below the container table: the named blocks each container is composed
 | Job Enqueuer | Cron-driven enqueueing of capture, derivation, revalidation, monitoring and scheduled research jobs (FR-RES-08, FR-DEP-07) |
 | Backup Orchestrator | Captures SQLite stores via the backup API or `VACUUM INTO` — never a hot file copy — snapshots **ledgers before lake** so no restored ledger row references an absent file, and writes the set's manifest and chain anchor to a **write-once target** (§4, §12). Runs on **two cadences, because one does not satisfy both RPOs**: registry and ledger increments ship **hourly** (RPO ≤ 1 h, QAS-09) — they are small; the lake ships **nightly** (RPO ≤ 24 h) — it is not |
 | Restore Rehearsal Runner | Performs restores on the NFR-07 cadence and records the result; an unrehearsed backup is not evidence |
+
+### 8.5 The Hypothesis Engine and Allocator — added at v0.4
+
+FRD v0.3 consolidated the hypothesis engine into the requirements baseline (§15–§22 there). Those requirements had **no owning container** in this document — the registry, the regime detector, the allocator and the conflict veto were each unassigned. They are assigned here, and importantly **most extend existing containers rather than adding new ones**.
+
+**Two new containers, not eight.** The instinct is one container per requirement module. That would be wrong: a registry is a registry, and a gate evaluator already exists.
+
+| New container | Plane / slice | Responsibility |
+|---|---|---|
+| **Regime Detector** | split — training in **research**, inference in **capture** | Produces the regime series. Training is batch and periodic; **inference must be causal and runs beside the Signal Runtime**, sharing one artefact so FR-SIG-04 parity holds across both. The split exists because training is expensive and occasional while inference is cheap and continuous |
+| **Allocator** | **capture slice, within the Lifecycle Controller** | Decides which live signals emit, at what margin weight, and arbitrates conflicts. **It gates live emission, so it cannot live in the research slice** — the same trust-boundary argument that placed the gate evaluator there (AD-22) |
+
+**Everything else extends what exists:**
+
+| FRD module | Owning container | What changes |
+|---|---|---|
+| FR-HYP (registry) | **Registries & Ledgers** | One more registry beside the signal, epoch and gate registries. Richer record schema; identical storage pattern |
+| FR-EXP (exploration) | **Research Workspace** + **Registries** | The SDK already auto-ledgers evaluations; FR-EXP-06 extends trial counting to *detector tuning* — a change to what counts as a trial, not to how trials are recorded |
+| FR-SCOPE (frequency) | **Lifecycle Controller** (G1) + **Monitoring** (book-level) | Two checks, no new machinery |
+| FR-GATE (ladder) | **Lifecycle Controller** | The gate ladder *is* the lifecycle state machine, now with named stages and additional per-stage checks |
+| FR-ENF (boundary) | **Webhook Gateway** + xman | Enforcement-point declarations, plus the FR-ENF-05 fallback in the gateway |
+| FR-DEC (mechanism decay) | **Monitoring & Feedback** | A premium series and an epoch-triggered review, alongside existing decay diagnostics |
+
+#### Impact on existing components
+
+The consolidation is not additive-only. Four components change behaviour:
+
+**Backtest & Validation Workers gain three things and lose one.** They gain the **Leakage Detector** (FR-VAL-08), the **naive-benchmark harness** (FR-GATE-16), and the **simulated-null generator** (FR-GATE-13) — the heaviest new compute in the platform, and one that must calibrate under the **physical measure**, since calibrating to observed option prices would embed the variance premium in the null and the test could then never reject. They **lose the gate evaluator**: §8.1's whitebox previously placed one here, and FR-GATE makes the Lifecycle Controller its sole owner, so a worker never judges results it computed.
+
+**The Lifecycle Controller becomes the platform's busiest component.** It already owned promotion, rollback, the kill switch and the claim plane; it now also owns gate evaluation, threshold locking, the allocator, the conflict veto and the G1 frequency check. The concentration is deliberate — every one of those is a *decision about what is allowed*, and they share one trust boundary — but it makes the controller the component whose failure has the widest blast radius. §17 records that as a risk rather than leaving it implied.
+
+**The Signal Runtime gains the regime inference path and the exposure multiplier**, which scales the emitted size hint. Each signal now also carries an exposure-class declaration, because FR-ALLOC-06 scales by class rather than uniformly — a uniform multiplier would de-risk hedges exactly when they should be held.
+
+**Monitoring & Feedback gains a second subject.** It has watched signals; it must now also watch the **multiplier itself** (FR-ALLOC-14) — cumulative foregone premium against avoided drawdown — because FR-MON-09's kill criteria cover signals and nothing otherwise watches a control that only ever reduces exposure. A precautionary control that never pays for itself is a pure cost, and without this nothing would notice.
+
+#### Three constraints that are easy to violate architecturally
+
+1. **The regime inference path must be causal**, and the prefix-property test (FR-REG-05) gates the *detector* in CI, not any hypothesis's results. Placing that check downstream — after triage or validation — would let a look-ahead-contaminated series be consumed before it is caught.
+2. **The allocator must have no path that raises exposure.** FR-ALLOC-06's no-upward-scaling rule is precisely what allows the multiplier to be classified as a risk control rather than an alpha claim, exempting it from a gate it could not otherwise pass. An implementation offering an upward path silently voids that argument.
+3. **The FR-ENF-05 fallback is built regardless of xman's schedule** — not contingent on the gross short-gamma cap landing, because a control that only exists after another team's change is not a control during the interval that matters most.
 
 **The remaining behaviour is deliberately standard** — process supervision, logging, metrics endpoints, config loading — reused wholesale from xman's conventions and specified at LLD.
 
@@ -645,6 +689,10 @@ Explicitly **not** defended against: a determined attacker with root on the host
 | AD-24 | **Backup anchor target must be write-once (WORM/object-lock)** — a mutable target defeats NFR-08 outright | §4, §11 threat model |
 | AD-25 | **Compaction writes new merged versions and never rewrites originals**, so existing manifests keep resolving to the bytes they pinned | §11 axis 1 |
 | AD-26 | **Schemas are versioned and additive; breaking changes create a new dataset version**, never a mutation | §11 schema evolution |
+| AD-27 | **The Allocator lives inside the Lifecycle Controller, not the research slice** — it gates live emission, so the AD-22 trust argument applies | §8.5 |
+| AD-28 | **The Regime Detector is split: training in research, inference in capture**, sharing one artefact so FR-SIG-04 parity holds | §8.5 |
+| AD-29 | **The gate evaluator is removed from the Backtest Workers** and owned solely by the Lifecycle Controller — a component never judges results it computed | §8.5; FR-GATE |
+| AD-30 | **The Regime Detector container is contingent** on FR-REG-01's horse race; if continuous conditioning wins it is not built | §8.5; §16 |
 | AD-05 | `ICostModel` port; two C3 implementations; versioned cost-configuration artefact on every run | §7.5, §8.1 |
 | AD-06 | One signal artefact, three adapters; parity **structural for code, measured for data** via the live-observed family | §7.6, §8.3, §9 |
 | AD-07 | Append-only hash-chained ledgers; thresholds locked in-ledger before results | §7.7, §10.1 |
@@ -699,8 +747,16 @@ Module → component mapping (every FR module and NFR lands on at least one name
 | NFR-08 | Hash-chained ledgers + daily verification | QAS-10 |
 | NFR-09 | Slice hierarchy (§11) | QAS-06 saturation test |
 | NFR-10 | Data catalogue | — |
+| **FR-HYP-01…07** | Hypothesis registry (Registries & Ledgers); G0/G1 checks in Lifecycle Controller | `rejected_mechanisms` is what stops a hypothesis carrying a mechanism its own evidence contradicts |
+| **FR-EXP-01…06** | Research SDK (Workspace) + trial ledger (Registries) | EXP-06 extends trial counting to detector tuning — a change to *what counts*, not to how it is recorded |
+| **FR-SCOPE-01…03** | Lifecycle Controller (G1); Monitoring (book-level realised distribution) | SCOPE-02 measures share-below-floor, not mean — a barbell book games a mean trivially |
+| **FR-REG-01…13** | **Regime Detector** — training in research, inference in capture; prefix-property test in CI | REG-01 may conclude the layer is not built; REG-05 gates the *detector* at G1, not any hypothesis's results |
+| **FR-GATE-01…20** | **Lifecycle Controller** (evaluation, threshold locking, G6 rules); Workers (simulated null, benchmark harness) | GATE-13's null calibrates under the **physical measure** — option-price calibration would leave the test unable to reject |
+| **FR-ALLOC-01…14** | **Allocator**, within the Lifecycle Controller; Monitoring for ALLOC-14 | Equal *margin* contribution, not expected shortfall; the multiplier's G4 exemption depends on never scaling up |
+| **FR-ENF-01…05** | Webhook Gateway (fallback, emission-side caps); **xman** (ENF-04, owner-assigned) | ENF-05 is built regardless of ENF-04's schedule |
+| **FR-DEC-01…06** | Monitoring & Feedback; Registries for the locked haircut | DEC-05 makes a new epoch trigger review of every live signal whose evidence predates it |
 
-**Components with no driving requirement** (gold-plating check): none. The Scheduler + Backup Agent exists for NFR-07/08 and FR-RES-08/FR-DEP-07 scheduling; every other container maps above. No component was found serving zero requirements.
+**Components with no driving requirement** (gold-plating check): none. The Scheduler + Backup Agent exists for NFR-07/08 and FR-RES-08/FR-DEP-07 scheduling; the Regime Detector exists for FR-REG and is **contingent on FR-REG-01's outcome** — if that experiment concludes continuous conditioning wins, the container is not built and FR-ALLOC-01's fallback applies. Every other container maps above. No component was found serving zero requirements.
 
 **Not fully addressed, and why** (surfaced, not papered over): **(a)** FR-DATA-13 is mechanism-named only (see table) — acceptable for a Could in Phase 3. **(b)** FR-BT-05's margin *methodology* has a named seam (`IMarginModel`) but no committed method — SPAN replication vs. exchange-file-driven vs. third-party library is an open build/buy question (§17); the HLD deliberately does not decide it. **(c)** NFR-03's < 5 min target is a design intent pending the DuckDB + vectorised-backend spike (§17) — the architecture provides the levers; the number is unproven until measured.
 
