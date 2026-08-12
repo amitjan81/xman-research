@@ -1,0 +1,42 @@
+{
+  "_comment": [
+    "The synthetic corpus the unit tests run against. Every date here is a real NSE",
+    "trading day (verified against pandas_market_calendars 5.4.0), because the tests",
+    "assert on real holidays: 2026-01-26 is Republic Day and 2026-01-24/25 are a",
+    "weekend, and none of the three may ever be reported as a capture gap.",
+    "",
+    "The corpus deliberately has one hole and one quarantined session:",
+    "  - 2026-01-20 and 2026-01-21 are trading days with no file  -> capture gap",
+    "  - 2026-02-03 has a file but the producer quarantined it     -> present, untrusted",
+    "Capture 'stops' after 2026-02-03, mirroring the real corpus's dead tail.",
+    "",
+    "Checked in as text rather than as parquet + sqlite binaries on purpose: the",
+    "repository's .gitignore (owned by PR #8) ignores '*.sqlite' at any depth, so a",
+    "checked-in fixture manifest would be silently untracked and the suite would pass",
+    "here and fail on a fresh clone. Materialising both from this file also keeps the",
+    "fixture reviewable in a diff."
+  ],
+  "underlying": "NIFTY",
+  "sessions": [
+    {"date": "2026-01-05", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-06", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-07", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-08", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-09", "status": "published", "coverage_pct": 99.4},
+    {"date": "2026-01-12", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-13", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-14", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-15", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-16", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-19", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-22", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-23", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-27", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-28", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-29", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-01-30", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-02-02", "status": "published", "coverage_pct": 100.0},
+    {"date": "2026-02-03", "status": "quarantined", "coverage_pct": 41.2,
+     "reason": "stale prices on 58% of symbols after 11:04"}
+  ]
+}

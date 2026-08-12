@@ -1,0 +1,15 @@
+[
+  {
+    "TimeStamp": "12/06/2026 09:15:00",
+    "BrokerName": "Dhan",
+    "TickSize": 5.0,
+    "Segment": "INDICES",
+    "Exchange": "NSE",
+    "TradingSymbol": "NIFTY",
+    "MarketDataSymbol": 13,
+    "ExchangeToken": "13",
+    "LookupName": "NIFTY",
+    "ClosePrice": 23431.25,
+    "LotSize": 65
+  }
+]
