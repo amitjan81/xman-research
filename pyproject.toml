@@ -1,7 +1,7 @@
 [project]
 name = "xman-research"
 version = "0.1.0"
-description = "Options research platform — hypothesis record and append-only trial log (MVP component C4)"
+description = "Options research platform (MVP)"
 requires-python = ">=3.12"
 dependencies = [
     # C2 (session store) reads the producer's parquet corpus and needs an NSE trading
