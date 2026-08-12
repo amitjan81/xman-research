@@ -1,0 +1,43 @@
+[project]
+name = "xman-research"
+version = "0.1.0"
+description = "Options research platform — hypothesis record and append-only trial log (MVP component C4)"
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/xman_research"]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# Deliberately NO pytest-xdist dependency and no -n flag: this host is shared with a
+# live trading platform, so an uncapped worker fan-out is a production risk. If xdist
+# is ever added, cap it at -n 4.
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+# The exploratory trees and the markdown specs predate this package and are explicitly
+# out of scope: rewriting prior research is not this component's business.
+#
+# The "*.md" entry is load-bearing and was verified, not assumed. `ruff format` reformats
+# Python code blocks *embedded in Markdown* (confirmed on ruff 0.16.2: dropping this entry
+# and running `ruff format .` rewrote 345 lines of RESEARCH_SUMMARY.md's code samples —
+# quote style, line wrapping — none of it this package's code). Do not remove it on the
+# reasoning that "ruff only looks at .py files"; that was true of older versions and is
+# not true here.
+extend-exclude = ["lib", "research", "strategies", "forex", "symbolSchemaFile", "*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
