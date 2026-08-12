@@ -4,17 +4,22 @@
 
 | | |
 |---|---|
-| **Version** | 0.2 (Post-review revision) |
-| **Date** | August 2026 |
+| **Version** | **0.3** (consolidated) |
+| **Date** | 12 August 2026 |
 | **Status** | Approved baseline |
-| **Note** | v0.2 incorporates the accepted findings of the 11 August 2026 review; see Appendix A for the full disposition. |
+| **Supersedes** | FRD v0.2, and the standalone `Hypothesis_Engine_Spec.md` v0.5, whose requirements are absorbed as §15–§22 and whose seed catalogue becomes Appendix B |
 
-> **Provenance.** The authoritative source for this document is
-> `Options_Research_Platform_FRD.docx`, committed alongside this file. This
-> markdown is a faithful rendering of it, committed so the requirements are
-> diffable and greppable and so downstream documents can cite requirement IDs
-> against a version-controlled text. **If the two ever disagree, the .docx
-> wins** — regenerate this rendering rather than editing it.
+## Revision history
+
+| Version | Date | Summary |
+|---|---|---|
+| **0.3** | 12 Aug 2026 | **Consolidated.** The hypothesis engine was specified separately; it is part of the platform, so its requirements belong here. Absorbs the standalone specification in full — eight new modules (§15–§22: hypothesis registry, exploration, frequency scoping, regime, the gate ladder, the allocator, the enforcement boundary, decay and mechanism monitoring), the seed hypothesis catalogue as Appendix B, and a consolidation map as Appendix C. Requirement IDs normalised to this document's `FR-<MODULE>-<NN>` convention with numbers preserved. **§1.2 amended:** the allocator introduces runtime scope — weighting, conflict veto, regime exposure multiplier — which v0.2 excluded; the exclusion is lifted and the enforcement boundary with xman is specified in §21 rather than left implicit. This markdown becomes the **authoritative form** from this version; the v0.2 `.docx` is retained as a historical snapshot. |
+| 0.2 | Aug 2026 | Post-review revision, incorporating the accepted findings of the 11 August 2026 review; see Appendix A for the full disposition. |
+
+> **Provenance.** From v0.3 this markdown is authoritative. `Options_Research_Platform_FRD.docx`
+> is the v0.2 snapshot, retained for history — it does **not** contain §15–§22 and must not
+> be treated as current. Keeping a stale binary as "authoritative" while editing the markdown
+> is precisely the drift trap this note exists to prevent.
 
 ---
 
@@ -24,13 +29,15 @@
 This document specifies the functional requirements for a proprietary research platform whose purpose is to discover, validate, version, deploy and continuously improve trading signals for options strategies on Indian markets (NSE/BSE index and stock derivatives). Validated signals drive strategies executed on the xman trading platform. The document is intended as the basis for architecture design, build/buy decisions and phased delivery planning.
 ### 1.2 Scope
 In scope: market and derived data management; the interactive research environment; a feature and signal library; backtesting and statistical validation; capital, sizing and capacity research; forward (paper) testing; signal versioning and a controlled software development lifecycle (SDLC) from research to production; production performance measurement; the feedback loop that drives signal improvement; and AI/LLM assistance across the research workflow. Out of scope for this document: order management and broker-layer risk enforcement, and execution logic inside xman itself. Note that position sizing and capacity are in scope as research questions (Section 8), even though their runtime enforcement lives in xman. The webhook-based integration with xman is specified only at the interface level and is explicitly a low-priority, later-phase item.
+
+**Amended at v0.3.** The allocator (§20) introduces **runtime scope this document previously excluded**: signal weighting, the conflict veto, and the regime exposure multiplier all shape what is emitted, not merely what is researched. The exclusion is lifted deliberately rather than by omission, because "decides what to trade and when" cannot be specified without saying where those decisions take effect. §21 draws that boundary control by control, on one principle: **anything protecting capital rather than shaping research output must remain effective when this platform is stopped, unreachable, or emitting incorrectly** — and therefore belongs in xman, not here.
 #### 1.2.1 Explicit exclusions (Won't, this roadmap)
 The following are deliberately excluded so that future scope creep has something to be measured against: full order-book / market-microstructure capture and signals; high-frequency (sub-second) signal generation; multi-user governance, entitlement and approval workflow (the platform assumes a single accountable operator; approval gates are self-attestations with tamper-evident records per NFR-08); and reinforcement-learning execution agents. Any of these entering scope requires a new revision of this document.
 ### 1.3 Background and design philosophy
 The requirements below are synthesised from three bodies of knowledge. First, the academic literature on backtest overfitting and financial machine learning, principally the work of Bailey and López de Prado on the Deflated Sharpe Ratio, the Probability of Backtest Overfitting, purged and combinatorial purged cross-validation, and the "research factory" organisation of quantitative work. Second, publicly documented practice at systematic funds and multi-manager platforms, where the consistent lessons are that point-in-time data discipline and walk-forward validation must be pipeline requirements rather than researcher options, that a hybrid of interpretable factor signals plus machine-learning refinements is the dominant production architecture, and that signal decay is the central long-term challenge the platform must be designed to detect and manage. Third, the modern MLOps canon: feature stores to eliminate training/serving skew, model registries with full lineage, staged promotion (research → paper → production), drift monitoring and champion/challenger evaluation.
 Three principles govern everything in this document. (1) Anti-overfitting controls are enforced by the platform, not left to researcher discipline: every backtest records how many variations were tried, and headline metrics are always reported alongside selection-bias-adjusted equivalents. (2) Research/production parity: the same signal code, feature definitions and cost model run in backtest, paper and live modes, so a signal cannot behave differently in production than in research for architectural reasons. (3) Everything is versioned and reproducible: a signal result is a deterministic function of (data snapshot, code version, parameter set), and any historical result can be regenerated exactly.
 ### 1.4 Requirement conventions and verification
-Requirements are identified as FR-<MODULE>-<NN> and prioritised using MoSCoW. Following the review, MoSCoW labels are scoped to the Phase 1 timebox defined in Section 17 — "Must" means "Phase 1 is not credible without it", not "important in general" — which is the only condition under which MoSCoW forces genuine trade-offs. Section 17 additionally defines a Minimal Credible Core (MCC), the strictly smaller subset sufficient to run one honest experiment end to end, which is the first thing to build.
+Requirements are identified as FR-<MODULE>-<NN> and prioritised using MoSCoW. Following the review, MoSCoW labels are scoped to the Phase 1 timebox defined in Section 25 — "Must" means "Phase 1 is not credible without it", not "important in general" — which is the only condition under which MoSCoW forces genuine trade-offs. Section 25 additionally defines a Minimal Credible Core (MCC), the strictly smaller subset sufficient to run one honest experiment end to end, which is the first thing to build.
 Verification: each module preamble names the default verification method for its requirements using the standard categories (inspection, analysis, demonstration, test). Full per-requirement fit criteria in the scale/meter/threshold form are deliberately deferred to the phase specification of whichever phase a requirement enters — writing ~100 fit criteria before the Minimal Credible Core exists would be ceremony — but four requirements the review identified as untestable as written (FR-RES-02, FR-RES-06, FR-DATA-08, FR-MON-04) have been rewritten with measurable criteria in this revision. Detectors that can be over-aggressive (leakage detection, outlier IV detection) must ship with negative controls: known-clean inputs on which they must not fire.
 ### 1.5 Constraints and Assumptions
 This section records the operating constraints under which the platform will be built, each with its design consequence. Items marked TBC must be confirmed by the platform owner before Phase 1 design freezes; the consequences are written so that either resolution has a defined path.
@@ -46,10 +53,13 @@ This section records the operating constraints under which the platform will be 
 | C7 — Regulatory context. The platform operates against SEBI's evolving derivatives framework (including the April 2026 retail algo framework) and the post-2024 market-structure regime. | Regulatory changes are first-class data (FR-DATA-16) and analysis must not silently pool across regime boundaries (FR-BT-12). |
 
 ## 2. System Overview
-The platform is organised as a pipeline of nine cooperating modules around a shared data backbone. Data flows left to right in the happy path — from raw market data through research, validation and deployment into production monitoring — and right to left in the feedback path, where production performance drives signal refinement and retirement.
+The platform is organised as a pipeline of **eleven** cooperating modules around a shared data backbone. Data flows left to right in the happy path — from raw market data through research, validation and deployment into production monitoring — and right to left in the feedback path, where production performance drives signal refinement and retirement.
+
+Two of the eleven were previously specified in a separate document and are consolidated here at v0.3: the **Hypothesis Engine**, which decides what is worth researching at all, and the **Allocator**, which decides what runs live and at what size. They bracket the pipeline — one upstream of all research, one downstream of all validation — which is why specifying them apart from the rest was a mistake.
 
 | Module | Role |
 |---|---|
+| **Hypothesis Engine** | Registry of falsifiable claims with stated mechanisms; the seed catalogue (Appendix B); exploration intake; frequency scoping. Decides what enters research at all (§15–§17). |
 | Data Layer | Point-in-time store of NSE/BSE options, futures and cash market data; derived analytics (IV, Greeks, surfaces); data quality control; regulatory-epoch registry. |
 | Research Environment | Interactive workspace where hypotheses are formed and explored using the statistical toolbox and the feature library, with the exploration/trial boundary instrumented. |
 | Signal & Feature Library | Versioned registry of features and signals as code, with metadata, provenance, lineage and reuse. |
@@ -59,6 +69,7 @@ The platform is organised as a pipeline of nine cooperating modules around a sha
 | Forward Test Harness | Paper trading of candidate signals on live data; compares realised behaviour to backtest expectations. |
 | Deployment & SDLC | Promotion gates, environment management, release/rollback, audit trail from hypothesis to production. |
 | Production Monitoring & Feedback | Live vs. expected attribution, decay and drift detection, pre-registered kill criteria, automated alerts, structured feedback into research. |
+| **Regime & Allocator** | Regime detection (if FR-REG-01 justifies building it), the exposure multiplier as a precautionary risk control, and the allocator deciding which live signals run, at what margin weight, and what happens when two conflict (§18, §20). |
 
 AI capabilities are a layer that assists inside several modules (idea generation in Research, code synthesis in the Signal Library, anomaly narration in Monitoring), always subject to the same validation gates as human-authored work, and additionally subject to parametric look-ahead controls (Section 13). The xman execution interface sits at the far right of the pipeline and consumes production signal triggers over webhooks.
 ## 3. Functional Requirements — Data Layer (FR-DATA)
@@ -240,7 +251,179 @@ Deferred by design: the platform is valuable before a single live order is sent.
 | FR-EXE-03 | Support per-signal enable/disable and size caps at the interface layer (consistent with FR-CAP-04), independent of xman-side controls. | Should |
 | FR-EXE-04 | Sign or authenticate webhook payloads and log every emission and acknowledgement for audit. | Should |
 
-## 15. Non-Functional Requirements (Summary)
+## 15. Functional Requirements — Hypothesis Registry (FR-HYP)
+
+The hypothesis engine decides *what to research* and, with §20, *what to trade and when*. Its requirements were previously specified separately; they are consolidated here because the engine is part of the platform, not an adjunct to it. Section 21 of the standalone specification's rationale is preserved in the module preambles below — the *why* is what stops a future revision quietly undoing a control.
+
+A **hypothesis** is a falsifiable claim about why a trade should pay, with a stated mechanism and a null. It is not a strategy and not code. The **mechanism** field — *who is on the other side and what are they compensated for* — is what distinguishes an edge from a pattern. Default verification method for this module: test, with inspection for registry records.
+
+**The hypothesis record.** Fields marked locked become immutable once the first gated result exists, per FR-VAL-09: `mechanism`, `claim`, `rejected_mechanisms`, `predictors`, `universe`, `sample` (with epochs spanned), `null`, `role`, `horizon`, `data_frequency`, `latency_sensitivity`, `expected_mean_holding_period`, `evaluation_plan`, `thresholds`, `identification_inputs`. Unlocked: `provenance`, `data_prerequisites`, `status`. Derived, never entered: `trial_count`, read from the ledger per FR-VAL-03.
+
+`role` is one of `signal` (has its own P&L expression), `conditioner` (modulates another trade's sizing or direction), `risk_input` (consumed by other hypotheses or by risk management, never traded), or `benchmark`.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-HYP-01 | Reject any hypothesis record whose `mechanism`, `null`, `rejected_mechanisms` or `thresholds` fields are empty. | Must |
+| FR-HYP-04 | Where `data_prerequisites` are unmet, status is `blocked_on_data` and the platform refuses gated evaluation against it. | Must |
+| FR-HYP-05 | Refuse promotion of a `conditioner` or `risk_input` to standalone live emission. | Must |
+| FR-HYP-06 | The registry is searchable by mechanism family, predictor, status and epoch, so a proposal can be checked against prior art before testing begins. | Should |
+| FR-HYP-07 | Where a hypothesis declares `identification_inputs` — data or another hypothesis on which its test depends — block gated evaluation until those inputs are available at the stated granularity. | Must |
+
+*`rejected_mechanisms` exists because a hypothesis can otherwise silently carry a mechanism its own evidence contradicts. The seed catalogue's anchor entry did exactly that in an earlier draft: it claimed a preference-based insurance premium while the document's own headline finding argued that channel is approximately zero.*
+
+## 16. Functional Requirements — Hypothesis Exploration (FR-EXP)
+
+Four intake paths — seeded from the Appendix B catalogue, human, literature-derived, machine-generated — all entering the same registry, completing the same schema, traversing the same gates. Provenance changes the decay prior (FR-DEC-06) and nothing else.
+
+**Breadth is priced, not forbidden.** Every variant tested raises the deflated-Sharpe hurdle every survivor must clear (FR-VAL-03). That is what permits unlimited exploration without permitting self-deception. Two consequences are easy to miss: machine-scale search strains the assumption of a countable, honest trial family, and **regime slicing is also search** — testing *s* strategies × *r* regime definitions × *t* thresholds is closer to *s·r·t* effective trials than to *s+r+t*. Default verification method: test.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-EXP-01 | Every hypothesis, regardless of intake path, completes the FR-HYP record schema before any evaluation runs against it. | Must |
+| FR-EXP-02 | Each distinct regime definition and each threshold value evaluated increments the trial count for the hypothesis under test. | Must |
+| FR-EXP-04 | Before a proposal enters testing, report its similarity to existing registry entries by predictor overlap and mechanism family, so re-discovery is visible. | Should |
+| FR-EXP-06 | Detector hyperparameter tuning is search. Sweeping a persistence penalty, feature set or state count increments the trial count of every hypothesis subsequently evaluated against that detector. | Must |
+
+## 17. Functional Requirements — Frequency Scoping (FR-SCOPE)
+
+The platform is mid-frequency: mean holding period in **hours or longer**, individual short holds acceptable but not as the average case. Applying that constraint requires separating three properties routinely conflated:
+
+| Axis | Question |
+|---|---|
+| **Data frequency** | What sampling granularity is needed to *compute* the signal? |
+| **Holding period** | How long is the resulting position held? |
+| **Latency sensitivity** | How fast must you act once the signal fires, before the edge decays? |
+
+**This distinction is load-bearing.** FR-DATA-05's variance-premium work requires 5-minute bars to compute realised variance honestly, yet is computed end-of-day and held to expiry: zero latency sensitivity, multi-day hold. Reading "we are not HFT" as "no intraday data" would eliminate the core of the catalogue for no reason. **Intraday sampling is not intraday trading.** Default verification method: test.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-SCOPE-01 | G1 rejects any hypothesis whose `expected_mean_holding_period` is under one hour, or whose `latency_sensitivity` is `high`, unless an explicit recorded exemption is granted at registration. The one-hour floor is deliberately looser than the "hours or longer" constraint: this is the coarse per-hypothesis filter, and FR-SCOPE-02's book-level control is the real constraint. A single fast hypothesis is harmless; a book that drifts intraday is not. | Must |
+| FR-SCOPE-02 | Monitor the live book's **realised** holding-period distribution and alert on breach. The primary measure is the **share of trades held below the floor**, with median as secondary — a mean floor is trivially gamed by a barbell of many short trades plus one long position, which passes while the book is operationally intraday. | Must |
+| FR-SCOPE-03 | Where a hypothesis requires intraday data purely as offline *sampling*, record that distinctly from a requirement for intraday *execution*, so data-acquisition decisions are not justified against the wrong axis. | Should |
+
+## 18. Functional Requirements — Regime (FR-REG)
+
+**Regime and epoch are different things and must never be conflated.** A regime is a statistical state the market moves between — a parameter vector (drift, volatility, downside deviation), not a narrative label. An **epoch** (FR-DATA-16) is a change in market structure or participant composition, invisible to any return-based detector.
+
+**The hardest constraint in this module.** At persistence settings that avoid whipsaw, five years of history contains roughly **two to three regime episodes in total** — not per regime. At settings producing many episodes, turnover destroys the edge. Persistence and statistical power are in direct opposition and five years cannot supply both. Everything below follows from that. Default verification method: test.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-REG-01 | **Before the regime subsystem is built**, run and record a horse race on identical forward P&L comparing (a) a smooth function of the continuous conditioning variable, (b) **the filtered-probability weight the design actually specifies**, (c) the discrete label as reference only, and (d) a trend conditioner as the practitioner-standard rival. Decision metric is pre-registered and **tail-based**, per FR-GATE-02: (b) must reduce maximum drawdown and conditional VaR at matched return, out of sample, after costs. **If it does not, the regime layer is not built** and the platform implements continuous conditioning instead. | Must |
+| FR-REG-01a | The forward-P&L series is the backtest P&L of a pre-registered, fixed set of naive benchmarks (FR-GATE-16) — not candidate signals, whose selection would contaminate the comparison. | Must |
+| FR-REG-01b | The horse race's own multiplicity is charged downstream: selecting among conditioning technologies shapes every subsequent regime-conditioned evaluation, so it increments the trial count of **every hypothesis later evaluated against the winning conditioner**. Charging it only to benchmarks whose counts gate nothing would let the subsystem's most consequential model-selection decision escape the ledger. | Must |
+| FR-REG-02 | Cap regime state count at 3; default 2. A four-state univariate Gaussian model carries 20 free parameters, several of which would rest on ~2 effective observations at realistic sample sizes. | Must — *contingent* |
+| FR-REG-03 | Report **episode-count n**, never day-count n, on every per-regime statistic, and visually suppress any statistic backed by fewer than 5 episodes. | Must — *contingent* |
+| FR-REG-04 | Resample with a stationary or block bootstrap at block length comparable to dwell time. IID day-level resampling produces confidence intervals roughly √(dwell) too narrow. | Must — *contingent* |
+| FR-REG-05 | **The prefix-property test.** Compute the regime series through *T*, recompute through *T+k*, assert element-wise equality on the overlapping prefix. A failing detector is barred from every backtest path. This single assertion catches smoothed decoding, full-sample scalers, full-sample quantile thresholds and forward-filled features at once, and it runs in CI. **Checked at G1** — it is a property of the detector, not of any hypothesis's results. | Must |
+| FR-REG-06 | Regime thresholds are computed from trailing windows only, never full-sample quantiles — the same defect as smoothed labels in different clothing, and easier to commit by accident. | Must — *contingent* |
+| FR-REG-07 | Alert when a regime-conditional strategy's Sharpe exceeds buy-and-hold by more than approximately 2×; that ratio is the observed signature of the smoothed-label defect. *Heuristic tripwire derived from practitioner-tier evidence, not a validated threshold.* | Should — *contingent* |
+| FR-REG-08 | Hard position limits and defined-risk structures sit **beneath** the regime layer, enforced per FR-ENF. A regime signal is never the primary tail control for a short-gamma position: detection latency is reported at median 2–3 days and 90th percentile ~7 days, which for Indian weekly options is most of a contract's life. | Must |
+| FR-REG-09 | The operator-facing threshold control displays its measured false-positive rate at selection time. | Should — *contingent* |
+| FR-REG-10 | Persistence is an explicit tunable hyperparameter; switches-per-year is a first-class diagnostic on every run. | Must — *contingent* |
+| FR-REG-11 | After every retrain, re-map state indices to a canonical ordering and log a diff of the trailing 250 days' labels. A large diff means the detector changed, not the market. | Should — *contingent* |
+| FR-REG-12 | Epoch data is owned by the FR-DATA-16 registry — verified registry data, not a hard-coded calendar. This module adds only the behaviour: **refuse training windows spanning an epoch boundary** for any expiry-day or short-gamma hypothesis, or for the regime detector, without recorded justification. | Must |
+| FR-REG-13 | Declare and record the detector's retrain cadence, training window, and whether training windows may span epoch boundaries (they may not, per FR-REG-12). | Must — *contingent* |
+
+**Recommended detection method**, for the design that follows: a statistical jump model with an explicit persistence penalty, or Bayesian online change-point detection — whose causality is structural, there being no smoothed variant to use by accident. Markov-switching GARCH is a poor first build; its path-dependence problem makes exact likelihood computation infeasible, so it imports an estimation research problem rather than a library call. Features: 3–5 return-derived exponentially-weighted measures at mixed halflives, plus the variance risk premium. No macro, correlation or liquidity inputs in the first version — every added feature multiplies the trial count under FR-EXP-06.
+
+## 19. Functional Requirements — The Gate Ladder (FR-GATE)
+
+The stages, and what each checks. Gates reference requirements owned by other modules rather than restating them.
+
+| Gate | Checks | Failure |
+|---|---|---|
+| **G0 Registration** | Complete schema (FR-HYP-01); prior-art similarity; identification inputs available (FR-HYP-07); thresholds locked (FR-VAL-09) | Reject |
+| **G1 Feasibility** | Features exist at required granularity and history; liquidity floor met; frequency scoping (FR-SCOPE-01); **prefix-property compliance of any detector to be used (FR-REG-05)** | `blocked_on_data` |
+| **G2 Triage** | Tier-1 evaluation across variants; every variant ledgered | Shortlist or abandon |
+| **G3 Validation** | Tier-2 (FR-VAL-05); DSR, PBO, family corrections, minimum length (FR-VAL-11); simulated null (FR-GATE-13); cost-breakeven; tail metrics; **naive-benchmark increment (FR-GATE-17)** | Reject |
+| **G4 Regime qualification** | Only if regime-conditional. Minimum episodes; label-corruption sensitivity | **Demote to unconditional — see FR-GATE-15** |
+| **G5 Forward test** | Pre-registered duration and criteria (FR-FWD-03); paper-vs-backtest divergence | Reject |
+| **G6 Promotion** | Book-relative checks (FR-GATE-18/19) | Reject or resize |
+| **G7 Live** | Kill criteria registered (FR-MON-09) | — |
+
+Two structural properties: **thresholds are read, never supplied** (FR-VAL-09), with the G6 exception below; and **the evaluator is not the computer** — validation workers compute and publish, the lifecycle controller judges.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-GATE-01 | The regime layer's primary action is exposure reduction toward flat. Strategy rotation requires its own evidence and its own gate. The documented edge is de-risking, not rotating. | Must — *contingent* |
+| FR-GATE-02 | Regime-conditional claims are evaluated on drawdown and tail metrics, not return. In the strongest available result, maximum drawdown improved from −55% to −27% while annual return moved 10.2%→11.2%: this is a drawdown-control technology, and justifying it on return will over-fit toward an outcome it does not reliably deliver. | Must — *contingent* |
+| FR-GATE-03 | Emit **filtered probability as a continuous weight**, not an argmax label. This avoids whipsaw at a hard boundary, avoids discretisation loss, degrades gracefully under misclassification, and sidesteps label instability across retrains. | Must — *contingent* |
+| FR-GATE-04 | Halving a short-option position does not halve its gap risk. Gross short-gamma exposure is capped independently of the regime weight, enforced per FR-ENF-04/05. | Must |
+| FR-GATE-05 | Before any regime-conditional allocation deploys, produce a label-corruption sensitivity curve. **Defined criterion:** if randomly corrupting **10%** of regime labels reduces deflated Sharpe by more than **25%** relative to the uncorrupted case, or drives it below the hypothesis's locked DSR minimum, the design is not viable and does not deploy. Both numbers are locked at G0. | Must — *contingent* |
+| FR-GATE-13 | For any hypothesis whose P&L expression is a non-linear option payoff, G3 assesses significance against a simulated null. Scope: a single named model family, a fixed versioned parameter set re-calibrated once per epoch, index underlyings only, fixed path count. **The null is calibrated under the physical measure**, to index returns and realised-variance measures — **not** to observed option prices. Calibrating to option prices embeds the variance premium in the fitted parameters, so the null contains the effect under test and **the test can never reject, silently, with no error and no diagnostic**. Option prices for the null are generated under zero risk premia. **Parameter uncertainty is propagated** via a parameter bootstrap, not a point estimate. | Must |
+| FR-GATE-14 | The deflated Sharpe ratio is the headline metric, not raw Sharpe. For short-gamma strategies its skew/kurtosis haircut will be substantially larger than for an equity strategy at the same raw Sharpe — that is the correction working. | Must |
+| FR-GATE-15 | **G4 defaults to demotion.** Composing FR-REG-02's episode arithmetic with FR-REG-03's five-episode floor, no regime-conditional hypothesis reaches the floor for roughly a decade of live history. The honest statement: regime-conditional claims are not testable on available Indian history at deployable persistence, and G4's function is to demote to unconditional. The platform displays the projected date at which the episode floor could first be met, so the operator sees the wait rather than discovering it. | Must |
+| FR-GATE-16 | A fixed, pre-registered, versioned set of naive benchmarks exists — minimally a systematic fixed-delta short strangle for variance-premium hypotheses and a systematic short straddle for event hypotheses — run under the same cost model and the same data. | Must |
+| FR-GATE-17 | G3 evaluates the candidate's increment over its declared benchmark against a threshold locked at G0. A candidate that does not beat its naive benchmark does not pass, regardless of standalone metrics. **The increment is risk-matched, not raw.** An unqualified P&L increment conflates timing skill with exposure quantity: a conditional signal flat 60% of the time will mechanically trail an always-on short strangle in a calm sample *however good its timing is*, so a raw hurdle systematically favours more-exposed variants of the benchmark — the opposite of this gate's purpose. The comparison is either increment **per unit of margin consumed**, or the deflated Sharpe of the **long-candidate / short-benchmark spread** at equal risk. The choice is locked at G0. | Must |
+| FR-GATE-18 | G6 rules are **globally locked and versioned** rather than per-hypothesis — one rule set applied to every promotion, changed only by a ledgered versioned amendment. G6's checks (correlation contribution, concentration headroom, capacity) are inherently book-relative and cannot be pre-registered per hypothesis, so they are the one structural exception to FR-VAL-09's threshold locking. **An amendment applies only to hypotheses registered after its ledger timestamp** — not to anything already in flight — or, where impractical, after a locked minimum dwell long enough that an amendment cannot be aimed at a known candidate. | Must |
+| FR-GATE-19 | Every G6 evaluation records the rule-set version, the live book it was evaluated against, and the computed values, so a promotion can be re-checked against the rules in force at the time. | Must |
+| FR-GATE-20 | Candidate and benchmark are evaluated **under the same cost-configuration version, within the same run identity tuple**. When FR-FB-02 recalibrates the cost model, benchmark results shift underneath any previously locked increment threshold; pinning both sides is what keeps the increment meaningful across recalibrations. A recalibration therefore requires re-evaluating both sides. | Must |
+
+## 20. Functional Requirements — The Allocator (FR-ALLOC)
+
+Which live signals run, at what weight, and what happens when two conflict. **New runtime scope relative to FRD v0.2** — §1.2 is amended accordingly.
+
+**Design position: deliberately dumb, but specified.** An allocator sits downstream of every anti-overfitting control in the platform, where nothing is watching it. The evidence for sophistication is weak: the disagreement in the volatility-managed-portfolio literature is not about whether volatility is forecastable but about whether **the conditioning-to-weight mapping is stable enough to estimate in real time**. Dumb, however, is not the same as vague. Default verification method: test.
+
+**Why margin contribution and not expected shortfall.** Equal expected-shortfall contribution requires a joint tail model across every live signal — estimator choice, dependence structure, tail assumptions — for a short-gamma book whose tail is precisely the thing there is no data on. SPAN-style margin is externally computed by the exchange, conservative, stress-based rather than historically estimated, and already the binding constraint under FR-CAP-01. It requires zero estimation.
+
+**The caveat that makes it safe: margin-efficient is not low-risk.** Far-out-of-the-money short options are margin-cheap and gap-heavy, so equal-margin weighting over-allocates to precisely the structures margin under-prices. Equal-margin allocation is valid **only in combination with** FR-CAP-03's concentration limits — the moneyness dimension especially — and FR-GATE-04's gamma cap. Those are mandatory complements, not optional overlays.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-ALLOC-01 | v1 allocates by **equal margin contribution** within a stated margin budget, with FR-CAP-03 concentration limits and the FR-GATE-04 gamma cap enforced as preconditions rather than later checks. Expected-shortfall contribution is deferred to v2 under FR-ALLOC-04. If FR-REG-01 concludes the regime layer is not built, the continuous conditioning variable substitutes for the regime multiplier in FR-ALLOC-06's role and nothing else changes. | Must |
+| FR-ALLOC-02 | Conflict is evaluated **per exposure axis** — delta, vega, gamma — not on a single undefined "direction". Two signals conflict only where they oppose on the same axis, over the same underlying, in an overlapping window, and are not in a declared relationship. | Must |
+| FR-ALLOC-04 | Any allocator more sophisticated than v1 is estimated on a trailing window, applied forward, and reported only on that basis — never fitted on the full sample and reported in-sample. | Must |
+| FR-ALLOC-05 | Review the conflict log periodically; a persistently conflicting undeclared pair indicates at least one hypothesis is mis-specified. | Should |
+| FR-ALLOC-06 | The regime exposure multiplier applies **by exposure class, not uniformly**: it scales short-volatility and short-gamma exposure toward flat, leaves long-volatility and declared hedge exposure unscaled, and **never scales any exposure up**. Applied uniformly it would de-risk defensive positions exactly when they should be held. Each signal declares its exposure class at registration. | Must |
+| FR-ALLOC-07 | Signals may declare a **relationship** — `hedge`, `overlay`, `pair` — at registration. Declared relationships are exempt from the conflict veto, and the declaration is part of the locked record so it cannot be added after a conflict surfaces. Without this, a long-put tail hedge permanently opposes the core short-volatility book on the vega axis and the veto would cancel both the hedge and what it hedges. | Must |
+| FR-ALLOC-08 | G6 models **suppression interactions**: promoting a signal that would frequently veto an incumbent on shared underlyings is a cost to the book, and the incremental-contribution check accounts for it. Otherwise a new signal can silently silence a better incumbent. | Should |
+| FR-ALLOC-09 | Rebalancing is **band-triggered, not continuous**: the book re-sizes only when the target weight departs from the live weight by more than a configured band, with a minimum dwell between rebalances. Band and dwell are versioned configuration. Every options re-weight is a close-and-reopen at spread, so continuous re-weighting either bleeds cost or gets silently discretised by the implementer. | Must |
+| FR-ALLOC-10 | The cost of a rebalance is modelled as unwind at prevailing spreads **plus** reopen at prevailing spreads, never as a notional delta, and the backtest survives a 3× cost stress on that basis. | Must |
+| FR-ALLOC-11 | The regime multiplier is registered as a **risk control** with its own record, distinct from the hypothesis registry, recording its classification, the asymmetry argument below, and the FR-ALLOC-06 no-upward-scaling condition on which the classification depends. | Must |
+| FR-ALLOC-12 | Its evidence standard is explicitly **lower than G4's and explicitly stated**: FR-REG-01's horse race showing drawdown reduction at matched return, plus the FR-GATE-05 corruption test, but **not** the five-episode floor, which FR-GATE-15 establishes is unreachable. The waiver is recorded, not implied. | Must |
+| FR-ALLOC-13 | **Pre-registered removal criteria**, locked before deployment: the multiplier is reviewed each epoch against cumulative foregone premium versus avoided drawdown, and removed if foregone premium exceeds avoided drawdown by a locked margin over a locked window. A precautionary control that never pays for itself is a cost, not a control. | Must |
+| FR-ALLOC-14 | The multiplier is **monitored live in its own right** — FR-MON-09 covers signals and nothing otherwise watches the multiplier. Reporting shows continuously the premium foregone to de-risking and the drawdown avoided, so the FR-ALLOC-13 review is a reading rather than a reconstruction. | Must |
+
+**Why the multiplier is exempt from G4, stated rather than assumed.** FR-GATE-15 establishes that regime-conditional claims are untestable on available history — yet FR-ALLOC-06 applies a regime-conditioned multiplier across the entire live book, which is the same claim class at the widest possible blast radius. The resolution is that the multiplier is classified as a **precautionary risk control, not a return claim**, on an asymmetric loss function: a false de-risk costs bounded foregone premium; a missed de-risk costs a gap loss on a short-gamma book.
+
+**This argument is available only because FR-ALLOC-06 forbids scaling up.** A multiplier that only ever reduces exposure cannot manufacture returns; its worst case is opportunity cost. **If any future revision permits upward scaling, the classification is void and the multiplier becomes an alpha claim subject to G4 like everything else.** That conditionality is the entire basis of the exemption and must not be quietly dropped.
+
+## 21. Functional Requirements — Enforcement Boundary (FR-ENF)
+
+Runtime enforcement lives in xman; this platform researches and emits (§1.2). The controls this platform introduces must therefore each declare where they actually take effect. Default verification method: demonstration.
+
+| Control | Computed by | Enforced where | Rationale |
+|---|---|---|---|
+| Regime exposure multiplier | Signal runtime | **Emitted** — scales the size hint in the FR-EXE-01 payload | A research output about sizing, not a safety limit. If it fails, size is wrong, not unbounded |
+| Per-signal enable/disable and size cap | Lifecycle controller | **Emission interface (FR-EXE-03)** *and* independently in xman | Belt and braces |
+| Conflict veto | Lifecycle controller | **Emission — suppression means no emission is sent** | A veto is the absence of an instruction; it cannot fail open |
+| Concentration limits | Lifecycle controller, checked at G6 and at emission | **Both** — advisory at emission, authoritative in xman | Book-relative and safety-relevant; this platform cannot see xman's true live book with certainty |
+| Gross short-gamma cap | — | **xman only** | A hard limit protecting capital. It must not depend on this platform being correct, reachable, or running |
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-ENF-01 | Every control this platform introduces declares its enforcement point; no control is introduced without one. | Must |
+| FR-ENF-02 | Controls classified as protecting capital rather than shaping research output are enforced in xman and remain effective when this platform is stopped, unreachable, or emitting incorrectly. A fail-safe test demonstrates this. | Must |
+| FR-ENF-03 | Where a control is enforced in both places, the platform-side value is recorded on every emission so a divergence between intended and enforced limits is reconstructable. | Should |
+| FR-ENF-04 | **Owner: the xman platform.** The gross short-gamma cap is a requirement levied on xman, accepted as an xman-side change. xman possesses Greeks machinery, so the capability exists; what remains is wiring it into a pre-trade risk check on the order path. This is a **declared cross-document dependency**: until xman confirms the check is live, any design statement relying on the cap being enforced is provisional and FR-ENF-05 is the operative control. | Must |
+| FR-ENF-05 | A **model-free fallback** is specified and available so the cap degrades gracefully rather than failing silently: bucketed contract-count caps per moneyness × expiry band, countable from the order book with no options model, no volatility surface and no Greeks. Deliberately cruder and more conservative than a gamma cap. **Built regardless of FR-ENF-04's status** — a control that only exists after another team's change is not a control during the interval that matters most. | Must |
+
+## 22. Functional Requirements — Decay and Mechanism Monitoring (FR-DEC)
+
+FR-FB covers the feedback loop and FR-MON covers signal-level decay. This module covers what neither does: monitoring the **mechanism** rather than the P&L. A premium can erode because its source is competed or legislated away, and that erosion is visible in the premium series long before it appears in any signal's drawdown. Default verification method: test.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-DEC-01 | Maintain the measured variance risk premium as a first-class series **by epoch and regime**, alerting on structural decline independently of any signal's performance. | Must |
+| FR-DEC-02 | Re-measure the premium either side of each epoch boundary. **Stated honestly:** 20 Nov 2024 is a confounded bundle of three simultaneous changes and cannot identify any of them individually; all boundaries are confounded with market conditions; and any pre-2024 measurement depends on vendor backfill that may not be obtainable. | Should |
+| FR-DEC-04 | A retired hypothesis may be re-proposed, but re-entry opens a new record linked to the retired one, with the original's trial history attached. | Should |
+| FR-DEC-05 | **A new epoch triggers a review of every live signal whose training or validation window predates it**, with the outcome recorded. FR-DEP-07's revalidation is scheduled, not epoch-triggered. | Must |
+| FR-DEC-06 | The decay haircut applied to literature-derived hypotheses is part of the **locked threshold set**, not free-standing configuration. Revising it after results exist follows FR-VAL-09's new-hypothesis rule. The canonical figures — 26% lower out-of-sample, 58% lower post-publication across 97 predictors — are an equity cross-section result; applying them to options is an extrapolation and is labelled as one. | Must |
+
+## 23. Non-Functional Requirements (Summary)
 
 | ID | Requirement |
 |---|---|
@@ -255,12 +438,12 @@ Deferred by design: the platform is valuable before a single live order is sent.
 | NFR-09 | Resource partitioning: research and capture workloads run under enforced CPU/memory/IO limits and lower scheduling priority than live trading on shared hardware; a saturation test demonstrates live-trading latency is unaffected by a research workload at full permitted load. |
 | NFR-10 | Data licensing: vendor licence and redistribution terms for retained multi-year history are recorded in the data catalogue per dataset, and retention/usage stays within them. |
 
-## 16. Minimal Credible Core
+## 24. Minimal Credible Core
 The Minimal Credible Core (MCC) is the smallest subset of this document sufficient to run one honest experiment end to end — smaller than Phase 1, and the thing actually worth building first. It comprises: point-in-time storage with as-of queries and snapshots for one index underlying's options chain (FR-DATA-01/03/09 restricted in scope), prospective capture running from day one (FR-DATA-14/15), basic IV and first-order Greeks (FR-DATA-05 core), the hypothesis registry and auto-logged experiment tracking with the exploration boundary (FR-RES-03/04/09), one signal implemented against the contract in backtest mode (FR-SIG-02/03 minimal), the backtester with the full cost stack, expiry settlement and participation caps but simplified margin (FR-BT-01/02/03/04/09, FR-CAP-04), walk-forward plus DSR/PBO with locked thresholds (FR-VAL-01/03/04/05/09), and hash-chained append-only ledgers with offsite backup (NFR-07/08). Everything else, including CPCV, the feature store, surface fitting, forward testing, monitoring and AI assistance, layers on after the MCC has produced its first gated result.
-## 17. Phasing and Effort
+## 25. Phasing and Effort
 Phase 1 (foundation, the MoSCoW timebox): the MCC plus the remaining Phase 1 Musts — full margin modelling, CPCV, the feature store, epoch registry and epoch-annotated reporting, sizing policy as artefact, and data QC. Phase 2 (lifecycle): FR-FWD, FR-DEP, FR-MON (including pre-registered kill criteria), FR-FB. Phase 3 (leverage): FR-AI, remaining Should/Could items, and FR-EXE to close the loop into xman.
 Effort is stated as bands with the capacity assumption named, per the review. For a small team (2–3 engineers): MCC in roughly 6–10 weeks, Phase 1 in 3–4 months, full lifecycle in 6–9 months. For a single practitioner without AI assistance: MCC in roughly 3–5 months, Phase 1 approaching a year, and the earlier headline estimates would be misleading. The operative assumption for this platform (constraint C1) is a single practitioner with substantial agentic AI development capacity, which experience suggests sits between the bands — closer to the small-team band for well-specified components (backtester mechanics, storage, CI) and closer to the solo band for judgement-heavy components (cost-model calibration, validation-gate design, epoch analysis). These bands are planning inputs, not commitments, and should be revised after the MCC lands.
-## 18. Glossary
+## 26. Glossary
 
 | Term | Meaning |
 |---|---|
@@ -279,7 +462,7 @@ Effort is stated as bands with the capacity assumption named, per the review. Fo
 | Regulatory epoch | A named period of stable market structure between structural regulatory changes; results must not silently pool across epoch boundaries. |
 | Cost-breakeven multiple | The multiplier on modelled total costs at which a strategy's net expectancy reaches zero; a fragility measure. |
 
-## 19. Key References
+## 27. Key References
 Bailey, D.H. & López de Prado, M. (2014), "The Deflated Sharpe Ratio", Journal of Portfolio Management 40(5). — Bailey, Borwein, López de Prado & Zhu (2016), "The Probability of Backtest Overfitting", Journal of Computational Finance. — López de Prado, M. (2018), Advances in Financial Machine Learning, Wiley. — Pardo, R. (2008), The Evaluation and Optimization of Trading Strategies. — Gatheral, J. & Jacquier, A. (2014), "Arbitrage-free SVI volatility surfaces", Quantitative Finance 14(1). — Hagan et al. (2002), "Managing Smile Risk" (SABR). — Harvey, C. & Liu, Y., and subsequent rebuttal literature on significance hurdles for new factors (shipped as the two FR-VAL-09 presets). — McLean, R.D. & Pontiff, J. (2016), "Does Academic Research Destroy Stock Return Predictability?", Journal of Finance (the post-publication decay figures behind FR-SIG-08, an equity cross-section result applied here by labelled extrapolation). — Tang et al. (2025), "AlphaAgent: LLM-Driven Alpha Mining with Regularized Exploration to Counteract Alpha Decay", KDD '25; RD-Agent(Q); QuantaAlpha (arXiv 2602.07085); XALPHA (arXiv 2607.08332); FactorMiner (KDD '26) — the agentic alpha-mining cluster informing Section 13. — 2025–26 published work on LLM training-cutoff leakage in backtests (behind FR-AI-08/09). — Industry/practitioner sources on Indian F&O backtest realism and MLOps governance for trading.
 ## Appendix A — Disposition of Review Findings (11 Aug 2026)
 
@@ -302,3 +485,85 @@ Bailey, D.H. & López de Prado, M. (2014), "The Deflated Sharpe Ratio", Journal 
 | D5 Isolation claim; NFR-03 contention | Accepted. FR-RES-05 reworded as partitioning; NFR-09 added; NFR-03 states its contention assumption. |
 | D6 AI citations unverified; open problem unstated | Partially accepted, partially rejected. Rejected: the claim that RD-Agent(Q), QuantaAlpha, XALPHA and FactorMiner could not be confirmed — all four were located in retrievable sources during drafting (arXiv 2602.07085, arXiv 2607.08332, KDD '26 proceedings, and cross-citations), and identifiers are now in §19 to make verification trivial. Chain-of-Alpha was never cited. Accepted: the open-problem statement (machine-scale search vs. DSR/PBO corrections) is now recorded in §13, and FR-AI-06 is labelled a position taken absent established practice. |
 | D7 "Won't" defined, never used | Accepted. §1.2.1 explicit exclusions added. |
+
+## Appendix B — Seed Hypothesis Catalogue
+
+The canon a hypothesis engine starts from, before anyone invents anything. Reference material rather than requirements: these are *inputs* to the platform, not obligations on it. Each is a candidate registry entry and must complete the FR-HYP schema before testing.
+
+**Evidence grades.** **A** replicated peer-reviewed with at least partial Indian evidence · **B** strong peer-reviewed, US/EU only, transfer to India is an assumption · **C** contested, or practitioner/vendor tier · **D** mechanism plausible, evidence absent.
+
+**The finding that should change priors before reading the rest.** Equity index option alphas in the US have become statistically indistinguishable from zero over roughly the past fifteen years, while synthetic options constructed to strip out option-market frictions have never shown negative alpha across a century. The implication is that the variance risk premium was substantially an **intermediation rent** rather than a deep preference-based risk premium, and it eroded as frictions fell. *(Source is a 2025 working paper, not peer-reviewed; direction is corroborated by the authors' earlier work but the VRP-decline literature is not unanimous.)*
+
+**Where the India transfer needs care.** That model's friction is a *structural* inability of retail to sell options. **No such constraint exists in India** — Indian retail can and demonstrably does write options at scale. What India plausibly has is a large *net* demand imbalance in short-dated index options, which is a behavioural fact rather than a binding constraint. The argument therefore runs through the demand-pressure and limits-to-arbitrage channel (H4's mechanism), yielding a weaker but still falsifiable prediction: if Indian premia are substantially an imbalance rent, the measured Indian premium should exceed the current US premium and should decline as the imbalance declines. **That requires measuring the imbalance, not assuming it** — H12 is the identification input.
+
+### Anchor hypotheses
+
+| ID | Claim | Grade | Role |
+|---|---|---|---|
+| **H1** | Implied variance systematically exceeds subsequently realised variance; selling variance earns a premium | A | signal |
+| **H2** | The variance risk premium level predicts subsequent index excess returns, strongest at roughly quarterly horizon — **not** a weekly-expiry timing signal | B | conditioner |
+| **H23** | Indian premia are substantially an imbalance rent; the premium should decline as the net retail imbalance declines | C | research question |
+
+**H1's mechanism** is the **intermediation rent**: one side of the market persistently demands convexity, and capacity-constrained intermediaries absorb it, compensated for inventory risk they cannot fully hedge, for jump exposure dynamic hedging cannot replicate, and for margin that binds precisely when the payout occurs.
+
+**H1's rejected mechanism** — recorded because a hypothesis must not silently carry a mechanism its own evidence contradicts — is the deep preference-based story, that buyers purchase insurance against a wealth-destroying state so it prices above actuarial value. If frictionless synthetic options never showed negative alpha across a century, that channel is approximately zero and cannot be the source.
+
+**H1's critical refinement**, from the one verified India study: only past **continuous** variance forecasts variance-swap returns — **realised jumps have no predictive power** — so a jump-loaded realised-variance estimator degrades the signal. Separate the components.
+
+### The remainder
+
+| ID | Hypothesis | Grade | Role | The thing to know |
+|---|---|---|---|---|
+| H4 | Put overpricing / net buying-pressure skew premium | B | signal | Demand-pressure and limits-to-arbitrage, not preference. **No Indian equivalent study exists.** Its mechanism is the one H1 and H23 borrow |
+| H7 | Term-structure SLOPE predicts variance-asset returns | B | conditioner | SLOPE is the **second principal component**, not front-minus-back, and predicts *variance-asset* returns, not equity returns. India has no liquid VIX futures — build the curve synthetically |
+| H8 | Contango/backwardation carry; inversion as stress flag | C | mixed | The **inversion flag is more robust than the carry trade**. Calendar-spread margin relief was removed on expiry day, 10 Feb 2025 |
+| H9 | Scheduled-event IV run-up and crush | B | signal | **Union Budget (1 Feb)** has no US analogue in magnitude. **No systematic academic treatment of the Indian index-level event set exists** |
+| H10 | Implied vs realised event move | C | signal | The conditioned version of H9 — sell only where the implied move is rich against that name's own history |
+| H11 | Dealer gamma → realised volatility | C | conditioner | US literature is **genuinely split** on sign; the reconciliation is that the *sign of dealer gamma* is the state variable. India has **no signed order flow**, so every implementation rests on an assumed dealer sign |
+| H12 | Participant-category positioning (FII/DII/Pro/Client) | D | conditioner | **Daily EOD, aggregated by instrument class** — that ceiling is permanent. Also the identification input for H23 |
+| H14 | Pinning at expiry | C | research question | Indian index options settle on the **last-30-minute time-average of the index**, which plausibly neutralises close-clustering. Indian evidence is mixed-to-null. Do not assume transfer |
+| **H15a** | 0DTE intraday gamma regime | C | — | **Out of scope (FR-SCOPE)** — holds minutes to hours with high latency sensitivity. Retained so the exclusion is explicit rather than an omission |
+| **H15b** | 1DTE, entered T-1 and held through expiry | C | signal | The in-scope half: ~24-hour hold, no latency sensitivity. Arguably the world's most extreme short-dated market with **essentially no published microstructure work** |
+| H17 | Dispersion / correlation risk premium | B | signal | Cleanest mechanism in the catalogue — correlation spikes exactly when diversification is needed. But liquidity concentration means full-index dispersion is probably not executable; reduced-basket only |
+| H18 | Cross-sectional IV−RV and delta-hedged option returns | B | signal | Needs a broad liquid single-stock cross-section India lacks. Expect non-replication for **data** reasons, not economic ones |
+| H20 | HAR-RV | A | risk_input | **Not a trade — the denominator of nearly everything above.** Build first. Carry HAR-J given H1's jump finding |
+| H21 | IV momentum and mean reversion | C | signal | Horizon-dependent sign flip makes single-horizon fits unstable |
+| H22 | India VIX informational content | C | risk_input | Literature is low-tier with at least one internal contradiction. **Re-derive on your own data** — history is free from NSE |
+| H25 | Jump/tail premium, distinct from the diffusive premium | B | risk_input | Far-OTM options cannot be replicated by dynamic hedging when jumps exist. Expect it to be untestable at conventional significance on Indian samples; its value is pricing what the tail costs |
+| H26 | Overnight vs intraday variance premium | B | signal | Variance accrues over trading time, decay over calendar time. Cheap to test from data the platform will hold |
+| H27 | Underlying trend as a short-volatility conditioner | C | conditioner | The most common practitioner overlay, and the natural continuous-conditioning rival in FR-REG-01's horse race |
+
+**Role counts:** nine signals (H1, H4, H9, H10, H15b, H17, H18, H21, H26) · six conditioners (H2, H7, H8-inversion, H11, H12, H27) · three risk inputs (H20, H22, H25) · two research questions (H14, H23) · two out of scope on frequency grounds (H15a, and the withdrawn surface-relative-value entry).
+
+**Backlog, recorded not specified:** VRP term structure (needs multi-expiry) · risk-neutral skewness (**the literature's sign conventions are genuinely split and the two common measures move in opposite directions**; any implementation must store the definition with the series) · tail-hedging cost (subsumed by H25) · PCR and max pain (**max pain has no independent mechanism**; carry only as a benchmark) · expiry-week theta (re-indexed by the Sep 2025 migration) · expiry-day migration as a natural experiment (**the best available way to validate the gamma and expiry families causally**).
+
+### Two inference errors the catalogue must actively prevent
+
+**"Retail loses money" does not imply "fading retail pays."** SEBI's FY25 study reports ~91% of individual F&O traders losing money and aggregate net losses around ₹1.06 lakh crore. But those losses are substantially **transaction costs, STT, spreads and adverse selection** — symmetric frictions a systematic fader also pays, not transfers to whoever takes the other side. **No study was found demonstrating a strategy profiting by fading retail positioning.** Any hypothesis invoking this must address the frictions objection in its `mechanism` field.
+
+**High IV rank does not imply cheap-to-sell.** The evidence is vendor-tier and measures win rate and premium collected — the wrong denominators. The discriminating question is P&L **per unit of realised gamma risk or maximum adverse excursion**. And the variance premium *compresses* after volatility spikes, exactly when IV rank peaks, because realised volatility catches up. Prefer the variance risk premium, which has peer-reviewed forward-predictive support, over IV rank, which does not.
+
+### Evidence gaps the platform must fill itself
+
+No Indian dealer-gamma study. No Indian net-buying-pressure study. No credible modern Indian pinning study. No Indian dispersion measurement. No systematic treatment of the Indian index-level event set — despite the Union Budget being among the largest scheduled volatility events in any equity market. No Indian 0DTE literature, in arguably the world's largest short-dated options market.
+
+**Nearly the entire catalogue is US or European evidence whose transfer to India is an explicit assumption.** The only genuinely India-based evidence verified is one 2020 study of the Indian variance risk premium, the SEBI regulatory record, and a 2025 study of the expiry-day change.
+
+## Appendix C — Consolidation Map
+
+The hypothesis engine was specified separately as `Hypothesis_Engine_Spec.md` v0.5 and is absorbed here at v0.3. Its requirement IDs are normalised to this document's `FR-<MODULE>-<NN>` convention. Anyone holding the standalone specification can translate as follows:
+
+| Standalone ID | Consolidated ID |
+|---|---|
+| `HYP-FR-nn` | `FR-HYP-nn` |
+| `EXP-FR-nn` | `FR-EXP-nn` |
+| `SCOPE-FR-nn` | `FR-SCOPE-nn` |
+| `REG-FR-nn` | `FR-REG-nn` |
+| `GATE-FR-nn` | `FR-GATE-nn` |
+| `ALLOC-FR-nn` | `FR-ALLOC-nn` |
+| `ENF-FR-nn` | `FR-ENF-nn` |
+| `DEC-FR-nn` | `FR-DEC-nn` |
+
+Numbers are preserved; only the prefix order changes. Eight standalone requirements that duplicated FRD requirements were withdrawn in the standalone document's own v0.2 and do not reappear here — they were always owned by FR-VAL-03, FR-VAL-05, FR-VAL-09, FR-VAL-11, FR-FB-04, FR-AI-06, FR-CAP-03 and FR-DATA-16.
+
+The standalone specification's seed catalogue becomes Appendix B, and its design rationale is preserved in the §15–§22 module preambles rather than discarded — the *why* is what stops a future revision quietly undoing a control.
