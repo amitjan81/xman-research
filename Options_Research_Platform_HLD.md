@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Version** | **0.5** (holdout boundary, run manifest, replay) |
-| **Status** | Proposed — for owner review against FRD v0.2 |
-| **Date** | 11 August 2026 |
-| **Baseline** | FRD **v0.4** (consolidated, Aug 2026) — `Options_Research_Platform_FRD.md` in this repository; constraints C1–C7 binding |
+| **Version** | **0.6** (root-cause revision) |
+| **Status** | Proposed — for owner review against FRD v0.5 |
+| **Date** | 12 August 2026 |
+| **Baseline** | FRD **v0.5** (root-cause revision, Aug 2026) — `Options_Research_Platform_FRD.md` in this repository; constraints C1–C7 binding |
 | **Audience** | Platform owner/operator; AI implementation agents; future reviewers |
 | **HLD/LLD line** | This document decides **containers (things that run or store data), dataset lifecycles, the port/adapter seams, and irreversible technology choices**. Schemas, table DDL, API signatures, class design, configuration formats and per-component algorithms are LLD, to be recorded as ADRs and phase specifications as each component enters build. |
 
@@ -13,6 +13,7 @@
 
 | Version | Date | Summary of change |
 |---|---|---|
+| **0.6** | 12 Aug 2026 | **Root-cause revision, mirroring FRD v0.5.** §9.1.1 answers the question v0.5 left open — *who executes the holdout evaluation*: a **Holdout Evaluation Sandbox** in the capture slice under the `promotion` principal, with no network egress, no write path to research-readable locations, and **only the pre-registered metric set leaving it**. Result minimisation is what closes the exfiltration channel; the mount permission never did, because the evaluation is a backtest of researcher-authored code whose persisted equity curve and trade log are a projection of the holdout itself. Sealed-zone derivation moves to the capture slice so the holdout is QC'd through the same pipeline as in-sample data. §9.1.2 states what the seal does **not** cover — the live-observed, monitoring and execution families span the same dates and are research-readable. §11.1 adds the identity model: six principals, default deny, an authenticated operator API, and the operator credential held **outside** the research slice — the only mechanism that distinguishes the operator from the operator's agents, and without which the AI information boundaries are unenforceable. The threat model gains a holdout row stating honestly that the operator with root cannot be prevented, only detected. **Corrections:** four stale statements of NFR-01 replaced by the run manifest; QAS-06's tactic no longer mandates the physical separation AD-20 records as unavailable; the Lifecycle Controller concentration risk is **actually recorded in §17** — §8.5 asserted it was and it was not — with the gateway's fail-closed behaviour defined; header and scope line corrected from FRD v0.2 and 12 modules. |
 | **0.5** | 12 Aug 2026 | **Structural controls given architecture.** FRD v0.4 added controls that are *access boundaries and artefacts*, not computations, so they land here rather than in a worker: §9.1 adds the **sealed holdout zone** — a lake partition the research slice cannot read, enforced by OS-user and mount permissions rather than by policy, since the platform runs autonomous agents with lake access and a rule they are asked to respect is not a control. The **run manifest** replaces the five-element identity tuple as the reproducibility key, because the tuple omitted the numerical environment it implicitly promised. **Replay verification** is added to the Signal Runtime, which the live-observed dataset already made possible. Campaign records and mechanism-family budgets extend the Registries. The allocator is reduced to fixed weights plus caps until two validated signals exist, and the Regime Detector container moves to Phase 2 at the earliest. |
 | **0.4** | 12 Aug 2026 | **Hypothesis engine absorbed.** FRD v0.3 consolidated the hypothesis engine into the requirements baseline; its eight requirement modules had no owning container here. §8.5 added, assigning them — **two new containers (Regime Detector, split training/inference; Allocator, inside the Lifecycle Controller because it gates live emission), with the remaining six modules extending existing containers rather than adding their own.** Records the impact on four existing components: the workers gain a leakage detector, a naive-benchmark harness and a physical-measure simulated null while **losing the gate evaluator** to the Lifecycle Controller; the controller becomes the platform's busiest component and its widest blast radius; the Signal Runtime gains causal regime inference and the exposure multiplier; Monitoring gains the multiplier itself as a second subject, since nothing otherwise watches a control that only ever reduces exposure. Container diagram updated. |
 | **0.3** | 11 Aug 2026 | **Second review round (Fable) + two owner decisions.** *Owner decisions:* capture phased to indices first with stock underlyings deferred, recorded with permanent-forfeiture-of-history as accepted risk (AD-21); single host / single disk confirmed, so live-trading IO protection is not structural — residual risk accepted with four compensating controls and a named dedicated-disk revisit trigger (AD-20). *Critical fixed:* §8.2 had sized a 10-underlying index corpus while the FRD scopes index **and** stock derivatives (180+ NSE underlyings); sizing now states both scopes, and capture feasibility against vendor rate limits is raised as an open item. *Majors fixed:* claim plane respecified by responsibility with leases, an artefact path and a separate worker identity (AD-23); Lifecycle Controller added to the deployment diagram — previously in no slice — and the claim arrow repointed to it; gate evaluation made the Lifecycle Controller's alone so the container computing a result never judges it (AD-22); Universe Resolver settled in the PIT Lake; backup anchor target now **must** be write-once, with a threat model naming the operator's future self as primary adversary (AD-24); hourly ledger increments added so QAS-09's 1 h RPO has a mechanism; hash-chain continuity reconciled against monthly-rolling stores; four unowned requirements given owning blocks — FR-VAL-08 leakage detector, FR-BT-02 statutory cost schedule, FR-FWD-01 paper fill simulator, FR-SIG-01 online feature writer; DuckDB justification corrected from ASOF join to knowledge-time version resolution, with the spike rewritten to test the right query shape; compaction designed rather than assumed away (AD-25); schema evolution and the platform's own SDLC added (AD-26). *Self-correction:* §7.8's Tier-2 arithmetic is now derived rather than asserted, and states plainly that its 3 min/path assumption is unsupported for the positional strategies tiering exists to serve. |
@@ -23,7 +24,7 @@
 
 ## 1. Purpose, scope and readership
 
-This HLD is the architecture that satisfies FRD v0.2 in full — all 12 FR modules (FR-DATA, FR-RES, FR-SIG, FR-BT, FR-VAL, FR-CAP, FR-FWD, FR-DEP, FR-MON, FR-FB, FR-AI, FR-EXE) and NFR-01…10 — under constraints C1–C7. It decides:
+This HLD is the architecture that satisfies FRD v0.5 in full — all 20 FR modules and the NFR set — under constraints C1–C7. It decides:
 
 - the storage paradigm and the point-in-time/reproducibility mechanism (the platform's defining property, NFR-01);
 - the compute and orchestration model, including how sweeps and CPCV scale;
@@ -49,7 +50,7 @@ The biggest risk: the honesty of branch (b) of the cost model (fills-calibrated)
 **Goals**
 
 1. One honest experiment end-to-end (the FRD's MCC) on hardware shared with live trading, with nothing about the design needing rework as Phases 1–3 layer on.
-2. Reproducibility as a *structural* property: any recorded result regenerable exactly from (snapshot id, code version, parameter set) — NFR-01.
+2. Reproducibility as a *structural* property: any recorded result regenerable exactly from its **run manifest** — NFR-01, FR-BT-06.
 3. Anti-overfitting controls enforced by the pipeline (trial ledger, locked thresholds, deflated statistics), not by operator discipline — FRD principle 1.
 4. Growth without redesign on the three owner-selected axes: data history, research throughput, signal book size.
 5. Maximum reuse of xman technology and patterns; every departure named and justified (§7, §14).
@@ -113,7 +114,7 @@ Scenarios in six-part form (source · stimulus · environment · artifact · res
 
 | ID | Scenario |
 |---|---|
-| QAS-01 | Operator · re-runs a 9-month-old backtest by run id · normal operation · backtest worker + PIT lake · result regenerated from (snapshot, code version, params) · metrics byte-identical, zero manual steps (NFR-01). |
+| QAS-01 | Operator · re-runs a 9-month-old backtest by run id · normal operation · backtest worker + PIT lake · result regenerated from its **run manifest** · metrics identical **to a declared numeric tolerance** where the environment is reconstructed, and byte-identical where it is not — see §9 on what the manifest can and cannot promise (NFR-01). |
 | QAS-02 | Research SDK · as-of query for historical date D · any later date · PIT query engine · returns only records with knowledge-time ≤ D · leakage tripwire suite green; 0 post-knowledge rows ever returned (FR-DATA-03/10). |
 | QAS-03 | Operator · 1-year, single-underlying, 1-min backtest · live trading at normal load under NFR-09 partitioning · backtest worker · completes interactively · **< 5 min** target (NFR-03; not guaranteed in declared sweep/capture windows). |
 | QAS-04 | Notebook cell · evaluates a signal variant via SDK · exploratory session **concurrent with a running sweep** · experiment ledger · trial row auto-logged · 100% of SDK evaluations ledgered, ≤ 5 s behind execution (FR-RES-04/09). Requires a **non-blocking ledger write path** — local durable queue plus an async appender — so interactive trial logging never stalls behind sweep-writer lock contention on precisely the nights it matters most. |
@@ -478,6 +479,28 @@ FR-VAL-12/13/14 make a sealed temporal holdout the platform's strongest control,
 - **Consumption is tracked**, because the holdout is a depleting resource: each evaluation consumes a segment, and the remaining unconsumed span is reported. A holdout re-read until a candidate passes is a training set with extra steps.
 - The seal is carved **before any research begins** (§24 of the FRD places it in the Minimal Credible Core on the irretrofittable test) — it cannot be sealed after it has been read.
 
+#### 9.1.1 Who executes the holdout evaluation — the gap v0.5 left
+
+§9.1 sealed the data and never said who runs the evaluation. Two consequences followed: no component could execute it (workers cannot read the zone; the Lifecycle Controller is a gatekeeper, not a backtest engine), and — worse — **the evaluation is a backtest of researcher- or agent-authored code over holdout data, so the seal leaks through its own results.** FR-BT-07 requires the equity curve and full trade log persisted for every run; over the holdout window those artefacts *are* a projection of holdout prices at one-minute cadence, written where research can read them. An agent can also encode holdout bytes into any output field deliberately.
+
+**The Holdout Evaluation Sandbox** — a distinct process, not a new plane:
+
+| Property | Design |
+|---|---|
+| Slice / principal | Capture slice, `promotion` principal — the only principal with holdout read access |
+| Inputs | The sealed zone, plus the candidate's immutable registry artefact. **Nothing from the research slice at execution time** |
+| Execution | Runs the candidate's code with **no network egress and no write path to any research-readable location** |
+| Outputs — the load-bearing part | **Only the pre-registered metric set and a pass/fail verdict leave the sandbox.** The equity curve, trade log and any per-timestamp artefact are written *inside* the sealed zone and never released. Result minimisation is what closes the exfiltration channel; the mount permission alone does not |
+| Audit | Every execution and every read is appended to the tamper-evident ledger and anchored offsite (FR-ENF-10) |
+
+**Derivation of sealed data.** QC, IV, Greeks and vol analytics for the holdout period run **in the capture slice under the `capture` principal**, not on the research-slice worker fleet. Otherwise the choice is between evaluating against un-QC'd data through a different pipeline than every in-sample result — which invalidates the comparison the holdout exists to make — and letting research-slice workers read the zone, which ends the seal.
+
+**Backup and restore.** The `backup` principal reads the sealed zone; restore rehearsals for that zone restore **only into a capture-slice path**, never a research-readable scratch location. A rehearsal that unseals the holdout is a rehearsal that destroys the control.
+
+#### 9.1.2 What the seal does not cover
+
+Stated so it is not mistaken for total. The holdout seals *market-data zones* for its window. The **live-observed, monitoring and execution-fill families cover the same dates and remain research-readable** — so if the holdout window overlaps any period the platform was live, the seal is partial by construction. FR-VAL-18's most-recent-contiguous rule and FR-VAL-19's post-cutoff rule together push the holdout toward *prospective* data, where this overlap is real and must be managed rather than assumed away: those families are sealed for the holdout window too, or the window is chosen to precede live operation.
+
 **Lineage and reproducibility.** A result's identity is its **run manifest** (FR-BT-06): data snapshot, code commit, dependency lockfile hash, container image digest, model and feature versions, parameter config, cost-config version, random seeds and runtime config. *This replaces v0.4's five-element tuple, which pinned engine version but not the numerical environment — dependency set, BLAS implementation, thread count and reduction order — and therefore promised a byte-identical reproducibility the design could not deliver.* Lineage is walkable in both directions: hypothesis → trials → runs → gate records → deployments → emissions (NFR-02), and every artefact back to the bytes that produced it.
 
 **Ingest-to-serve lifecycle** (prose, per the sequence-diagram test — ordering is simple): (1) capture/ingest lands vendor data verbatim in the raw zone with knowledge-time; (2) QC validates schema, gaps, staleness, outlier IV against neighbour interpolation — suspect records are **quarantined** (flagged, never dropped; QC status queryable per FR-DATA-08) and alerts raised; (3) derivation jobs compute IV/Greeks/analytics into the curated zone; (4) snapshot manifests are cut on demand and pinned by runs; (5) archival is only whatever the data-path registry's retention declares — market history itself is never deleted (NFR-10 licensing terms recorded per dataset in the catalogue).
@@ -630,12 +653,28 @@ Because the research slice stays on this host, the axis-2 claim plane (below) is
 
 **Trust boundaries (NFR-05).** The research slice runs as a separate OS user with no read access to xman's credential store; this platform's own secrets (vendor keys, webhook signing key) are Fernet-encrypted (xman incumbent) in its own store, readable only by the capture/production user. **Two Redis instances, not one:** a *production* instance holding the online feature store that the live signal path reads, writable only by the capture/production user; and a *research* instance for everything in the research slice. Collapsing these would put the live emission path's inputs in a datastore writable by the platform's lowest-trust workloads — autonomous AI agents run in the research slice (FR-AI) — which contradicts the OS-user separation already chosen for files. The split costs one more instance to keep alive under C1 and closes the hole structurally. Role-based access at the API is trivial under C1 (one operator) but the OS-level separation is what "research code cannot exfiltrate production credentials" actually means here. The webhook boundary to xman is HTTP-only, signed, and idempotent (FR-EXE-04).
 
+### 11.1 The identity model — added at v0.6
+
+FRD §21.1 introduces principals because several controls were specified as boundaries without saying who is on either side. Architecturally this is small, and deliberately so — §1.2.1 excludes an entitlement subsystem:
+
+| Principal | Enforcement mechanism |
+|---|---|
+| `operator` | Credential **held outside the research slice**, supplied per interactive session. Required by the Lifecycle Controller for promote, rollback, kill and threshold-lock |
+| `research-agent`, `worker` | Research OS user; filesystem denies the holdout; the API denies operator endpoints |
+| `capture`, `promotion` | Capture-slice OS users; `promotion` alone holds holdout read |
+| `backup` | Own user; read-everything, write-only-to-target |
+
+**Why the operator credential must live outside the research slice.** This is the whole mechanism. An agent running as the research user can read anything that user can read — so a token on disk in the research slice makes `operator` and `research-agent` the same principal in practice, and FR-AI-02/03's "through the SDK, never around it" becomes unenforceable. The API is the around-path, and **distinguishing the operator from the operator's agents is the actual problem** — not authenticating a human of whom there is exactly one.
+
+**Consequence for AI information boundaries.** FR-ENF-09 requires them enforced by the platform rather than by prompt discipline. Architecturally that means a role which must not see out-of-sample results is served a **context the platform assembles and filters** — it does not receive registry read access with an instruction not to look. Where the boundary cannot be built, the design does not claim the role has it.
+
 **Threat model for the integrity story (NFR-08).** Tamper-evidence is a control, and a control without a named adversary is decoration. What NFR-08 defends against, in order of likelihood:
 
 | Adversary | Capability | What stops it |
 |---|---|---|
 | **The operator's future self** — the primary threat under C1 | Full local access; motivated to quietly improve a trial count, a locked threshold or a gate outcome after a disappointing result | Hash chain makes any retroactive edit detectable **only if the anchor is beyond the same hands** — hence the write-once offsite requirement (§4). This is the whole reason the control exists |
 | **A compromised or misbehaving research process** — including autonomous AI agents | Runs as the research user; can write anything that user can write | OS-user separation (research cannot write production stores or the production Redis); the SDK is the only ledger write path; chain verification would surface anything that got through |
+| **The operator reading the holdout** | Root access; a read leaves no trace by default | **Cannot be prevented — only detected.** Reads are ledgered and anchored offsite (FR-ENF-10), the same treatment the ledgers get. Stated plainly because the asymmetry is real: this is the one control whose primary adversary owns the machine it runs on |
 | **Silent corruption** — disk, SQLite, a bad restore | No intent, same effect | Daily chain verification (QAS-10) plus rehearsed restores (NFR-07) |
 
 Explicitly **not** defended against: a determined attacker with root on the host, and physical loss of both host and backup target. Both are out of scope under C1 and are stated so no one mistakes tamper-*evidence* for tamper-*proofing* — the chain proves alteration happened, it does not prevent it.
@@ -672,13 +711,13 @@ Explicitly **not** defended against: a determined attacker with root on the host
 
 | QAS | Tactic | Component(s) | Verification |
 |---|---|---|---|
-| QAS-01 | Content-addressed snapshot manifests + run identity tuple + EngineTime determinism | PIT Lake, Backtest Workers | CI reproducibility check (FR-DEP-02): rerun pinned run, byte-compare |
+| QAS-01 | Content-addressed snapshot manifests + **run manifest** + EngineTime determinism | PIT Lake, Backtest Workers | CI reproducibility check (FR-DEP-02): rerun pinned run, byte-compare |
 | QAS-02 | As-of-by-default query API; knowledge-time filtering in the engine, not in caller code | PIT Lake / SDK | Leakage tripwire test suite incl. negative controls (FR-VAL-08) |
 | QAS-03 | Vectorised scan backend + partition pruning + embedded engine; measured under NFR-09 contention | Backtest Workers, PIT Lake | Timed benchmark run with live platform at normal load |
 | QAS-04 | SDK is the only data/backtest path; evaluation call sites auto-ledger; declared exploration sessions for the rest | Research SDK, Trial ledger | SDK logging tests; periodic self-audit vs notebook history (FR-RES-09) |
 | QAS-05a | Tier-1 triage configuration (declared, versioned) over all variants; CAS queue + N workers; sweeps run in research slice overnight | Job queue, Workers | Timed 1,000-variant fixture sweep |
 | QAS-05b | Tier-2 full CPCV restricted to top-*k* shortlist; per-path parallelism; only Tier-2 admissible at the gate | Validation Service, Workers | Timed shortlist run **plus** the mandated proxy-vs-full rank-correlation check (§7.8) |
-| QAS-06 | Slice hierarchy with enforced quotas **plus physical separation of the contended device** (dedicated disk minimum; research on a second host preferred) — cgroup IO control alone is insufficient (§11) | Deployment (§11) | NFR-09 saturation test, latency delta measured; test must include a page-cache-evicting lake scan and a write-burst, not CPU load alone |
+| QAS-06 | Slice hierarchy with enforced quotas, `memory.low` protection of the live working set, and declared write windows. **Physical separation of the contended device is *not* available** (AD-20, owner decision: single host, single disk), so this scenario is met by compensating controls plus the saturation test, not by structural isolation — and the test is the only evidence for a property the hardware does not guarantee | Deployment (§11) | NFR-09 saturation test, latency delta measured; test must include a page-cache-evicting lake scan and a write-burst, not CPU load alone |
 | QAS-07 | Capture in its own (non-research) partition; completeness check vs instrument master; gap alerting | Capture Service, Monitoring | Injected-gap fixture; daily completeness report |
 | QAS-08 | CAS claim + orphan reaper + idempotent result writes | Job queue | Kill-worker chaos test |
 | QAS-09 | Per-store backup schedule, offsite copy, rehearsed restore | Backup Agent | Scheduled restore rehearsal, result recorded |
@@ -712,6 +751,10 @@ Explicitly **not** defended against: a determined attacker with root on the host
 | AD-31 | **The sealed holdout is a separate lake zone denied to the research OS user**, not a flag or filter — a boundary agents are asked to honour is not a boundary | §9.1 |
 | AD-32 | **The run manifest replaces the identity tuple** as the reproducibility key; the tuple omitted the numerical environment it implicitly promised | §9 |
 | AD-33 | **Replay verification of the recorded live event stream** is what makes parity a tested property rather than an architectural claim | §8.4 |
+| AD-35 | **Principals with default-deny capabilities; the operator credential lives outside the research slice** — the only mechanism that distinguishes the operator from the operator's agents | §11.1 |
+| AD-36 | **The holdout evaluation runs in a sandbox that emits only the pre-registered metric set** — result minimisation, not mount permission, is what closes the exfiltration channel | §9.1.1 |
+| AD-37 | **Sealed-zone derivation runs in the capture slice**, so the holdout is QC'd through the same pipeline as in-sample data without research-slice reads | §9.1.1 |
+| AD-38 | **The gateway fails closed** when the Lifecycle Controller is unavailable | §17 |
 | AD-34 | **Allocator v1 is fixed weights plus caps until two validated signals exist**; sophistication is gated on evidence, not on a phase | §8.5; FRD §25 |
 | AD-05 | `ICostModel` port; two C3 implementations; versioned cost-configuration artefact on every run | §7.5, §8.1 |
 | AD-06 | One signal artefact, three adapters; parity **structural for code, measured for data** via the live-observed family | §7.6, §8.3, §9 |
@@ -779,7 +822,11 @@ Module → component mapping (every FR module and NFR lands on at least one name
 | **FR-SIG-09** | **Replay Verifier** (Signal Runtime) + live-observed dataset | Parity as a tested property |
 | **FR-BT-15/16** | **Cost Envelope Estimator** and **Feasibility Checker** (Backtest Workers) | Feasibility is an output, not a cost input |
 | **FR-AI-10/11** | AI Assist Layer with enforced information boundaries; no agent holds holdout credentials | The adversarial reviewer is the compensating control for the missing second human |
-| **FR-DEC-07…09** | **Mechanism-Family Budget** (Registries); Monitoring for consumption reporting | Kills families, not just signals |
+| **FR-DEC-07…11** | **Mechanism-Family Budget** (Registries); **family assignment at G0 by the Lifecycle Controller**, not by the proposing process | Self-assignment was circular — a dead idea escaped quarantine by renaming itself |
+| **FR-ENF-06…12** | **Identity model (§11.1)**; Lifecycle Controller for API authentication; AI layer for filtered contexts | The operator credential outside the research slice is the load-bearing part |
+| **FR-VAL-15…21** | **Holdout Evaluation Sandbox (§9.1.1)**; capture-slice derivation; Lifecycle Controller for the G5a gate | Result minimisation closes the channel the mount permission left open |
+| **FR-EXP-10/11** | Trial ledger with lineage aggregation (Registries) | Per-record counts were gameable by record-splitting |
+| **NFR-03a / NFR-11** | Signal Runtime (timeliness, staleness suppression); Scheduler (unattended bound) | The runtime previously had no performance requirement at all |
 | **FR-DEC-01…06** | Monitoring & Feedback; Registries for the locked haircut | DEC-05 makes a new epoch trigger review of every live signal whose evidence predates it |
 
 **Components with no driving requirement** (gold-plating check): none. The Scheduler + Backup Agent exists for NFR-07/08 and FR-RES-08/FR-DEP-07 scheduling; the Regime Detector exists for FR-REG and is **contingent on FR-REG-01's outcome** — if that experiment concludes continuous conditioning wins, the container is not built and FR-ALLOC-01's fallback applies. Every other container maps above. No component was found serving zero requirements.
@@ -805,6 +852,8 @@ Module → component mapping (every FR module and NFR lands on at least one name
 
 **Resolved by owner decision this revision:** single host and single disk, with residual live-trading risk accepted and compensating controls named (§11, AD-20); capture phased to indices first (§8.2, AD-21).
 
+**Recorded risk — Lifecycle Controller concentration.** §8.5 asserted this was recorded here and it was not. One process now owns the kill switch, gate evaluation, threshold locking, the allocator, bulk artefact ingestion from the worker fleet, SSE dashboard fan-out and (with §9.1.1) the holdout evaluation sandbox's supervision. **A wedged upload or a stuck dashboard client can take the kill switch down with it.** "Same trust boundary" justifies the same *identity domain*, not the same *process* — the mitigation is to split the operator-control surface from the bulk-ingestion and dashboard surfaces into separate processes sharing the `operator`/`promotion` principals, which is a deployment change rather than a design change and is deferred rather than dismissed. Until then, the kill path's behaviour when the controller is unavailable is defined: **the gateway fails closed**, suspending emission.
+
 **Accepted debt:** SQLite queue serialises job claims (fine at minutes-long jobs; seam named if it ever binds); single-host availability (by scope, §3 non-goals); paper/live environments share the host with research until a placement change is warranted; Tier-1 triage carries selection-under-a-different-metric risk, bounded by the mandated correlation guard and priced by the full trial count (§7.8); **live-trading IO contention on a single shared disk, accepted with compensating controls and a named revisit trigger (§11)**; **permanent forfeiture of stock-underlying history for as long as capture stays index-only (§8.2)** — the one item on this list that cannot be repaid later.
 
 ## 18. Glossary
@@ -819,5 +868,5 @@ Only terms this HLD adds; FRD §18 owns the domain glossary (PIT, CPCV, DSR, PBO
 | Slice | An enforced OS resource partition (cgroup) with CPU/memory/IO limits and priority; the NFR-09 mechanism |
 | Port / adapter | `typing.Protocol` interface (`I*`) and its swappable implementation — xman's DI convention |
 | `EngineTime` | xman's injected clock singleton; the only time source in business logic |
-| Run identity tuple | (snapshot manifest id, signal version hash, parameter hash, cost-config version, engine version) — the reproducibility key (FR-BT-06) |
+| Run manifest | Data snapshot, code commit, dependency lockfile hash, environment image digest, model and feature versions, parameter config, cost-config version, seeds and runtime config — the reproducibility key (FR-BT-06). *Supersedes the five-element "run identity tuple" of earlier revisions, which omitted the numerical environment.* |
 | Chain anchor | The hash-chain head value copied into each offsite backup, making off-host tamper-evidence verification possible |
