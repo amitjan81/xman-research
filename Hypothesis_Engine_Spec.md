@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | **0.3** (frequency-scoped) |
+| **Version** | **0.4** (second review round) |
 | **Status** | Proposed |
 | **Date** | 12 August 2026 |
 | **Parents** | FRD v0.2 (requirements baseline); Options Research Platform HLD v0.3 (architecture) |
@@ -13,6 +13,7 @@
 
 | Version | Date | Summary |
 |---|---|---|
+| **0.4** | 12 Aug 2026 | **Second review round — all ten findings accepted.** *Coherence break closed:* §8.3 declared regime-conditional claims untestable while §9.3 applied a regime multiplier to the whole book — the same claim class at wider blast radius, through a side door. §9.7 now classifies the multiplier explicitly as a **precautionary risk control rather than an alpha claim**, an argument available *only because* it never scales exposure up, with its own evidence standard, pre-registered removal criteria and live monitoring. *Gate machinery corrected:* GATE-FR-17's benchmark increment was unit-less and would have penalised conditional signals for being conditional — now risk-matched, applying §5.6's own denominator discipline to the spec's own hurdle. GATE-FR-13's simulated null now specifies **physical-measure calibration** — calibrating to observed option prices would embed the premium in the null and the test could never reject, silently. *Allocator:* the "deliberately dumb" v1 was specified with expected-shortfall contribution, which needs a joint tail model estimated from the same thin data; replaced by **equal margin contribution** — externally computed, stress-based, already the binding constraint — with the caveat that margin-efficient is not low-risk, so concentration limits and the gamma cap are mandatory complements. ES-contribution becomes v2 under ALLOC-FR-04. *Enforcement:* the gross short-gamma cap levied an unconfirmed cross-boundary requirement; now recorded as requiring owner confirmation, with a **model-free bucketed fallback** needing no options model. *Moderate:* REG-FR-01's decision metric pre-registered as tail-based; horse-race trial multiplicity charged to downstream hypotheses; SCOPE-FR-02's gameable mean replaced by share-below-floor; GATE-FR-18's amendment timing closed; cost-config version pinned across candidate and benchmark; SCOPE-FR-01's buffer rationale stated. |
 | **0.3** | 12 Aug 2026 | **Frequency scoping (owner decision).** The platform is mid-frequency: mean holding period measured in hours or longer, with individual short holds acceptable but not as the average. §5.7 added, separating the three axes that this constraint is usually conflated across — data sampling frequency, holding period, and execution latency sensitivity — and classifying every catalogue entry against them. *Catalogue changes:* **H19 (surface relative value) withdrawn** as out of scope; **H15 split** into H15a (0DTE intraday gamma, out of scope) and H15b (1DTE entered T-1 and held through expiry, in scope); H11's conditioner-only status given a second justification; H14 and H17 marked borderline with their specific reasons. *Schema:* three locked fields added — `data_frequency`, `latency_sensitivity`, `expected_mean_holding_period`. *Gates:* G1 rejects hypotheses whose expected mean hold is under one hour; a new portfolio-level check monitors the **live book's realised** mean holding period, because individually acceptable signals can aggregate into a de facto intraday book. |
 | **0.2** | 12 Aug 2026 | **Full incorporation of the v0.1 review** (1 critical, 19 major, 12 minor). *Critical:* §3 added — the runtime-enforcement boundary with xman, mapping every control this subsystem introduces to where it is actually enforced. *Science:* §1.1's India transfer rewritten — the Dew-Becker & Giglio friction is a **structural** constraint on option writing which does **not** exist in India; the argument now runs through demand-pressure and limits-to-arbitrage, with H12 named as its identification input. H1's mechanism rewritten to the intermediation-rent channel, with the preference channel recorded as the *rejected* alternative it contradicted. The SEBI interventions are no longer described as separable experiments (three fall on one day) and their pre-2024 data dependency is stated. §6.3/6.4 tables attributed and evidence-graded. *Catalogue:* three canonical hypotheses added (jump/tail premium, overnight-vs-intraday variance, trend as short-vol conditioner); role taxonomy reconciled. *Epochs:* definition widened to admit enforcement and participation shocks (the July 2025 Jane Street order); the October 2024 STT change added; "hard-coded calendar" replaced by the parents' epoch registry. *Gates:* the §6.1 gating experiment now tests the design actually specified rather than a strawman; the prefix-property check moved from G4 to G1; G4 restated honestly as a demotion gate, since the spec's own episode arithmetic makes it unpassable for roughly a decade; G6's structural exception to threshold-locking named and given its own discipline. *Allocator:* weighting unit defined as risk-based with an explicit margin budget; the regime multiplier no longer applies uniformly; conflict resolution given per-axis direction definitions and a declared-relationship exemption so hedges are not cancelled; rebalancing bands and a naive-benchmark hurdle added. *Process:* phase and verification method on every requirement. |
 | 0.1 | 12 Aug 2026 | Initial specification. Seeded from two research streams: an options-hypothesis catalogue (24 candidates across 9 families) and a regime-detection review. |
@@ -130,7 +131,11 @@ The FRD is explicit: runtime enforcement lives in xman; this platform researches
 | **Per-signal enable/disable and size cap** | Lifecycle Controller | **Emission interface (FR-EXE-03)**, *and* independently in xman | Belt and braces; the FRD already specifies caps at the interface layer independent of xman-side controls |
 | **Conflict veto** | Lifecycle Controller | **Emission — suppression means no emission is sent** | A veto is the absence of an instruction; it needs no downstream enforcement and cannot fail open |
 | **Concentration limits** (per underlying, expiry, direction, moneyness) | Lifecycle Controller, checked at G6 and at emission | **Both** — advisory at emission, authoritative in xman | Book-relative and safety-relevant. This platform cannot see xman's true live book with certainty, so it must not be the sole enforcer |
-| **Gross short-gamma cap** | — | **xman only** | A hard risk limit protecting capital. **It must not depend on this platform being correct, reachable, or running.** REG-FR-08's requirement that limits sit *beneath* the regime layer means exactly this |
+| **Gross short-gamma cap** | — | **xman only** — see ENF-FR-04 | A hard risk limit protecting capital. **It must not depend on this platform being correct, reachable, or running.** REG-FR-08's requirement that limits sit *beneath* the regime layer means exactly this |
+
+**ENF-FR-04** *(Must, Phase 2, inspection)* — **The gross short-gamma cap is a requirement levied on xman, and it currently has no owner.** Computing book gamma requires Greeks. xman does possess Greeks machinery — chain implied-volatility inversion and Greeks on a short production cycle — so the *capability* exists; what is unconfirmed is whether it is **wired into a pre-trade risk check on the order path**, which is a different thing. This requirement crosses the document boundary and **requires owner confirmation before the design may depend on it**. Recording it here is what stops the platform's most important safety property resting on an assumption nobody has checked.
+
+**ENF-FR-05** *(Must, Phase 2, test)* — **A model-free fallback shall be specified and available**, so the cap degrades gracefully rather than failing silently if the Greeks path is unavailable at order time: **bucketed contract-count caps per moneyness × expiry band**. This needs no options model, no volatility surface and no Greeks — it is countable from the order book alone — and is deliberately cruder and more conservative than a gamma cap. A crude limit that always works is worth more than a precise one that depends on a capability nobody confirmed.
 
 **ENF-FR-01** *(Must, Phase 2, verification: demonstration)* — Every control this subsystem introduces shall declare its enforcement point in the table above; no control shall be introduced without one.
 
@@ -303,7 +308,9 @@ Applying that constraint requires separating three properties that are routinely
 **H14 and H17 are borderline for different reasons.** H14's hold is hours and confined to the final session, with the edge concentrated in the settlement window — it satisfies the holding rule but has a latency-sensitive tail. H17's holding period is fine at weeks; its problem is that legging a multi-name basket carries execution risk that behaves like a latency constraint even though the signal is slow.
 
 - **SCOPE-FR-01** *(Must, Phase 1, test)* — G1 shall reject any hypothesis whose `expected_mean_holding_period` is under one hour, or whose `latency_sensitivity` is `high`, unless an explicit recorded exemption is granted at registration.
-- **SCOPE-FR-02** *(Must, Phase 2, test)* — The platform shall monitor the **live book's realised** mean holding period and alert when it falls below the configured floor. **This matters more than the per-hypothesis gate:** individually acceptable short-hold signals can aggregate into a book that is de facto intraday, which is the drift the constraint exists to prevent.
+  **On the buffer, stated rather than left as silent slack:** the owner constraint is "hours or longer", and this gate is deliberately looser at one hour. That is intentional — **the per-hypothesis gate is the coarse filter and SCOPE-FR-02's book-level control is the real constraint**, because a single fast hypothesis is harmless and a book that drifts intraday is not. The buffer exists so that individually reasonable short-hold candidates are not rejected one at a time while the aggregate goes unwatched.
+- **SCOPE-FR-02** *(Must, Phase 2, test)* — The platform shall monitor the live book's **realised** holding-period distribution and alert on breach. **This matters more than the per-hypothesis gate:** individually acceptable short-hold signals can aggregate into a book that is de facto intraday, which is the drift the constraint exists to prevent.
+  **The measure is not the mean.** A mean floor is trivially gamed by a barbell — many thirty-minute trades plus one three-week position passes comfortably while the book is operationally intraday. The primary measure shall be the **share of trades held below the floor**, with the **median** holding period as secondary. This is the same denominator discipline §5.6 applies to IV rank and GATE-FR-17 applies to the benchmark hurdle: choose the statistic that measures the thing you care about, not the one that is easiest to compute.
 - **SCOPE-FR-03** *(Should, Phase 2, inspection)* — Where a hypothesis requires intraday data purely as *offline sampling*, that shall be recorded distinctly from a requirement for intraday *execution*, so data-acquisition decisions are not made against the wrong justification.
 
 ---
@@ -340,9 +347,11 @@ v0.1's experiment compared a smooth function of the conditioning variable agains
   (b) **the filtered-probability weight the design actually specifies**;
   (c) the discrete label, as a reference point only;
   (d) **H27's trend conditioner**, as the practitioner-standard rival.
-**If (b) does not beat (a) and (d) out of sample after costs, the regime layer shall not be built** and the platform implements continuous conditioning instead.
+**The decision metric is pre-registered and tail-based, not raw P&L.** GATE-FR-02 already requires regime-conditional claims to be judged on drawdown and tail metrics rather than return, and that applies to the experiment deciding whether the layer exists at all. The criterion: **(b) must reduce maximum drawdown and conditional VaR at matched return** relative to (a) and (d), out of sample, after costs. The specific thresholds are locked before the experiment runs. **If it does not, the regime layer shall not be built** and the platform implements continuous conditioning instead.
 
-**REG-FR-01a** *(Must, Phase 1, inspection)* — The forward-P&L series for REG-FR-01 shall be the backtest P&L of a **pre-registered, fixed set of naive benchmark strategies** (§8.5) — not candidate signals, whose selection would contaminate the comparison. Running the experiment increments those benchmarks' trial counts, not any hypothesis's.
+**REG-FR-01a** *(Must, Phase 1, inspection)* — The forward-P&L series for REG-FR-01 shall be the backtest P&L of a **pre-registered, fixed set of naive benchmark strategies** (§8.5) — not candidate signals, whose selection would contaminate the comparison.
+
+**REG-FR-01b** *(Must, Phase 1, test)* — **The horse race's own multiplicity is charged downstream.** Selecting among four conditioning technologies is search, and it shapes every subsequent regime-conditioned evaluation — so by EXP-FR-06's own logic the selection multiplicity shall increment the trial count of **every hypothesis later evaluated against the winning conditioner**, not merely the benchmarks whose trial counts gate nothing. Charging it to the benchmarks alone would let the most consequential model-selection decision in the subsystem escape the ledger entirely.
 
 ### 7.2 If built: two states, never four
 
@@ -451,7 +460,9 @@ This makes most of §7's machinery **explicitly contingent**, which §12 now mar
 
 Option returns are non-linear and severely non-normal. The canonical caution — that large out-of-the-money put returns are not even inconsistent with Black-Scholes, and that stochastic-volatility models with **no** risk premia generate put returns not inconsistent with observed data — means significance must be assessed against **simulated model-generated returns**, not t-statistics. *(Stated for long put returns; the write-side rendering is symmetric. Paraphrase, not quotation.)*
 
-- **GATE-FR-13** *(Must, Phase 2, test)* — For any hypothesis whose P&L expression is a non-linear option payoff, G3 shall assess significance against a simulated null. **Scope, so this is a build and not a research programme:** a **single named model family** (Heston, or Bates where jumps matter for H25), a **fixed, versioned parameter set** calibrated once per epoch to index data, **index underlyings only**, and a **fixed path count**. Single-stock and multi-asset nulls are out of scope. Compute cost is budgeted against the research slice's Tier-2 window alongside corruption curves and regime retrains.
+- **GATE-FR-13** *(Must, Phase 2, test)* — For any hypothesis whose P&L expression is a non-linear option payoff, G3 shall assess significance against a simulated null. **Scope, so this is a build and not a research programme:** a **single named model family** (Heston, or Bates where jumps matter for H25), a **fixed, versioned parameter set** re-calibrated once per epoch, **index underlyings only**, and a **fixed path count**. Single-stock and multi-asset nulls are out of scope. Compute is budgeted against the research slice's Tier-2 window alongside corruption curves and regime retrains.
+  **Calibration measure — the decision that determines whether this test has any power.** The null shall be calibrated under the **physical measure**, to index returns and realised-variance measures. It shall **not** be calibrated to observed option prices. Calibrating to option prices embeds the variance risk premium in the fitted parameters, so the null already contains the effect under test and **the test can never reject — silently, with no error and no diagnostic**. Option prices for the null are then generated from the physical-measure dynamics **under zero risk premia**, which is what makes "could this result arise with no premium at all?" the question actually being asked.
+  **Parameter uncertainty shall be propagated**, not ignored: the null is generated across a **parameter bootstrap**, not from a point estimate, so the comparison accounts for the fact that the null's own parameters are estimated.
 - **GATE-FR-14** *(Must, Phase 1, test)* — The deflated Sharpe ratio is the headline metric, not raw Sharpe. For short-gamma strategies its skew/kurtosis haircut will be substantially larger than for an equity strategy at the same raw Sharpe — that is the correction working.
 
 ### 8.5 The naive-benchmark hurdle *(new in v0.2)*
@@ -459,13 +470,19 @@ Option returns are non-linear and severely non-normal. The canonical caution —
 Without this, the platform will validate signals whose entire edge is the unconditioned premium they sit on. DSR against zero is a far weaker hurdle than DSR of the **increment over the dumb version of the same trade**.
 
 - **GATE-FR-16** *(Must, Phase 1, test)* — A fixed, pre-registered, versioned set of naive benchmarks shall exist — minimally a systematic fixed-delta short strangle for VRP-flavoured hypotheses and a systematic short straddle for event hypotheses — run under the same cost model and the same data.
-- **GATE-FR-17** *(Must, Phase 1, test)* — G3 shall evaluate the candidate's **increment over its declared benchmark**, net of costs, against a threshold locked at G0. A candidate that does not beat its naive benchmark does not pass, regardless of standalone metrics.
+- **GATE-FR-17** *(Must, Phase 1, test)* — G3 shall evaluate the candidate's increment over its declared benchmark against a threshold locked at G0. A candidate that does not beat its naive benchmark does not pass, regardless of standalone metrics.
+  **The increment is risk-matched, not raw.** An unqualified P&L increment conflates timing skill with exposure quantity: a conditional signal that is flat 60% of the time will mechanically trail an always-on short strangle during a calm sample **however good its timing is**, so a raw-P&L hurdle systematically favours more-exposed variants of the benchmark over genuinely conditional signals — the exact opposite of this gate's purpose. §5.6 makes this denominator argument against IV rank; it applies with equal force here. The comparison shall therefore be one of:
+  (a) increment **per unit of margin consumed** (consistent with FR-CAP-01 and §9.4's allocation unit), or
+  (b) the deflated Sharpe of the **long-candidate / short-benchmark spread** with exposures scaled to equal risk.
+  The choice is locked at G0 with the threshold.
+- **GATE-FR-20** *(Must, Phase 1, test)* — Candidate and benchmark shall be evaluated **under the same cost-configuration version, within the same run identity tuple**. When FR-FB-02 recalibrates the cost model, benchmark results shift underneath any previously locked increment threshold; pinning both sides to one cost version is what keeps the increment meaningful across recalibrations. A recalibration therefore requires re-evaluating both sides, not just the candidate.
 
 ### 8.6 G6's structural exception to threshold locking *(new in v0.2)*
 
 G6's checks — incremental correlation contribution, concentration headroom, capacity — are **inherently book-relative**: they depend on what is live at promotion time and therefore **cannot** be pre-registered per hypothesis at G0. v0.1 asserted "read, never supplied" covered every gate. It does not cover G6, and G6 is precisely where the HLD threat model's named adversary — the operator's future self — has room.
 
-- **GATE-FR-18** *(Must, Phase 2, test)* — G6 rules shall be **globally locked and versioned** rather than per-hypothesis: one rule set, applied to every promotion, changed only by opening a versioned amendment that is ledgered and takes effect prospectively.
+- **GATE-FR-18** *(Must, Phase 2, test)* — G6 rules shall be **globally locked and versioned** rather than per-hypothesis: one rule set, applied to every promotion, changed only by opening a versioned amendment that is ledgered.
+  **"Prospectively" is defined, because it is undefined exactly where it matters.** An operator holding a pending promotion could otherwise amend the rules, wait a day, and promote under the new ones. An amendment therefore applies **only to hypotheses registered after the amendment's ledger timestamp** — not to anything already in flight. Where that is impractical, the fallback is a **locked minimum dwell** between an amendment and the first promotion evaluated under it, long enough that the amendment cannot be aimed at a known candidate. The dwell is itself part of the locked rule set.
 - **GATE-FR-19** *(Must, Phase 2, inspection)* — Every G6 evaluation shall record the rule-set version, the live book it was evaluated against, and the computed values — so a promotion can be re-checked against the rules in force at the time.
 
 ### 8.7 Misclassification sensitivity, with a defined threshold
@@ -494,7 +511,25 @@ Maximum drawdown improving from −55% to −27% while annual return moves 10.2%
 
 v0.1 applied the regime weight "uniformly as an exposure multiplier" across all live signals. That de-risks defensive positions exactly when they should be held or increased: a rising bear probability would scale *down* a long-vol or tail-hedge signal. Uniformity is coherent only while the book is 100% short-premium.
 
-- **ALLOC-FR-06** *(Must, Phase 2, test)* — The regime exposure multiplier shall apply **by exposure class, not uniformly**: it scales **short-volatility / short-gamma** exposure toward flat, leaves **long-volatility and declared hedge** exposure unscaled, and never scales any exposure *up*. Each signal declares its exposure class at registration.
+- **ALLOC-FR-06** *(Must, Phase 2, test)* — The regime exposure multiplier shall apply **by exposure class, not uniformly**: it scales **short-volatility / short-gamma** exposure toward flat, leaves **long-volatility and declared hedge** exposure unscaled, and **never scales any exposure up**. Each signal declares its exposure class at registration.
+
+### 9.7 The multiplier is a risk control, not an alpha claim — and why that distinction is load-bearing
+
+**The contradiction this resolves.** §8.3 establishes, from this document's own episode arithmetic, that no regime-conditional hypothesis can pass G4 for roughly a decade — everything is demoted to unconditional. §9.3 then applies a regime-conditioned exposure multiplier across the entire live short-volatility book. That is **the same claim class G4 declares untestable, deployed at the widest possible blast radius**, with no hypothesis record, no episode floor, no corruption test, no kill criteria and no monitoring of its own. Left unstated, §8 and §9 contradict each other.
+
+**The resolution, stated rather than assumed.** The multiplier is classified as a **precautionary risk control**, not a return claim, and precautionary controls legitimately face a lower evidential bar because the loss function is asymmetric:
+
+| | Cost |
+|---|---|
+| **False de-risk** (multiplier fires, nothing happens) | Bounded — foregone premium over the de-risked interval |
+| **Missed de-risk** (multiplier fails to fire, tail arrives) | Unbounded in the relevant sense — a gap loss on a short-gamma book |
+
+**This argument is available only because ALLOC-FR-06 forbids scaling up.** A multiplier that only ever reduces exposure cannot manufacture returns; its worst case is opportunity cost. **If any future revision permits upward scaling, the classification is void and the multiplier becomes an alpha claim subject to G4 like everything else.** That conditionality is the whole basis of the exemption and must not be quietly dropped.
+
+- **ALLOC-FR-11** *(Must, Pending-FRD, Phase 2, inspection)* — The regime multiplier shall be registered as a **risk control** with its own record, distinct from the hypothesis registry, recording its classification, the asymmetry argument above, and the ALLOC-FR-06 no-upward-scaling condition on which the classification depends.
+- **ALLOC-FR-12** *(Must, Pending-FRD, Phase 2, test)* — Its evidence standard is explicitly **lower than G4's and explicitly stated**: it requires REG-FR-01's horse race to show the conditioning technology reduces drawdown at matched return, and the GATE-FR-05 corruption test, but **not** the five-episode floor — which §8.3 establishes is unreachable. The waiver is recorded, not implied.
+- **ALLOC-FR-13** *(Must, Pending-FRD, Phase 2, test)* — **Pre-registered removal criteria**, locked before deployment: the multiplier is reviewed each epoch against **cumulative foregone premium versus avoided drawdown**, and is removed if foregone premium exceeds avoided drawdown by a locked margin over a locked window. A precautionary control that never pays for itself is a cost, not a control.
+- **ALLOC-FR-14** *(Must, Pending-FRD, Phase 2, test)* — The multiplier shall be **monitored live in its own right** — FR-MON-09 covers signals and nothing currently watches the multiplier. Reporting shall show, continuously, the premium foregone to de-risking and the drawdown avoided, so the ALLOC-FR-13 review is a reading rather than a reconstruction.
 
 ### 9.4 v1 allocator: deliberately dumb, but specified
 
@@ -505,14 +540,20 @@ Dumb, however, is not the same as vague. v0.1 said "equal weight" without a unit
 | Element | v1 rule |
 |---|---|
 | **Budget** | A stated **margin budget** — the capital the book may consume, margin being the binding constraint of an Indian short-option book (FR-CAP-01) |
-| **Weighting unit** | **Equal risk contribution**, measured as each signal's contribution to portfolio expected shortfall at a stated confidence — *not* equal notional or equal premium, which would give an 0DTE short-gamma signal and a quarterly VRP harvest wildly unequal risk |
+| **Weighting unit** | **Equal margin contribution** — see below. *Not* equal notional or premium, which would give a short-dated gamma signal and a quarterly VRP harvest wildly unequal risk; and *not* expected-shortfall contribution, which is v2 |
 | **Regime scaling** | Per ALLOC-FR-06, by exposure class |
 | **Concentration** | Per **FR-CAP-03** — per underlying, expiry, direction, moneyness bucket |
 | **Capacity** | Per **FR-CAP-04** participation caps |
 | **Conflict** | Veto, with the definitions and exemptions of §9.5 |
 | **Rebalancing** | Banded — §9.6 |
 
-- **ALLOC-FR-01** *(Must, Pending-FRD, Phase 2, test)* — v1 shall allocate by equal risk contribution within a stated margin budget. **If REG-FR-01 concludes the regime layer is not built, the continuous conditioning variable substitutes for the regime multiplier in ALLOC-FR-06's role**, and no other part of this section changes. *(v0.1 left this precondition dangling.)*
+**Why margin contribution and not expected shortfall.** v0.3 specified equal **expected-shortfall** contribution. That is not dumb: it requires a joint tail model across every live signal — estimator choice, dependence structure, tail assumptions — for a short-gamma book whose tail is precisely the thing there is no data on, sitting in the one place this document admits nothing is watching. It is exactly the model-risk-laden sophistication §9.4 says it wants to defer.
+
+**Margin contribution is the genuinely dumb unit, and it was already in the document.** SPAN-style margin is externally computed by the exchange, conservative, stress-based rather than historically estimated, maintained by someone else, and already the stated budget — FR-CAP-01 makes return on margin capital the primary metric because margin is the binding constraint of an Indian short-option book. It requires **zero estimation on our side**.
+
+**The caveat that makes it safe, and which must not be dropped: margin-efficient is not the same as low-risk.** Far-out-of-the-money short options are margin-cheap and gap-heavy, so equal-margin weighting will over-allocate to precisely the structures whose risk margin under-prices. **Equal-margin allocation is therefore valid only in combination with** the FR-CAP-03 concentration limits (per underlying, expiry, direction, **moneyness bucket** — the moneyness dimension is what catches this) and the GATE-FR-04 gross short-gamma cap. Those are **mandatory complements, not optional overlays**; equal margin alone does not imply a safe book.
+
+- **ALLOC-FR-01** *(Must, Pending-FRD, Phase 2, test)* — v1 shall allocate by **equal margin contribution** within a stated margin budget, with the FR-CAP-03 concentration limits and the GATE-FR-04 gamma cap enforced as preconditions rather than as later checks. Expected-shortfall contribution is deferred to v2 and inherits ALLOC-FR-04's trailing-window discipline. **If REG-FR-01 concludes the regime layer is not built, the continuous conditioning variable substitutes for the regime multiplier in ALLOC-FR-06's role**, and no other part of this section changes.
 - **ALLOC-FR-04** *(Must, Pending-FRD, Phase 3, test)* — Any allocator more sophisticated than v1 shall be estimated on a trailing window, applied forward, and reported only on that basis — never fitted on the full sample and reported in-sample.
 
 ### 9.5 Conflict resolution — corrected so it does not forbid hedging
@@ -594,27 +635,29 @@ Phase per FRD §1.4's convention — **Must means Phase 1 is not credible withou
 | ID | Area | Priority | Phase | Verification |
 |---|---|---|---|---|
 | ENF-FR-01…03 | Enforcement boundary | Must / Must / Should | 2 | demonstration, test, inspection |
+| ENF-FR-04, 05 | Enforcement — xman-levied cap and fallback | Must | 2 | inspection, test |
 | HYP-FR-01, 04, 05, 07 | Hypothesis record | Must | 1 | test, test, test, inspection |
 | HYP-FR-06 | Hypothesis record | Should | 2 | demonstration |
 | EXP-FR-01, 02, 06 | Exploration | Must | 1 | test |
 | EXP-FR-04 | Exploration | Should | 2 | demonstration |
-| REG-FR-01, 01a | Gating experiment | Must | 1 | test, inspection |
+| REG-FR-01, 01a, 01b | Gating experiment | Must | 1 | test, inspection, test |
 | REG-FR-05 | Prefix property | Must | 1 | test |
 | REG-FR-12 | Epoch training refusal | Must | 1 | test |
 | REG-FR-02, 03, 04, 06, 13 | Regime | Must — **contingent** | 2 | test / demonstration |
 | REG-FR-07, 09, 10, 11 | Regime | Should — **contingent** | 2–3 | demonstration, inspection, test |
 | REG-FR-08 | Limits beneath regime | Must | 2 | test |
-| GATE-FR-14, 16, 17 | Gate ladder | Must | 1 | test |
+| GATE-FR-14, 16, 17, 20 | Gate ladder | Must | 1 | test |
 | GATE-FR-13, 15, 18, 19 | Gate ladder | Must | 2 | test, inspection |
 | GATE-FR-01…05 | Regime gating | Must — **contingent** | 2 | inspection, test |
 | ALLOC-FR-01, 02, 06, 07, 09, 10 | Allocator | Must — **Pending-FRD** | 2 | test |
+| ALLOC-FR-11…14 | Regime multiplier as risk control | Must — **Pending-FRD** | 2 | inspection, test |
 | ALLOC-FR-04, 05, 08 | Allocator | Should — **Pending-FRD** | 3 | test, inspection, analysis |
 | DEC-FR-01, 05, 06 | Decay | Must | 1–2 | test, inspection |
 | DEC-FR-02, 04 | Decay | Should | 3 | analysis, inspection |
 | SCOPE-FR-01, 02 | Frequency scoping | Must | 1–2 | test |
 | SCOPE-FR-03 | Frequency scoping | Should | 2 | inspection |
 
-**Totals:** 43 requirements (down from 46 — eight withdrawn to FRD ownership per §2.4, plus additions). **Referenced but not owned here:** FR-VAL-03, FR-VAL-05, FR-VAL-09, FR-VAL-11, FR-FB-04, FR-AI-06, FR-CAP-01, FR-CAP-03, FR-CAP-04, FR-DATA-06, FR-DATA-16, FR-DEP-01, FR-EXE-01, FR-EXE-03, FR-FWD-03, FR-MON-09, FR-RES-03, FR-SIG-02, FR-SIG-04, FR-SIG-06.
+**Totals:** 51 requirements (down from 46 — eight withdrawn to FRD ownership per §2.4, plus additions). **Referenced but not owned here:** FR-VAL-03, FR-VAL-05, FR-VAL-09, FR-VAL-11, FR-FB-04, FR-AI-06, FR-CAP-01, FR-CAP-03, FR-CAP-04, FR-DATA-06, FR-DATA-16, FR-DEP-01, FR-EXE-01, FR-EXE-03, FR-FWD-03, FR-MON-09, FR-RES-03, FR-SIG-02, FR-SIG-04, FR-SIG-06.
 
 ---
 
