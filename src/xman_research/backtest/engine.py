@@ -62,6 +62,12 @@ from xman_research.backtest.execution import (
     ParticipationLimits,
     apply_participation_caps,
 )
+from xman_research.backtest.lot_size import (
+    LotSizeAudit,
+    LotSizeContradictionError,
+    audit_lot_size,
+    audit_sessions,
+)
 from xman_research.backtest.margin import MarginRequirement, ShortLeg, SimplifiedMarginModel
 from xman_research.backtest.market import Contract, SessionView
 from xman_research.backtest.settlement import (
@@ -488,10 +494,25 @@ def run_backtest(
     daily: list[DailyRecord] = []
     total_costs = ZERO_COST
     unverified: set[str] = set()
+    audits: list[LotSizeAudit] = []
 
     for ref in refs:
         frame = store.load_session(ref, verify=config.verify_checksums)
         refdata = store.load_refdata(ref)
+        # Before anything is sized: does this session's declared lot size survive contact
+        # with its own bars? See xman_research.backtest.lot_size for the December 2025
+        # regime this found, and for why the refusal is not overridable.
+        audit = audit_lot_size(
+            session_date=ref.session_date,
+            underlying=config.underlying,
+            frame=frame,
+            refdata=refdata,
+        )
+        if audit.contradicts_declared:
+            raise LotSizeContradictionError(audit.failure_message(), audit)
+        audits.append(audit)
+        if audit.non_conforming_symbols:
+            unverified.add("corpus.open_interest_not_divisible_by_lot_size")
         session = SessionView.from_frame(ref.session_date, config.underlying, frame, refdata)
 
         minute = session.minute_at_or_after(config.decision_time)
@@ -531,7 +552,7 @@ def run_backtest(
         daily=tuple(daily),
         total_costs=total_costs,
         config_provenance=config.provenance(),
-        data_provenance=resolution.provenance(),
+        data_provenance={**resolution.provenance(), "lot_size_audit": audit_sessions(audits)},
         strategy_name=strategy.name,
         strategy_parameters=dict(strategy.parameters()),
         unverified_inputs=tuple(sorted(unverified)),

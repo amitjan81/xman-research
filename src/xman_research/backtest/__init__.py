@@ -66,6 +66,14 @@ from xman_research.backtest.execution import (
     ParticipationLimits,
     apply_participation_caps,
 )
+from xman_research.backtest.lot_size import (
+    NIFTY_LOT_SIZE_EPOCHS,
+    LotSizeAudit,
+    LotSizeContradictionError,
+    LotSizeEpoch,
+    audit_lot_size,
+    epoch_for,
+)
 from xman_research.backtest.margin import (
     MarginRequirement,
     ShortLeg,
@@ -89,6 +97,7 @@ from xman_research.backtest.settlement import (
 from xman_research.backtest.strategies import ShortAtmStraddle
 
 __all__ = [
+    "NIFTY_LOT_SIZE_EPOCHS",
     "SETTLEMENT_RULES",
     "BacktestConfig",
     "BacktestResult",
@@ -106,6 +115,9 @@ __all__ = [
     "FillModel",
     "FillRecord",
     "FlatPerOrderBrokerage",
+    "LotSizeAudit",
+    "LotSizeContradictionError",
+    "LotSizeEpoch",
     "MarginRequirement",
     "OptionType",
     "ParticipationLimits",
@@ -127,6 +139,8 @@ __all__ = [
     "TradeIntent",
     "TradeKind",
     "apply_participation_caps",
+    "audit_lot_size",
+    "epoch_for",
     "run_backtest",
     "settlement_rule_for",
     "settlement_value",
