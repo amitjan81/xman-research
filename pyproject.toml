@@ -7,9 +7,18 @@ dependencies = [
     # C2 (session store) reads the producer's parquet corpus and needs an NSE trading
     # calendar. pandas_market_calendars is a hard dependency on purpose: a hand-written
     # holiday list is the failure this project has already paid for once.
-    "pandas>=2.2",
+    #
+    # Floors are what has actually been validated, not the oldest version that might
+    # work. Every fact this package pins — the manifest digests agreeing on all 119 real
+    # sessions, the 161-session count, the 2026-12-25 end of the holiday table, the
+    # 2026-01-15 erratum — was established on pandas 3.0.5 and pmc 5.4.0. pandas 2.2 risks
+    # a different DataFrame.to_csv float rendering, which would turn every verification
+    # into a false ChecksumMismatchError; pmc 4.4's older holiday table would reject every
+    # current range through CalendarCoverageError. Both fail loudly, and a floor that
+    # admits them buys nothing except that failure on somebody else's machine.
+    "pandas>=3.0",
     "pyarrow>=16",
-    "pandas_market_calendars>=4.4",
+    "pandas_market_calendars>=5.4",
 ]
 
 [build-system]

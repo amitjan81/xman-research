@@ -91,13 +91,26 @@ class ManifestReader:
         on a tree whose manifest was copied at a different time from its parquet files,
         and it is not an error: the file on disk is the fact, the manifest is commentary.
         """
+        return self.rows_and_availability(underlying, session_dates)[0]
+
+    def rows_and_availability(
+        self, underlying: str, session_dates: Iterable[dt.date]
+    ) -> tuple[dict[dt.date, ManifestRow], bool]:
+        """:meth:`rows_for` and :attr:`available` from a **single** open.
+
+        A resolution needs both facts, and asking for them separately opened the
+        database twice per call. Note what the shape forbids: an early return on an
+        empty ``session_dates`` would answer "unavailable" for every empty range, which
+        is a different claim from "no rows were asked for" — and one the summary would
+        then print as a false "manifest unavailable" note.
+        """
         wanted = sorted(set(session_dates))
-        if not wanted:
-            return {}
         found: dict[dt.date, ManifestRow] = {}
         with self._connect() as connection:
             if connection is None:
-                return {}
+                return {}, False
+            if not wanted:
+                return {}, True
             placeholders = ",".join("?" for _ in wanted)
             cursor = connection.execute(
                 "SELECT underlying, session_date, parquet_path, sha256, rows, symbols, "
@@ -119,7 +132,7 @@ class ManifestReader:
                     reason=record[8],
                     published_at=record[9],
                 )
-        return found
+        return found, True
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection | None]:

@@ -3,14 +3,18 @@
 The expected trading days in every assertion below are written as **literals**, not
 derived from the calendar the code under test uses. Deriving them would make the test
 agree with the implementation by construction and prove nothing about whether either
-matches NSE. The literals were taken once from pandas_market_calendars 5.4.0 and are
-checkable by hand: January 2026's holiday is Republic Day, Monday the 26th.
+matches NSE. The literals were taken once from pandas_market_calendars 5.4.0 — plus the cited
+corrections in ``NSE_ERRATA`` where that package is known wrong — and are checkable by
+hand: January 2026's holidays are Republic Day (Monday the 26th) and the 15th, on which
+NSE was shut for the Maharashtra municipal corporation elections.
 """
 
 from __future__ import annotations
 
 import csv
+import dataclasses
 import datetime as dt
+import hashlib
 import json
 import sqlite3
 import stat
@@ -24,12 +28,16 @@ import pytest
 from xman_research.clock import ManualClock
 from xman_research.session_store import (
     DERIVATION_VERSION,
+    NSE_ERRATA,
     CalendarCoverageError,
+    CalendarErratum,
     ChecksumMismatchError,
     EmptyRangeError,
     MissingSessionsError,
     SessionNotFoundError,
+    SessionRef,
     SessionStore,
+    TradingCalendar,
     content_digest,
 )
 
@@ -46,7 +54,8 @@ JAN_05_TO_16 = (
     dt.date(2026, 1, 12),
     dt.date(2026, 1, 13),
     dt.date(2026, 1, 14),
-    dt.date(2026, 1, 15),
+    # 2026-01-15 is absent: NSE was closed for the Maharashtra municipal corporation
+    # elections. pandas_market_calendars 5.4.0 has it as a session; NSE_ERRATA corrects it.
     dt.date(2026, 1, 16),
 )
 
@@ -153,9 +162,10 @@ def test_range_entirely_inside_the_corpus_is_complete(store: SessionStore) -> No
 
     assert resolution.expected == JAN_05_TO_16
     assert resolution.missing == ()
+    assert resolution.unexpected == ()
     assert resolution.is_complete
     assert not resolution.is_empty
-    assert len(resolution.sessions()) == 10
+    assert len(resolution.sessions()) == 9
 
 
 def test_resolved_sessions_come_back_in_date_order(store: SessionStore) -> None:
@@ -216,6 +226,35 @@ def test_resolution_cannot_be_iterated_around_the_gate(store: SessionStore) -> N
         len(resolution)  # type: ignore[arg-type]
 
 
+def test_serialising_a_resolution_does_not_hand_over_the_sessions(store: SessionStore) -> None:
+    """``asdict`` is a logging reflex, not an adversarial reach — and it was a third door.
+
+    While the refs were an ordinary dataclass field, ``dataclasses.asdict(res)["_found"]``
+    returned every session of a gappy resolution without a gap ever being confronted, and
+    without the caller typing an underscore. The gate cannot be made absolute in Python;
+    it can stop being trivially bypassable by well-meaning code.
+    """
+    resolution = store.resolve("NIFTY", dt.date(2026, 1, 19), dt.date(2026, 1, 23))
+
+    serialised = dataclasses.asdict(resolution)
+
+    assert "_found" not in serialised
+    assert not any(isinstance(value, SessionRef) for value in serialised.values())
+    assert not any(
+        isinstance(value, tuple) and any(isinstance(item, SessionRef) for item in value)
+        for value in serialised.values()
+    )
+    # The gap report itself is still fully serialisable — that is what asdict is for.
+    assert serialised["missing"] == (dt.date(2026, 1, 20), dt.date(2026, 1, 21))
+
+
+def test_an_underlying_that_is_a_path_is_refused(store: SessionStore) -> None:
+    """``NIFTY/../..`` would resolve against a directory outside the corpus root."""
+    for hostile in ("NIFTY/../..", "../NIFTY", "", ".."):
+        with pytest.raises(ValueError, match="underlying must be"):
+            store.resolve(hostile, dt.date(2026, 1, 5), dt.date(2026, 1, 6))
+
+
 def test_range_entirely_after_the_corpus_ends_is_all_missing(store: SessionStore) -> None:
     """The case that is true of the real corpus right now, and the one clipping would hide."""
     resolution = store.resolve("NIFTY", dt.date(2026, 2, 16), dt.date(2026, 2, 20))
@@ -259,15 +298,175 @@ def test_a_range_of_only_non_trading_days_is_empty_not_complete(store: SessionSt
         resolution.sessions()
 
 
+def test_an_empty_range_is_refused_by_accept_gaps_as_well(store: SessionStore) -> None:
+    """The second door has to hold the same line, or the guarantee is decorative.
+
+    ``try: res.sessions() / except SessionStoreError: res.accept_gaps(reason)`` is an
+    entirely ordinary shape, and while ``accept_gaps`` answered an empty range it turned
+    a typo'd date into a green run over zero sessions — through one generic ``except``.
+    There is no gap to accept in a range that expected nothing.
+    """
+    resolution = store.resolve("NIFTY", dt.date(2026, 1, 24), dt.date(2026, 1, 25))
+
+    with pytest.raises(EmptyRangeError):
+        resolution.accept_gaps("a standard, entirely reasonable pipeline-wide reason")
+
+
+def test_an_empty_range_does_not_report_itself_as_complete(store: SessionStore) -> None:
+    """``not () and not ()`` is vacuously true, and ``if res.is_complete:`` is a guard."""
+    resolution = store.resolve("NIFTY", dt.date(2026, 1, 24), dt.date(2026, 1, 25))
+
+    assert resolution.is_empty
+    assert not resolution.is_complete
+    assert resolution.completeness_pct == 0.0  # and not contradicting is_complete
+
+
+def test_an_empty_range_does_not_falsely_claim_the_manifest_was_unreadable(
+    store: SessionStore,
+) -> None:
+    """Asking for zero rows is not the same fact as the manifest being absent.
+
+    The availability answer used to come from a second, independent open; folding it
+    into the one query risks answering "unavailable" whenever no dates were asked for,
+    and the empty summary is where that lie would surface.
+    """
+    resolution = store.resolve("NIFTY", dt.date(2026, 1, 24), dt.date(2026, 1, 25))
+
+    assert resolution.manifest_available
+    assert "manifest unavailable" not in resolution.summary()
+
+
+def test_an_empty_range_still_reports_a_genuinely_absent_manifest(
+    store_without_manifest: SessionStore,
+) -> None:
+    """And the note is not dropped just because the range expected nothing."""
+    resolution = store_without_manifest.resolve("NIFTY", dt.date(2026, 1, 24), dt.date(2026, 1, 25))
+
+    assert not resolution.manifest_available
+    assert "manifest unavailable" in resolution.summary()
+
+
 def test_start_after_end_is_refused(store: SessionStore) -> None:
     with pytest.raises(ValueError, match="after end"):
         store.resolve("NIFTY", dt.date(2026, 1, 16), dt.date(2026, 1, 5))
 
 
 def test_a_range_past_the_holiday_tables_horizon_is_refused(store: SessionStore) -> None:
-    """Past the last known holiday, silence would mean 'no holidays', not 'unknown'."""
+    """Past the last known holiday, silence would mean 'no holidays', not 'unknown'.
+
+    The 2027 end date is coupled to the packaged holiday table: pandas_market_calendars
+    5.4.0 stops at 2026-12-25. When a future release extends past 2027-06-30 this test
+    goes red reading "DID NOT RAISE", which means "the horizon moved", not "the guard
+    broke" — move the date out and re-check ``TradingCalendar.coverage_end``.
+    """
     with pytest.raises(CalendarCoverageError, match="holiday data ends"):
         store.resolve("NIFTY", dt.date(2026, 12, 1), dt.date(2027, 6, 30))
+
+
+# --------------------------------------------------------------------------------------
+# The calendar can be wrong in both directions, and both are reported
+# --------------------------------------------------------------------------------------
+
+
+def _plant_session(corpus_root: Path, stem: str) -> Path:
+    """Copy an existing fixture session onto ``stem`` — a file for a day nobody expects."""
+    planted = corpus_root / "NIFTY" / f"{stem}.parquet"
+    planted.write_bytes((corpus_root / "NIFTY" / "2026-01-05.parquet").read_bytes())
+    return planted
+
+
+def test_a_session_on_a_day_the_calendar_calls_closed_is_reported(
+    store: SessionStore, corpus_root: Path
+) -> None:
+    """The Muhurat case: real captured data on a day the holiday table calls closed.
+
+    Resolving only over ``expected`` meant such a file was never looked at, never
+    counted, and reachable through no API at all — criterion 1 pointed the other way,
+    with real data as the casualty. It is a *result*, symmetric with a missing session.
+    """
+    _plant_session(corpus_root, "2026-01-26")  # Republic Day, per the packaged table
+
+    resolution = store.resolve("NIFTY", dt.date(2026, 1, 23), dt.date(2026, 1, 28))
+
+    assert dt.date(2026, 1, 26) not in resolution.expected
+    assert resolution.unexpected == (dt.date(2026, 1, 26),)
+    assert "UNEXPECTED" in resolution.summary()
+    assert "2026-01-26" in resolution.summary()
+    assert resolution.provenance()["unexpected"] == ["2026-01-26"]
+    # Nothing is missing, so it is complete — but a disagreement is not a green tick.
+    assert resolution.is_complete
+    assert "#b06000" in resolution._repr_html_()
+
+
+def test_an_unexpected_session_is_handed_over_rather_than_dropped(
+    store: SessionStore, corpus_root: Path
+) -> None:
+    """It is real captured data. Reporting it and then withholding it helps nobody."""
+    _plant_session(corpus_root, "2026-01-26")
+
+    sessions = store.resolve("NIFTY", dt.date(2026, 1, 23), dt.date(2026, 1, 28)).sessions()
+
+    dates = [ref.session_date for ref in sessions]
+    assert dates == [
+        dt.date(2026, 1, 23),
+        dt.date(2026, 1, 26),  # the day the calendar calls closed
+        dt.date(2026, 1, 27),
+        dt.date(2026, 1, 28),
+    ]
+
+
+def test_a_range_of_only_a_closed_day_that_holds_data_is_not_empty(
+    store: SessionStore, corpus_root: Path
+) -> None:
+    """A range expecting nothing, and a range holding nothing, part company here.
+
+    Refusing this range as empty would be the same silent exclusion in a louder costume.
+    """
+    _plant_session(corpus_root, "2026-01-26")
+
+    resolution = store.resolve("NIFTY", dt.date(2026, 1, 26), dt.date(2026, 1, 26))
+
+    assert resolution.expected == ()
+    assert not resolution.is_empty
+    assert len(resolution.sessions()) == 1
+    assert "expected no sessions here" in resolution.summary()
+    assert "1/0 sessions" not in resolution.summary()
+
+
+def test_the_errata_layer_corrects_a_day_the_packaged_table_gets_wrong() -> None:
+    """The mechanism, proved with a synthetic entry, and the one real entry separately.
+
+    Testing only the shipped NSE entry would make the single datum its own proof of
+    mechanism, so the two are checked apart.
+    """
+    synthetic = CalendarErratum(
+        session_date=dt.date(2026, 1, 20),
+        reason="synthetic — mechanism test only",
+        source="tests/test_session_store.py",
+    )
+    corrected = TradingCalendar("NSE", errata=(synthetic,))
+
+    days = corrected.trading_days(dt.date(2026, 1, 19), dt.date(2026, 1, 23))
+    assert dt.date(2026, 1, 20) not in days
+    assert dt.date(2026, 1, 21) in days
+    # The correction is the only difference: without it the day is an ordinary session.
+    uncorrected = TradingCalendar("NSE", errata=()).trading_days(
+        dt.date(2026, 1, 19), dt.date(2026, 1, 23)
+    )
+    assert dt.date(2026, 1, 20) in uncorrected
+    assert set(uncorrected) - set(days) == {dt.date(2026, 1, 20)}
+
+
+def test_the_shipped_nse_errata_are_cited_and_applied_by_default() -> None:
+    """Every correction carries the evidence for it — an uncited one is a guess."""
+    assert dt.date(2026, 1, 15) in {entry.session_date for entry in NSE_ERRATA}
+    assert all(entry.reason.strip() and entry.source.strip() for entry in NSE_ERRATA)
+
+    default = TradingCalendar("NSE")
+    assert default.errata == NSE_ERRATA
+    assert dt.date(2026, 1, 15) not in default.trading_days(
+        dt.date(2026, 1, 12), dt.date(2026, 1, 16)
+    )
 
 
 # --------------------------------------------------------------------------------------
@@ -294,7 +493,7 @@ def test_resolution_degrades_gracefully_without_a_manifest(
     assert resolution.missing == ()
     assert resolution.is_complete
     sessions = resolution.sessions()
-    assert len(sessions) == 10
+    assert len(sessions) == 9
     assert all(ref.sha256 is None and ref.status is None for ref in sessions)
     assert "manifest unavailable" in resolution.summary()
 
@@ -309,7 +508,7 @@ def test_a_corrupt_manifest_is_treated_as_absent_not_fatal(
     resolution = store.resolve("NIFTY", dt.date(2026, 1, 5), dt.date(2026, 1, 16))
 
     assert not resolution.manifest_available
-    assert len(resolution.sessions()) == 10
+    assert len(resolution.sessions()) == 9
 
 
 def test_a_quarantined_session_is_excluded_and_named(store: SessionStore) -> None:
@@ -322,7 +521,30 @@ def test_a_quarantined_session_is_excluded_and_named(store: SessionStore) -> Non
     assert "QUARANTINED" in resolution.summary()
     with pytest.raises(MissingSessionsError):
         resolution.sessions()
-    assert len(resolution.accept_gaps("re-checking the quarantine decision")) == 1
+    # By default the quarantined session stays out even here: accepting a gap is not the
+    # same decision as trusting data the producer marked bad.
+    accepted = resolution.accept_gaps("carrying on across the quarantined day")
+    assert [ref.session_date for ref in accepted] == [dt.date(2026, 2, 2)]
+
+
+def test_a_quarantined_session_is_reachable_but_only_through_its_own_door(
+    store: SessionStore,
+) -> None:
+    """Excluding it by default must not mean nobody can ever look at it again.
+
+    Re-checking a quarantine decision is a legitimate act, and it needs the file. It gets
+    its own flag rather than riding along on any ``accept_gaps`` reason, so a caller who
+    wrote "known vendor outage" cannot silently receive data the producer called bad.
+    """
+    resolution = store.resolve("NIFTY", dt.date(2026, 2, 2), dt.date(2026, 2, 3))
+
+    accepted = resolution.accept_gaps(
+        "re-checking the quarantine decision", include_quarantined=True
+    )
+
+    assert [ref.session_date for ref in accepted] == [dt.date(2026, 2, 2), dt.date(2026, 2, 3)]
+    assert accepted[1].status == "quarantined"
+    assert not store.load_session(accepted[1]).empty  # the point: the file is reachable
 
 
 # --------------------------------------------------------------------------------------
@@ -333,21 +555,29 @@ def test_a_quarantined_session_is_excluded_and_named(store: SessionStore) -> Non
 def test_the_store_never_writes_into_the_corpus(tmp_path: Path, clock: ManualClock) -> None:
     """The read-only guarantee, proved by removing write permission rather than by promise.
 
-    An owner needs write on a directory to create an entry in it, so a full
-    resolve-load-refdata-verify cycle against a ``r-x`` corpus proves that no code path
-    here creates a WAL sibling, a scan index, or a cache file. This is the test that
-    would have caught a plain ``mode=ro`` sqlite open against a WAL-mode manifest.
+    Two halves, because they catch different bugs. Read-only **directories** prove
+    nothing is *created* — no WAL sibling, no scan index, no cache file; this is the
+    check that would have caught a plain ``mode=ro`` sqlite open against a WAL-mode
+    manifest. Read-only **files**, plus a content hash either side, prove nothing is
+    *mutated in place* — an in-place same-name ``to_parquet`` rewrite or a truncated
+    index refresh leaves the directory listing identical and would pass the first half
+    alone.
     """
     _build_corpus(tmp_path, with_manifest=True)
     corpus = tmp_path / "datasets" / "dhan"
     manifest = tmp_path / "manifest.sqlite"
     before = sorted(p.name for p in (corpus / "NIFTY").iterdir())
+    everything = sorted(p for p in tmp_path.rglob("*"))
+    digests = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in everything if p.is_file()}
 
     # tmp_path holds the manifest, so locking it down is what proves the sqlite open
     # mode cannot leave a -wal/-shm sibling in the producer's directory.
-    locked = [p for p in tmp_path.rglob("*") if p.is_dir()] + [tmp_path]
-    locked.sort(key=lambda p: len(p.parts), reverse=True)
-    for directory in locked:
+    locked_files = [p for p in everything if p.is_file()]
+    locked_dirs = [p for p in everything if p.is_dir()] + [tmp_path]
+    locked_dirs.sort(key=lambda p: len(p.parts), reverse=True)
+    for path in locked_files:
+        path.chmod(stat.S_IRUSR)
+    for directory in locked_dirs:
         directory.chmod(stat.S_IRUSR | stat.S_IXUSR)
     try:
         store = SessionStore(corpus, clock=clock, manifest_path=manifest)
@@ -359,8 +589,15 @@ def test_the_store_never_writes_into_the_corpus(tmp_path: Path, clock: ManualClo
         assert sorted(p.name for p in (corpus / "NIFTY").iterdir()) == before
         assert sorted(p.name for p in tmp_path.iterdir()) == ["datasets", "manifest.sqlite"]
     finally:
-        for directory in reversed(locked):
+        for directory in reversed(locked_dirs):
             directory.chmod(stat.S_IRWXU)
+        for path in locked_files:
+            path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+    assert sorted(p for p in tmp_path.rglob("*")) == everything, "a file or directory appeared"
+    assert {
+        p: hashlib.sha256(p.read_bytes()).hexdigest() for p in everything if p.is_file()
+    } == digests, "an existing file was rewritten in place"
 
 
 def test_loading_returns_the_producers_frame_unmodified(store: SessionStore) -> None:
@@ -506,7 +743,7 @@ def test_an_unknown_underlying_resolves_to_everything_missing(store: SessionStor
     """Not an exception: 'we have no data for this' is a resolution, and a loud one."""
     resolution = store.resolve("BANKNIFTY", dt.date(2026, 1, 5), dt.date(2026, 1, 16))
 
-    assert resolution.missing_count == 10
+    assert resolution.missing_count == 9
     assert resolution.found_count == 0
 
 

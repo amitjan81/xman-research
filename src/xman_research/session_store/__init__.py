@@ -46,7 +46,9 @@ from xman_research.session_store.store import (
 )
 from xman_research.session_store.trading_calendar import (
     NSE_CALENDAR,
+    NSE_ERRATA,
     CalendarCoverageError,
+    CalendarErratum,
     TradingCalendar,
 )
 
@@ -55,9 +57,11 @@ __all__ = [
     "DEFAULT_MANIFEST_PATH",
     "DERIVATION_VERSION",
     "NSE_CALENDAR",
+    "NSE_ERRATA",
     "PUBLISHED",
     "QUARANTINED",
     "CalendarCoverageError",
+    "CalendarErratum",
     "ChecksumMismatchError",
     "EmptyRangeError",
     "ManifestReader",

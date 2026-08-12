@@ -33,6 +33,15 @@ NIFTY = CORPUS_ROOT / "NIFTY"
 # The corpus's own boundaries, as they stand.
 FIRST_SESSION = dt.date(2025, 12, 16)
 LAST_SESSION = dt.date(2026, 6, 12)
+TODAY = dt.date(2026, 8, 12)
+
+# Counts, re-derived rather than remembered: 119 parquet files and 119 producer manifest
+# rows between FIRST_SESSION and LAST_SESSION, against 119 calendar sessions once
+# NSE_ERRATA removes 2026-01-15 (pandas_market_calendars 5.4.0 offers 120). The dead
+# capture window from 2026-06-15 to TODAY is 42 further sessions, giving 161 expected
+# across the whole span.
+CAPTURED_SESSIONS = 119
+DEAD_WINDOW_SESSIONS = 42
 
 pytestmark = pytest.mark.skipif(not NIFTY.is_dir(), reason=f"real corpus not present at {NIFTY}")
 
@@ -53,12 +62,13 @@ def test_the_dead_capture_window_is_reported_as_missing(store: SessionStore) -> 
     say so — loudly, with the count — rather than hand back the sessions it happens to
     have and let a Sharpe ratio be computed over a two-month hole.
     """
-    resolution = store.resolve("NIFTY", dt.date(2026, 6, 1), dt.date(2026, 8, 12))
+    resolution = store.resolve("NIFTY", dt.date(2026, 6, 1), TODAY)
 
     assert not resolution.is_complete
-    assert resolution.missing_count > 30, "the known outage is roughly two months of sessions"
-    assert min(resolution.missing) > LAST_SESSION
-    assert max(resolution.missing) == dt.date(2026, 8, 12)
+    assert resolution.missing_count == DEAD_WINDOW_SESSIONS
+    assert resolution.missing_runs() == (resolution.missing,), "one unbroken outage"
+    assert min(resolution.missing) == dt.date(2026, 6, 15)
+    assert max(resolution.missing) == TODAY
     assert "MISSING" in resolution.summary()
 
     with pytest.raises(MissingSessionsError):
@@ -74,7 +84,7 @@ def test_the_outage_boundary_is_where_the_corpus_actually_stops(store: SessionSt
     ending = store.resolve("NIFTY", LAST_SESSION, LAST_SESSION)
     assert ending.is_complete
 
-    after = store.resolve("NIFTY", LAST_SESSION + dt.timedelta(days=1), dt.date(2026, 8, 12))
+    after = store.resolve("NIFTY", LAST_SESSION + dt.timedelta(days=1), TODAY)
     assert after.found_count == 0
     assert after.missing_count == after.expected_count > 0
 
@@ -91,28 +101,45 @@ def test_the_reader_agrees_with_the_producer_over_the_captured_span(
     """
     resolution = store.resolve("NIFTY", FIRST_SESSION, LAST_SESSION)
 
+    # sessions(), not accept_gaps(): over the captured span there is now nothing to accept,
+    # and reaching for the gap door would misrepresent a complete range as a partial one.
+    sessions = resolution.sessions()
     on_disk = {p.name[: -len(".parquet")] for p in NIFTY.glob("*.parquet")}
-    resolved = {ref.session_date.isoformat() for ref in resolution.accept_gaps("cross-check")}
-    assert resolved == on_disk, "a parquet file exists for a day the calendar calls closed"
+    assert {ref.session_date.isoformat() for ref in sessions} == on_disk
+    assert resolution.unexpected == (), "a parquet file exists for a day the calendar calls closed"
+    assert len(sessions) == CAPTURED_SESSIONS
 
     assert resolution.manifest_available
-    assert all(ref.sha256 is not None for ref in resolution.accept_gaps("cross-check"))
-    assert all(ref.status == "published" for ref in resolution.accept_gaps("cross-check"))
+    assert all(ref.sha256 is not None for ref in sessions)
+    assert all(ref.status == "published" for ref in sessions)
 
 
-def test_the_one_gap_inside_the_captured_span_is_reported(store: SessionStore) -> None:
-    """There is a hole *inside* the corpus, not only after it.
+def test_the_apparent_gap_inside_the_captured_span_was_a_calendar_error(
+    store: SessionStore,
+) -> None:
+    """2026-01-15 is absent from the corpus because NSE was shut, not because capture failed.
 
-    2026-01-15 is a Thursday that the NSE calendar calls a trading day, and neither the
-    parquet tree nor the producer's manifest has it. The cause is not established here —
-    it is either a capture failure or a market holiday the calendar package does not
-    carry, and this reader is not the component that can tell. Reporting it is the
-    correct behaviour either way; asserting a cause would be a guess dressed as a test.
+    It read as the one hole inside the corpus for as long as the cause was unknown. It is
+    now established: the exchange was closed for the Maharashtra municipal corporation
+    elections and pandas_market_calendars 5.4.0 does not carry the date. NSE_ERRATA
+    corrects it, with the citation attached.
+
+    Reporting a gap that is not one is not a harmless conservatism — it teaches the
+    researcher to type an accept_gaps reason without reading the report, which is exactly
+    how the gate this component exists to provide stops working.
     """
     resolution = store.resolve("NIFTY", dt.date(2026, 1, 12), dt.date(2026, 1, 16))
 
-    assert resolution.missing == (dt.date(2026, 1, 15),)
     assert not (NIFTY / "2026-01-15.parquet").exists()
+    assert dt.date(2026, 1, 15) not in resolution.expected
+    assert resolution.missing == ()
+    assert resolution.is_complete
+    assert [ref.session_date for ref in resolution.sessions()] == [
+        dt.date(2026, 1, 12),
+        dt.date(2026, 1, 13),
+        dt.date(2026, 1, 14),
+        dt.date(2026, 1, 16),
+    ]
 
 
 def test_a_clean_range_inside_the_corpus_resolves_and_loads(store: SessionStore) -> None:
@@ -165,5 +192,25 @@ def test_weekends_and_real_holidays_are_never_counted_as_capture_gaps(
     """
     resolution = store.resolve("NIFTY", FIRST_SESSION, LAST_SESSION)
 
-    assert resolution.missing == (dt.date(2026, 1, 15),)
-    assert resolution.expected_count == resolution.found_count + 1
+    assert resolution.missing == ()
+    assert resolution.expected_count == resolution.found_count == CAPTURED_SESSIONS
+    assert resolution.is_complete
+
+
+def test_the_whole_span_reports_the_capture_outage_and_nothing_else(
+    store: SessionStore,
+) -> None:
+    """The headline numbers, in one place: 119 found of 161 expected, 42 missing in 1 run.
+
+    Everything between the first captured session and today, which is the range a
+    researcher asking "what do we have?" would actually type.
+    """
+    resolution = store.resolve("NIFTY", FIRST_SESSION, TODAY)
+
+    assert resolution.expected_count == CAPTURED_SESSIONS + DEAD_WINDOW_SESSIONS == 161
+    assert resolution.found_count == CAPTURED_SESSIONS
+    assert resolution.missing_count == DEAD_WINDOW_SESSIONS
+    assert resolution.unexpected == ()
+    assert resolution.missing_runs() == (resolution.missing,)
+    assert "in 1 run:" in resolution.summary()
+    assert "2026-06-15..2026-08-12 (42 days)" in resolution.summary()

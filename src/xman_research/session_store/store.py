@@ -25,6 +25,12 @@ the entire point of the component: a Sharpe ratio computed over a range with a t
 hole in it, that does not mention the hole, is a wrong answer wearing a right answer's
 clothes — and the ordinary way to produce one is not dishonesty but a ``for`` loop over
 ``glob("*.parquet")``, which cannot tell an absent file from a day the market was shut.
+
+The same asymmetry is enforced in the other direction, which is easier to miss: a
+session **present** on a day the calendar calls closed is reported as
+:attr:`Resolution.unexpected` rather than quietly excluded. Iterating only the expected
+days is the same silent skip wearing the calendar's authority, and the calendar is not
+always right — see :data:`~xman_research.session_store.trading_calendar.NSE_ERRATA`.
 """
 
 from __future__ import annotations
@@ -34,7 +40,7 @@ import hashlib
 import json
 import os
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -64,12 +70,23 @@ __all__ = [
 #: Bumped whenever a change here alters what a caller receives for the same files on
 #: disk. Recorded on every :class:`Resolution` so a stored result can be tied to the
 #: reader that produced it — the reader half of the spec's "derived is regenerable from
-#: raw plus a recorded derivation version". At ``1`` the reader performs no derivation
-#: at all: :meth:`SessionStore.load_session` hands back the producer's frame untouched.
-#: Any future normalisation (a tz-aware index, a renamed column, an int cast on ``oi``)
-#: is a derivation and must bump this, or results computed either side of the change
-#: become silently incomparable.
-DERIVATION_VERSION = "session-store/1"
+#: raw plus a recorded derivation version". The reader still performs no derivation on
+#: the frame itself: :meth:`SessionStore.load_session` hands back the producer's frame
+#: untouched. Any future normalisation (a tz-aware index, a renamed column, an int cast
+#: on ``oi``) is a derivation and must bump this.
+#:
+#: **The resolution's answer counts too, not only the frame.** The set of expected
+#: sessions is part of what a caller receives, so a change to
+#: :data:`~xman_research.session_store.trading_calendar.NSE_ERRATA` — adding a cited
+#: holiday, or dropping one once pandas_market_calendars carries the fix — bumps this
+#: version as surely as a column rename would. Two gap reports produced either side of
+#: an errata change are not comparable, and this field is the only thing that says so.
+#: (Chosen over recording the applied errata dates inside :meth:`Resolution.provenance`,
+#: so that there is exactly one authority on comparability rather than two.)
+#:
+#: ``2`` — the calendar errata layer, and present-but-unexpected sessions being resolved
+#: and reported rather than silently ignored. Both change the answer for unchanged files.
+DERIVATION_VERSION = "session-store/2"
 
 #: Defaults, not constants. The corpus root is configuration — overridden by the
 #: constructor argument, then by these environment variables, then by these values.
@@ -179,6 +196,16 @@ class Resolution:
     the failure this class exists to make impossible. The sessions come out of exactly
     two doors: :meth:`sessions`, which refuses while there is a gap, and
     :meth:`accept_gaps`, which requires the caller to write down why.
+
+    The resolved refs are held **outside** the dataclass fields, reached only through
+    those two methods. That is not decoration: as an ordinary field, a plain
+    ``dataclasses.asdict(resolution)["_found"]`` handed over every session on a gappy
+    resolution without a gap ever being confronted — and reaching for ``asdict`` to log
+    an object is a reflex, not an attack. Python cannot make the gate absolute (the
+    attribute is still there for anyone who goes looking), but it can stop the casual
+    route, and ``asdict`` was the casual route. The cost is that the generated
+    ``__eq__`` compares the report and not the refs, which is the right comparison for
+    two resolutions of the same range anyway.
     """
 
     underlying: str
@@ -187,11 +214,19 @@ class Resolution:
     expected: tuple[dt.date, ...]
     missing: tuple[dt.date, ...]
     quarantined: tuple[dt.date, ...]
+    unexpected: tuple[dt.date, ...]
     resolved_at: dt.datetime
     derivation_version: str
     calendar_name: str
     manifest_available: bool
-    _found: tuple[SessionRef, ...] = field(repr=False)
+    found: InitVar[tuple[SessionRef, ...]]
+    quarantined_refs: InitVar[tuple[SessionRef, ...]]
+
+    def __post_init__(
+        self, found: tuple[SessionRef, ...], quarantined_refs: tuple[SessionRef, ...]
+    ) -> None:
+        object.__setattr__(self, "_refs", found)
+        object.__setattr__(self, "_quarantined_refs", quarantined_refs)
 
     @property
     def expected_count(self) -> int:
@@ -199,40 +234,71 @@ class Resolution:
 
     @property
     def found_count(self) -> int:
-        return len(self._found)
+        """Sessions resolved: the expected ones that are present, plus any unexpected."""
+        return len(self._refs)
 
     @property
     def missing_count(self) -> int:
         return len(self.missing)
 
     @property
+    def unexpected_count(self) -> int:
+        return len(self.unexpected)
+
+    @property
+    def expected_present_count(self) -> int:
+        """Resolved sessions the calendar actually expected — the completeness numerator."""
+        expected = set(self.expected)
+        return sum(1 for ref in self._refs if ref.session_date in expected)
+
+    @property
     def is_empty(self) -> bool:
-        """No exchange sessions in the range at all — nothing was expected.
+        """Nothing was expected in this range, and nothing was found either.
 
         Kept separate from :attr:`is_complete` on purpose. An empty range is vacuously
         complete, and reading that as "complete, carry on" is precisely how a typo in a
-        date turns into a green result over no data.
+        date turns into a green result over no data. Both doors to the sessions refuse
+        on it, so the vacuous case cannot be mistaken for a clean run through either.
+
+        A range the calendar calls empty but which nevertheless holds a session on disk
+        is **not** empty — that is the Muhurat case, and there is real data to hand over.
         """
-        return not self.expected
+        return not self.expected and not self.unexpected
 
     @property
     def is_complete(self) -> bool:
-        """Every expected session is present and none of them is quarantined."""
-        return not self.missing and not self.quarantined
+        """Nothing expected is absent or quarantined — and the range was not empty.
+
+        Speaks only to :attr:`missing` and :attr:`quarantined`. An empty range is
+        explicitly *not* complete: ``not () and not ()`` is vacuously true, and a caller
+        guarding ``if resolution.is_complete:`` would read a range typo'd onto a weekend
+        as a clean run over no data. :attr:`unexpected` does not falsify it either — a
+        session the calendar did not expect is a calendar/producer disagreement, not a
+        hole in the data — but it is always named in :meth:`summary`.
+        """
+        return not self.is_empty and not self.missing and not self.quarantined
 
     @property
     def completeness_pct(self) -> float:
         if not self.expected:
-            return 0.0
-        return 100.0 * self.found_count / self.expected_count
+            # Nothing expected: 0% over a genuinely empty range, and 100% when the only
+            # sessions here are ones the calendar did not expect but the producer captured.
+            return 100.0 if self.unexpected else 0.0
+        return 100.0 * self.expected_present_count / self.expected_count
 
     def sessions(self) -> tuple[SessionRef, ...]:
         """The resolved sessions in date order — or a refusal.
 
-        Raises :class:`EmptyRangeError` if the range holds no exchange sessions, and
+        Raises :class:`EmptyRangeError` if the range holds no sessions at all, and
         :class:`MissingSessionsError` if any expected session is absent or quarantined.
         This is the door to use by default; reaching for :meth:`accept_gaps` should be
         a decision, not a habit.
+
+        Sessions present on disk that the calendar did not expect **are** returned here:
+        they are real captured data, and dropping them would be criterion 1 inverted —
+        the silent skip this component exists to remove, pointed the other way. They are
+        reported in :meth:`summary` and listed in :attr:`unexpected`, so they arrive
+        named rather than smuggled.
         """
         if self.is_empty:
             raise EmptyRangeError(
@@ -241,33 +307,70 @@ class Resolution:
             )
         if not self.is_complete:
             raise MissingSessionsError(self.summary(), self)
-        return self._found
+        return self._refs
 
-    def accept_gaps(self, reason: str) -> tuple[SessionRef, ...]:
+    def accept_gaps(
+        self, reason: str, *, include_quarantined: bool = False
+    ) -> tuple[SessionRef, ...]:
         """The resolved sessions despite the gaps, against a written reason.
 
         The reason is mandatory and is not checked for truthfulness — it cannot be. Its
         job is to make ignoring a gap a deliberate, attributable act rather than an
         omission, and to give the trial log something to record about why a result was
         computed over a partial window.
+
+        ``include_quarantined`` adds back the sessions the producer marked untrustworthy.
+        They are excluded by default and behind their own flag rather than behind the
+        reason string, because "carry on across a two-day vendor outage" and "compute on
+        data the producer says is bad" are two different decisions, and a caller who
+        wrote the first reason must not silently receive the second.
+
+        Raises :class:`EmptyRangeError` on an empty range — checked before the reason,
+        since no reason accepts a gap in a range that has nothing to accept. Without it,
+        the common ``except SessionStoreError: refs = res.accept_gaps(...)`` shape would
+        turn a date typo back into a green run over zero sessions.
         """
+        if self.is_empty:
+            raise EmptyRangeError(
+                f"{self.underlying} {self.start}..{self.end} contains no {self.calendar_name} "
+                f"sessions — there is no gap to accept, only an empty range."
+            )
         if not reason or not reason.strip():
             raise ValueError(
                 "accept_gaps requires a written reason — proceeding over a known gap "
                 "without one is the omission this API exists to prevent."
             )
-        return self._found
+        if not include_quarantined or not self._quarantined_refs:
+            return self._refs
+        return tuple(sorted(self._refs + self._quarantined_refs, key=lambda ref: ref.session_date))
 
     def summary(self) -> str:
         """One paragraph a human can act on. Also this object's ``repr``."""
-        head = (
-            f"{self.underlying} {self.start}..{self.end} [{self.calendar_name}]: "
-            f"{self.found_count}/{self.expected_count} sessions "
-            f"({self.completeness_pct:.1f}% complete)"
-        )
+        label = f"{self.underlying} {self.start}..{self.end} [{self.calendar_name}]"
         if self.is_empty:
-            return f"{head} — no trading days in this range."
+            head = f"{label}: no trading days in this range."
+        elif not self.expected:
+            # "1/0 sessions (100.0% complete)" for a calendar-empty range that
+            # nevertheless holds a file reads as a bug in the reader. It is a
+            # calendar/producer disagreement, and it gets said in words.
+            head = (
+                f"{label}: the {self.calendar_name} calendar expected no sessions here, "
+                f"but {self.found_count} is on disk"
+            )
+        else:
+            head = (
+                f"{label}: {self.expected_present_count}/{self.expected_count} sessions "
+                f"({self.completeness_pct:.1f}% complete)"
+            )
         parts = [head]
+        if self.unexpected:
+            # Not run-grouped: _runs positions dates by their index in `expected`, which
+            # these are by definition not in, so every one would render as its own run.
+            parts.append(
+                f"UNEXPECTED {len(self.unexpected)} session(s) present on a day the "
+                f"{self.calendar_name} calendar calls closed — the calendar and the "
+                f"producer disagree: {', '.join(d.isoformat() for d in self.unexpected)}."
+            )
         if self.missing:
             runs = self.missing_runs()
             plural = "" if len(runs) == 1 else "s"
@@ -319,10 +422,11 @@ class Resolution:
             "found_count": self.found_count,
             "missing": [d.isoformat() for d in self.missing],
             "quarantined": [d.isoformat() for d in self.quarantined],
+            "unexpected": [d.isoformat() for d in self.unexpected],
             "manifest_available": self.manifest_available,
             "session_sha256": {
                 ref.session_date.isoformat(): ref.sha256
-                for ref in self._found
+                for ref in self._refs
                 if ref.sha256 is not None
             },
         }
@@ -335,9 +439,16 @@ class Resolution:
 
         A researcher who types ``res`` in a cell must *see* the hole. That is the
         strongest available form of "hard to ignore" in the workflow this platform is
-        actually used through.
+        actually used through. Amber for a complete range that carries unexpected
+        sessions: nothing is missing, but the calendar and the producer disagree about
+        what a session is, and that deserves a second look rather than a green tick.
         """
-        colour = "#137333" if self.is_complete and not self.is_empty else "#b3261e"
+        if not self.is_complete:
+            colour = "#b3261e"
+        elif self.unexpected:
+            colour = "#b06000"
+        else:
+            colour = "#137333"
         body = _html_escape(self.summary())
         return f'<pre style="white-space:pre-wrap;color:{colour}">{body}</pre>'
 
@@ -398,28 +509,41 @@ class SessionStore:
         headline guarantee vacuous: a range running past the end of capture would
         report itself complete, which is exactly the case that is true right now — the
         corpus stops on 2026-06-12 and capture has been dead since 2026-06-14.
+
+        The directory is also scanned for sessions the calendar did *not* expect. Only
+        iterating ``expected`` meant a file on a day the calendar calls a holiday was
+        never opened, never counted and reachable through no API at all — criterion 1
+        inverted, with real captured data as the casualty. See :attr:`Resolution.unexpected`.
         """
         if start > end:
             raise ValueError(f"start {start} is after end {end}")
+        _check_underlying(underlying)
 
         expected = self._calendar.trading_days(start, end)
+        expected_set = set(expected)
         directory = self._root / underlying
 
-        present: list[dt.date] = []
-        for session_date in expected:
-            if (directory / f"{session_date.isoformat()}{_PARQUET_SUFFIX}").is_file():
-                present.append(session_date)
-        missing = tuple(d for d in expected if d not in set(present))
+        present = [
+            session_date
+            for session_date in expected
+            if (directory / f"{session_date.isoformat()}{_PARQUET_SUFFIX}").is_file()
+        ]
+        present_set = set(present)
+        missing = tuple(d for d in expected if d not in present_set)
+        unexpected = tuple(
+            d
+            for d in _session_dates_on_disk(directory)
+            if start <= d <= end and d not in expected_set
+        )
+        on_disk = sorted(present_set | set(unexpected))
 
-        manifest_rows = self._manifest.rows_for(underlying, present)
-        quarantined = tuple(
-            d for d in present if (row := manifest_rows.get(d)) is not None and row.is_quarantined
+        manifest_rows, manifest_available = self._manifest.rows_and_availability(
+            underlying, on_disk
         )
-        found = tuple(
-            self._build_ref(underlying, directory, d, manifest_rows.get(d))
-            for d in present
-            if d not in set(quarantined)
-        )
+        quarantined_set = {
+            d for d in on_disk if (row := manifest_rows.get(d)) is not None and row.is_quarantined
+        }
+        refs = {d: self._build_ref(underlying, directory, d, manifest_rows.get(d)) for d in on_disk}
 
         return Resolution(
             underlying=underlying,
@@ -427,12 +551,14 @@ class SessionStore:
             end=end,
             expected=expected,
             missing=missing,
-            quarantined=quarantined,
+            quarantined=tuple(sorted(quarantined_set)),
+            unexpected=unexpected,
             resolved_at=self._clock.now(),
             derivation_version=self._derivation_version,
             calendar_name=self._calendar.name,
-            manifest_available=self._manifest.available,
-            _found=found,
+            manifest_available=manifest_available,
+            found=tuple(ref for d, ref in refs.items() if d not in quarantined_set),
+            quarantined_refs=tuple(ref for d, ref in refs.items() if d in quarantined_set),
         )
 
     def load_session(self, ref: SessionRef, *, verify: bool = False) -> pd.DataFrame:
@@ -513,6 +639,37 @@ class SessionStore:
             refdata_path=refdata if refdata.is_dir() else None,
             manifest_row=manifest_row,
         )
+
+
+def _session_dates_on_disk(directory: Path) -> tuple[dt.date, ...]:
+    """Every ``<YYYY-MM-DD>.parquet`` in ``directory``, as dates, in order.
+
+    Names that are not a date are skipped rather than raised on: the corpus belongs to
+    the producer, and a reader that refuses to resolve a range because somebody left a
+    ``backup.parquet`` in the tree has made the corpus harder to use, not safer. The
+    producer's ``.parquet.scan.npz`` index does not match the glob and is never touched.
+    """
+    dates: list[dt.date] = []
+    for path in directory.glob(f"*{_PARQUET_SUFFIX}"):
+        try:
+            dates.append(dt.date.fromisoformat(path.name[: -len(_PARQUET_SUFFIX)]))
+        except ValueError:
+            continue
+    return tuple(sorted(dates))
+
+
+def _check_underlying(underlying: str) -> None:
+    """Refuse an underlying that is a path rather than a name.
+
+    ``store.resolve("NIFTY/../..", ...)`` would otherwise walk out of the corpus root.
+    Everything here is read-only, so the worst case is telling a caller whether files
+    exist somewhere else on the machine — but a root that is not a root is worth one
+    line to prevent rather than an argument about severity.
+    """
+    if not underlying or underlying in {".", ".."}:
+        raise ValueError(f"underlying must be a non-empty name, got {underlying!r}")
+    if "/" in underlying or "\\" in underlying or os.sep in underlying:
+        raise ValueError(f"underlying must be a name, not a path, got {underlying!r}")
 
 
 def _default_root() -> Path:
