@@ -224,6 +224,7 @@ class SessionView:
         self._bars = dict(bars)
         self._universe = universe
         self._minutes = tuple(sorted({minute for _, minute in self._bars}))
+        self._symbols = frozenset(symbol for symbol, _ in self._bars)
         self._underlying_bars = tuple(
             self._bars[(underlying, minute)]
             for minute in self._minutes
@@ -287,7 +288,7 @@ class SessionView:
         capture-scope fact (spec §3 C1), not a market fact, and the backtester must be
         able to tell the difference before it decides a leg was unfillable.
         """
-        return any(existing == symbol for existing, _ in self._bars)
+        return symbol in self._symbols
 
     def underlying_bars(self) -> tuple[Bar, ...]:
         """The index's own bars, ascending by minute."""

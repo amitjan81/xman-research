@@ -42,7 +42,7 @@ import datetime as dt
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Protocol, runtime_checkable
 
 from xman_research._canonical import json_safe
@@ -140,10 +140,20 @@ class TradeIntent:
 
 @dataclass(frozen=True, slots=True)
 class Position:
-    """A signed position in one contract. Negative units are short."""
+    """A signed position in one contract. Negative units are short.
+
+    ``last_mark`` is the most recent observed price per unit — the fill price at entry,
+    then each session's last printed close. It exists so an unmarkable session can carry
+    the position forward at its last known value instead of at zero. Marking to zero is
+    not the conservative choice it looks like: for a **short** position a zero mark
+    removes a negative from the book and equity *rises* by the whole unrealised premium.
+    Since the only strategy shipped here is short-only, the tempting simplification is
+    precisely the one that flatters the result.
+    """
 
     contract: Contract
     units: int
+    last_mark: float
 
     @property
     def is_short(self) -> bool:
@@ -260,6 +270,12 @@ class DailyRecord:
     equity: float
     margin: MarginRequirement
     open_positions: int
+    stale_marks: int = 0
+    """Open positions carried at a previous session's price because none printed today.
+
+    A non-zero value means that session's equity is partly an estimate. It is counted
+    rather than silently absorbed, so C6 can refuse to compute a return series over a
+    stretch where the marks went stale."""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -269,6 +285,7 @@ class DailyRecord:
             "equity": self.equity,
             "margin": self.margin.as_dict(),
             "open_positions": self.open_positions,
+            "stale_marks": self.stale_marks,
         }
 
 
@@ -311,11 +328,11 @@ class BacktestConfig:
 class BacktestResult:
     """What one run produced, and everything needed to argue with it.
 
-    Carries **no timestamp**. A run's identity is its inputs, and stamping the wall clock
-    into the result would make two identical runs differ — the reproducibility criterion
-    would then be untestable without excluding a field, and a criterion with an exclusion
-    list is one edit away from excluding the wrong thing. When the run happened is the
-    trial log's business, and it is recorded there.
+    **No timestamp reaches the fingerprint.** The store's ``resolved_at`` travels in
+    :attr:`data_provenance` because a provenance record that cannot say when the files
+    were read is worth less than one that can — but :meth:`fingerprint` drops it, and it
+    is the only field so dropped. Nothing else here is clock-derived. When the run itself
+    happened is the trial log's business, and it is recorded there.
     """
 
     trial_id: str
@@ -572,6 +589,20 @@ def _execute(
         bar=bar,
         limits=config.limits,
     )
+    if bar is None and not session.has_bars_for(intent.trading_symbol):
+        # Distinguishable and worth distinguishing: an instrument that printed nothing all
+        # session is almost always a capture-scope gap on this corpus — capture ran with
+        # the expiry ladder pinned to the front contract, so the instrument master lists
+        # contracts the bar file has never carried. Reporting that as "no evidence any
+        # trade was possible" would blame the market for a decision made in the pipeline.
+        verdict = replace(
+            verdict,
+            reason=(
+                f"{intent.trading_symbol} printed no bar at any minute this session — on "
+                "this corpus that is usually capture scope (front expiry only, spec 3 C1) "
+                "rather than a market fact, and the two must not be read the same way"
+            ),
+        )
     if not verdict.is_fillable or bar is None:
         return (
             FillRecord(
@@ -613,7 +644,7 @@ def _execute(
     if net == 0:
         positions.pop(intent.trading_symbol, None)
     else:
-        positions[intent.trading_symbol] = Position(contract=contract, units=net)
+        positions[intent.trading_symbol] = Position(contract=contract, units=net, last_mark=price)
 
     return (
         FillRecord(
@@ -711,24 +742,31 @@ def _close_of_session(
 ) -> DailyRecord:
     """Mark the book at the session's last observed price and charge margin on it.
 
-    A position whose contract printed no bar at all this session is marked at zero rather
-    than carried at its entry price. That is harsh and it is the right way round: an
-    unmarkable position is a liquidity fact, and carrying it at cost would let a run
-    accumulate paper value in instruments that stopped trading.
+    A position whose contract printed no bar at all this session is carried at its last
+    observed mark and counted in :attr:`DailyRecord.stale_marks`. Marking it to zero
+    would be wrong in the direction that matters here: a short marked to zero hands the
+    book its entire unrealised premium as profit, and every position this package's own
+    strategy opens is short.
     """
     last_minute = session.minutes()[-1] if session.minutes() else None
     open_value = 0.0
+    stale = 0
     short_legs: list[ShortLeg] = []
     spot = session.spot_at(last_minute) if last_minute is not None else None
 
     for symbol in sorted(positions):
         position = positions[symbol]
-        mark = 0.0
+        mark: float | None = None
         for minute in reversed(session.minutes()):
             bar = session.bar(symbol, minute)
             if bar is not None:
                 mark = bar.close
                 break
+        if mark is None:
+            mark = position.last_mark
+            stale += 1
+        else:
+            positions[symbol] = replace(position, last_mark=mark)
         open_value += mark * position.units
         if position.is_short and spot is not None:
             short_legs.append(
@@ -746,4 +784,5 @@ def _close_of_session(
         equity=cash + open_value,
         margin=config.margin_model.requirement(short_legs),
         open_positions=len(positions),
+        stale_marks=stale,
     )

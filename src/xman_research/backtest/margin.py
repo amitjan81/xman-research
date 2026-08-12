@@ -134,7 +134,6 @@ class SimplifiedMarginModel:
     #: begins well after it, so nothing in range is affected.
     expiry_day_elm_pct: float = 0.02
     multiplier: float = 1.0
-    minimum_per_book: float = 0.0
 
     def __post_init__(self) -> None:
         for name in (
@@ -168,13 +167,6 @@ class SimplifiedMarginModel:
         span = self.span_pct_of_notional * notional * self.multiplier
         exposure = self.exposure_pct_of_notional * notional * self.multiplier
         expiry_elm = self.expiry_day_elm_pct * expiring_notional * self.multiplier
-        if short_legs and span + exposure < self.minimum_per_book:
-            # Split the floor across the two components in their own proportion so the
-            # breakdown still sums to the total and neither component is invented.
-            shortfall = self.minimum_per_book - (span + exposure)
-            share = span / (span + exposure) if (span + exposure) > 0 else 0.5
-            span += shortfall * share
-            exposure += shortfall * (1.0 - share)
         return MarginRequirement(
             span_component=span,
             exposure_component=exposure,

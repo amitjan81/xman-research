@@ -319,14 +319,54 @@ def test_a_different_parameter_changes_the_fingerprint(
     assert base.fingerprint() != slipped.fingerprint()
 
 
-def test_the_result_carries_no_timestamp(
+def test_no_timestamp_reaches_the_fingerprint(
     session: ResearchSession, h1: HypothesisRecord, store, window: DataWindow
 ) -> None:
-    """Reproducibility is testable without an exclusion list only if nothing is stamped."""
-    payload = _run(session, h1, store, window).as_dict()
+    """The store stamps ``resolved_at``; the fingerprint must not inherit it.
 
-    assert "run_at" not in payload
-    assert "resolved_at" not in payload["config"]
+    The suite's clock advances a second per reading, so two runs genuinely carry different
+    ``resolved_at`` values — which makes the equal fingerprints in the reproducibility
+    test above evidence rather than coincidence. Asserted here explicitly so that adding a
+    clock-derived field to the result cannot pass unnoticed.
+    """
+    first = _run(session, h1, store, window)
+    second = _run(session, h1, store, window)
+
+    assert first.data_provenance["resolved_at"] != second.data_provenance["resolved_at"]
+    assert first.fingerprint() == second.fingerprint()
+    assert "run_at" not in first.as_dict()
+    assert "resolved_at" not in first.config_provenance
+
+
+def test_an_unmarkable_short_is_carried_at_its_last_mark_not_at_zero(
+    session: ResearchSession, h1: HypothesisRecord, synthetic_store
+) -> None:
+    """The bug this test exists for: a short marked to zero books its premium as profit.
+
+    The straddle is written against a later expiry so it is still open on the second
+    session, which prints only the underlying — neither leg can be marked. Carried at the
+    last mark, the book's open value stays at minus the premium and equity is unchanged.
+    Marked to zero, equity would jump by the full 13,000 of premium sold — a gain
+    conjured out of a data gap, in the one direction that flatters the only strategy this
+    package ships.
+    """
+    later = dt.date(2026, 1, 13)
+    contracts = [
+        SyntheticContract(STRIKE, option_type, later, PREMIUM) for option_type in ("CE", "PE")
+    ]
+    root = synthetic_store.root
+    write_synthetic_session(root, ENTRY_DAY, spot=23_000.0, contracts=contracts)
+    write_synthetic_session(root, EXPIRY_DAY, spot=23_000.0, contracts=[])
+    store = synthetic_store()
+
+    with session.trial(h1, data_window=DataWindow(ENTRY_DAY, EXPIRY_DAY)) as trial:
+        result = run_backtest(trial, store=store, strategy=ShortAtmStraddle())
+
+    entry_day, blind_day = result.daily
+    assert entry_day.stale_marks == 0
+    assert blind_day.stale_marks == 2
+    assert blind_day.open_position_value == pytest.approx(-13_000.0)
+    assert blind_day.equity == pytest.approx(entry_day.equity)
 
 
 # ------------------------------------------------------------- the trial log seam
