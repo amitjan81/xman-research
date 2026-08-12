@@ -1,0 +1,37 @@
+[project]
+name = "xman-research"
+version = "0.1.0"
+description = "Options research platform — hypothesis record and append-only trial log (MVP component C4)"
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/xman_research"]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# Deliberately NO pytest-xdist dependency and no -n flag: this host is shared with a
+# live trading platform, so an uncapped worker fan-out is a production risk. If xdist
+# is ever added, cap it at -n 4.
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+# The exploratory trees and the markdown specs predate this package and are explicitly
+# out of scope: ruff formats python blocks inside .md, and rewriting the specs' code
+# samples is not this component's business.
+extend-exclude = ["lib", "research", "strategies", "forex", "symbolSchemaFile", "*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
