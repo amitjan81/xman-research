@@ -441,6 +441,42 @@ def test_two_windows_are_refused_rather_than_silently_halved(
     assert session.count_trials(h1) == 0
 
 
+def test_a_defaulted_second_window_is_ambiguous_too(
+    session: ResearchSession, h1: HypothesisRecord, window: DataWindow
+) -> None:
+    """A decided behaviour, not an incidental one — hence a test rather than a comment.
+
+    Only one window is *passed* here; the second arrives from a default. The ambiguity
+    check runs after ``apply_defaults()``, so this is refused as well, and that is on
+    purpose: this package already holds that an unpassed default is still a choice
+    (see ``test_defaults_are_recorded_as_params``). If a defaulted test window is a real
+    argument for recording params, it is a real second window for deciding which span
+    the row is filed under. Filing under ``train`` while the body also evaluated over
+    ``test`` produces exactly the falsely-comparable row the refusal exists to stop.
+    The way to express it is ``data_window=`` on the decorator, which the error says.
+    """
+    default_test_window = DataWindow(date(2025, 1, 1), date(2025, 6, 30))
+
+    @session.evaluation(h1)
+    def evaluate(train: DataWindow, test: DataWindow = default_test_window) -> dict[str, float]:
+        return {"sharpe": 1.0}
+
+    with pytest.raises(ValueError, match="more than one DataWindow"):
+        evaluate(window)
+
+    session.register(h1)
+    assert session.count_trials(h1) == 0
+
+    # And the sanctioned way to say it, which stays accepted.
+    @session.evaluation(h1, data_window=window)
+    def evaluate_explicitly(*, train_days: int = 250) -> dict[str, float]:
+        return {"sharpe": 1.0}
+
+    evaluate_explicitly()
+    assert session.count_trials(h1) == 1
+    assert session.trials(h1)[0].data_window == window
+
+
 def test_the_session_closes_its_log(
     db_path: Path, clock: ManualClock, code_version: StaticCodeVersion, h1: HypothesisRecord
 ) -> None:
