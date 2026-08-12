@@ -225,6 +225,10 @@ class Resolution:
     def __post_init__(
         self, found: tuple[SessionRef, ...], quarantined_refs: tuple[SessionRef, ...]
     ) -> None:
+        # Depends on this class NOT carrying slots=True — unlike every other dataclass in
+        # this module — because a frozen slotted class has no instance __dict__ to write
+        # into. Harmonising the decorators would turn the two lines below into an
+        # AttributeError at every resolve.
         object.__setattr__(self, "_refs", found)
         object.__setattr__(self, "_quarantined_refs", quarantined_refs)
 
@@ -353,9 +357,10 @@ class Resolution:
             # "1/0 sessions (100.0% complete)" for a calendar-empty range that
             # nevertheless holds a file reads as a bug in the reader. It is a
             # calendar/producer disagreement, and it gets said in words.
+            plural = "" if self.found_count == 1 else "s"
             head = (
                 f"{label}: the {self.calendar_name} calendar expected no sessions here, "
-                f"but {self.found_count} is on disk"
+                f"but {self.found_count} session{plural} on disk say otherwise"
             )
         else:
             head = (

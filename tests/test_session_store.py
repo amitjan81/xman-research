@@ -422,15 +422,17 @@ def test_a_range_of_only_a_closed_day_that_holds_data_is_not_empty(
 
     Refusing this range as empty would be the same silent exclusion in a louder costume.
     """
-    _plant_session(corpus_root, "2026-01-26")
+    _plant_session(corpus_root, "2026-01-24")  # a Saturday
+    _plant_session(corpus_root, "2026-01-26")  # Republic Day
 
-    resolution = store.resolve("NIFTY", dt.date(2026, 1, 26), dt.date(2026, 1, 26))
+    resolution = store.resolve("NIFTY", dt.date(2026, 1, 24), dt.date(2026, 1, 26))
 
     assert resolution.expected == ()
     assert not resolution.is_empty
-    assert len(resolution.sessions()) == 1
-    assert "expected no sessions here" in resolution.summary()
-    assert "1/0 sessions" not in resolution.summary()
+    assert resolution.unexpected == (dt.date(2026, 1, 24), dt.date(2026, 1, 26))
+    assert len(resolution.sessions()) == 2
+    assert "2 sessions on disk say otherwise" in resolution.summary()
+    assert "2/0 sessions" not in resolution.summary()  # nor any other reader-bug rendering
 
 
 def test_the_errata_layer_corrects_a_day_the_packaged_table_gets_wrong() -> None:

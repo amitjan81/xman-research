@@ -4,6 +4,12 @@ The reader side of the corpus the sibling ``xman`` repository captures. Its head
 guarantee: **a range resolves to files *and* to the trading days that should have been
 there, and you cannot get the files without having been shown the gaps.**
 
+The guarantee runs in both directions. A session the exchange calendar expected and the
+corpus lacks is a *gap*; a session present on a day the calendar calls closed is
+*unexpected* — reported just as loudly, and handed over rather than silently excluded,
+because the calendar is not always right. Where it is known wrong, the correction is a
+cited entry in ``NSE_ERRATA`` rather than a hand-written holiday list.
+
 Typical use::
 
     from datetime import date
