@@ -173,6 +173,43 @@ def test_params_survive_exotic_values(log: TrialLog, h1: HypothesisRecord) -> No
     assert "object object at" in stored["model"]
 
 
+class _NumericWrapper:
+    """Stands in for `np.int64` — not an `int` subclass, unwraps via `.item()`."""
+
+    def __init__(self, value: object) -> None:
+        self._value = value
+
+    def item(self) -> object:
+        return self._value
+
+
+def test_numeric_wrappers_are_stored_as_numbers(log: TrialLog, h1: HypothesisRecord) -> None:
+    """A metric computed by pandas/numpy must land as a number, not as its repr.
+
+    `metrics` is the column deflated Sharpe reads. `np.float64` survives because it
+    subclasses `float`; `np.int64` and `np.float32` do not, and would otherwise be
+    stored as the string "np.int64(412)" without anybody noticing.
+    """
+    log.register_hypothesis(h1)
+    append(
+        log,
+        h1,
+        metrics={"trades": _NumericWrapper(412), "sharpe": _NumericWrapper(1.25)},
+    )
+    stored = log.trials(h1.id)[0].metrics
+    assert stored == {"trades": 412, "sharpe": 1.25}
+
+
+def test_a_hostile_unwrapper_still_lands_the_row(log: TrialLog, h1: HypothesisRecord) -> None:
+    class Exploding:
+        def item(self) -> object:
+            raise RuntimeError("no")
+
+    log.register_hypothesis(h1)
+    append(log, h1, metrics={"weird": Exploding()})
+    assert "Exploding object at" in log.trials(h1.id)[0].metrics["weird"]
+
+
 def test_duplicate_trial_id_is_refused(log: TrialLog, h1: HypothesisRecord) -> None:
     log.register_hypothesis(h1)
     append(log, h1, trial_id="t_fixed")

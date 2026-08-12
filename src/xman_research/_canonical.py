@@ -40,6 +40,22 @@ def json_safe(value: Any) -> Any:
         return sorted((json_safe(v) for v in value), key=repr)
     if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
         return [json_safe(v) for v in value]
+    # Numeric wrappers — numpy scalars and anything else following the ``.item()``
+    # convention — unwrap to a plain Python number. This matters most in the metrics
+    # column: `np.float64` happens to be a `float` subclass and survives above, but
+    # `np.int64` and `np.float32` are not, and a metric silently stored as the string
+    # "np.int64(412)" is the kind of degradation nobody notices until the number is
+    # needed. `df["qty"].sum()` is the ordinary way a backtest metric arrives.
+    unwrap = getattr(value, "item", None)
+    if callable(unwrap):
+        try:
+            unwrapped = unwrap()
+        # Broad on purpose: a hostile .item() must not cost us the trial row.
+        except Exception:
+            pass
+        else:
+            if unwrapped is not value:
+                return json_safe(unwrapped)
     return repr(value)
 
 

@@ -72,7 +72,11 @@ class GitCodeVersion:
         sha = self._git("rev-parse", "HEAD")
         if sha is None:
             return CodeVersion(sha=UNKNOWN_SHA, dirty=True)
-        status = self._git("status", "--porcelain", "--untracked-files=no")
+        # Untracked files count as dirty. An untracked module the evaluation imports is
+        # the *least* recoverable case there is — the sha says nothing about it — so
+        # suppressing `??` entries would mark the worst case clean. Build noise is kept
+        # out of this by .gitignore, not by narrowing the question.
+        status = self._git("status", "--porcelain")
         if status is None:
             return CodeVersion(sha=sha, dirty=True)
         return CodeVersion(sha=sha, dirty=bool(status.strip()))

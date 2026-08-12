@@ -11,7 +11,9 @@ the *addition* of such an API, which is the point at which the property would be
 
 from __future__ import annotations
 
+import importlib
 import inspect
+import pkgutil
 from collections.abc import Iterator
 from typing import Any
 
@@ -25,27 +27,56 @@ import xman_research
 FORBIDDEN_SUBSTRINGS = ("count", "n_trials", "num_trials", "ntrials", "trials")
 
 
+def package_modules() -> list[Any]:
+    """Every public module in the package, not only what ``__init__`` re-exports.
+
+    Walking the package rather than ``__all__`` is the difference between a guard that
+    keeps working and one that quietly stops: the likeliest future breach is a *new*
+    module — ``xman_research.validation.deflated_sharpe(sharpe, n_trials=...)`` — that
+    nobody thought to re-export. The guard has to see it on the day it is written.
+    """
+    modules = [xman_research]
+    for found in pkgutil.iter_modules(xman_research.__path__):
+        if found.name.startswith("_"):
+            continue
+        modules.append(importlib.import_module(f"xman_research.{found.name}"))
+    return modules
+
+
 def public_callables() -> Iterator[tuple[str, Any]]:
-    for exported in xman_research.__all__:
-        obj = getattr(xman_research, exported)
-        if inspect.isclass(obj):
-            for member_name, member in inspect.getmembers(obj):
-                if member_name.startswith("_") and member_name != "__init__":
-                    continue
-                if inspect.isfunction(member) or inspect.ismethod(member):
-                    yield f"{exported}.{member_name}", member
-                elif isinstance(member, property) and member.fset is not None:
-                    yield f"{exported}.{member_name} (setter)", member.fset
-        elif callable(obj):
-            yield exported, obj
+    seen: set[tuple[str, str]] = set()
+    for module in package_modules():
+        for name, obj in inspect.getmembers(module):
+            if name.startswith("_"):
+                continue
+            origin = getattr(obj, "__module__", "")
+            if not isinstance(origin, str) or not origin.startswith("xman_research"):
+                continue
+            key = (origin, name)
+            if key in seen:
+                continue
+            seen.add(key)
+            if inspect.isclass(obj):
+                for member_name, member in inspect.getmembers(obj):
+                    if member_name.startswith("_") and member_name != "__init__":
+                        continue
+                    if inspect.isfunction(member) or inspect.ismethod(member):
+                        yield f"{origin}.{name}.{member_name}", member
+                    elif isinstance(member, property) and member.fset is not None:
+                        yield f"{origin}.{name}.{member_name} (setter)", member.fset
+            elif callable(obj):
+                yield f"{origin}.{name}", obj
 
 
 def test_the_public_surface_is_non_empty() -> None:
     """Guards the guard: a test that enumerates nothing would pass vacuously."""
     names = [name for name, _ in public_callables()]
-    assert len(names) > 20
-    assert "TrialLog.count_trials" in names
-    assert "open_session" in names
+    assert len(names) > 30
+    assert any(name.endswith("TrialLog.count_trials") for name in names)
+    assert any(name.endswith("evaluation.open_session") for name in names)
+    # Every module in the package is represented, so a new one cannot slip the guard.
+    covered = {name.split(".")[1] for name in names}
+    assert {"hypothesis", "trial_log", "evaluation", "clock", "code_version"} <= covered
 
 
 @pytest.mark.parametrize("qualified_name,function", list(public_callables()))
@@ -80,15 +111,10 @@ def test_counting_methods_take_only_a_hypothesis() -> None:
 
 
 def test_no_public_name_offers_to_set_a_count() -> None:
-    """No `set_trial_count`, no `override_trials`, no `trials = n`."""
-    for exported in xman_research.__all__:
-        obj = getattr(xman_research, exported)
-        candidates = [exported]
-        if inspect.isclass(obj):
-            candidates += [n for n, _ in inspect.getmembers(obj) if not n.startswith("_")]
-        for name in candidates:
-            lowered = name.lower()
-            assert not (
-                lowered.startswith(("set_", "override_", "assert_", "declare_"))
-                and ("trial" in lowered or "count" in lowered)
-            ), f"{exported}.{name} looks like a way to assert a trial count"
+    """No `set_trial_count`, no `override_trials`, no `declare_trials`."""
+    for qualified_name, _ in public_callables():
+        leaf = qualified_name.split(".")[-1].lower()
+        assert not (
+            leaf.startswith(("set_", "override_", "assert_", "declare_", "force_"))
+            and ("trial" in leaf or "count" in leaf)
+        ), f"{qualified_name} looks like a way to assert a trial count"

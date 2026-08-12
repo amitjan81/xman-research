@@ -89,6 +89,26 @@ def test_git_version_reads_a_real_tree(tmp_path: Path) -> None:
     assert dirty.dirty is True
 
 
+def test_an_untracked_file_counts_as_dirty(tmp_path: Path) -> None:
+    """The least recoverable case of all: code the sha says nothing about."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def run(*args: str) -> None:
+        subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+    run("init", "-q")
+    run("config", "user.email", "test@example.invalid")
+    run("config", "user.name", "Test")
+    (repo / "a.txt").write_text("one\n")
+    run("add", "a.txt")
+    run("commit", "-qm", "first")
+    assert GitCodeVersion(repo)().dirty is False
+
+    (repo / "scratch_helper.py").write_text("SIZING = 2\n")
+    assert GitCodeVersion(repo)().dirty is True
+
+
 def test_git_version_is_cached_per_instance(tmp_path: Path) -> None:
     provider = GitCodeVersion(tmp_path)
     assert provider() is provider()
