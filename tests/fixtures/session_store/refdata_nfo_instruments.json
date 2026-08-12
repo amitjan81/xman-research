@@ -1,0 +1,34 @@
+[
+  {
+    "TimeStamp": "12/06/2026 09:15:00",
+    "BrokerName": "Dhan",
+    "TickSize": 5.0,
+    "Segment": "NFO-OPT",
+    "Exchange": "NFO",
+    "TradingSymbol": "NIFTY-16Jun2026-23400-CE",
+    "MarketDataSymbol": 9000001,
+    "ExchangeToken": "9000001",
+    "LookupName": "NIFTY",
+    "ClosePrice": 124.4,
+    "LotSize": 65,
+    "ExpiryDate": "16/06/2026",
+    "StrikePrice": 23400.0,
+    "OptionType": "CE"
+  },
+  {
+    "TimeStamp": "12/06/2026 09:15:00",
+    "BrokerName": "Dhan",
+    "TickSize": 5.0,
+    "Segment": "NFO-OPT",
+    "Exchange": "NFO",
+    "TradingSymbol": "NIFTY-16Jun2026-23400-PE",
+    "MarketDataSymbol": 9000002,
+    "ExchangeToken": "9000002",
+    "LookupName": "NIFTY",
+    "ClosePrice": 93.6,
+    "LotSize": 65,
+    "ExpiryDate": "16/06/2026",
+    "StrikePrice": 23400.0,
+    "OptionType": "PE"
+  }
+]

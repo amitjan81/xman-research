@@ -1,0 +1,84 @@
+"""MVP component C2 — the session store.
+
+The reader side of the corpus the sibling ``xman`` repository captures. Its headline
+guarantee: **a range resolves to files *and* to the trading days that should have been
+there, and you cannot get the files without having been shown the gaps.**
+
+The guarantee runs in both directions. A session the exchange calendar expected and the
+corpus lacks is a *gap*; a session present on a day the calendar calls closed is
+*unexpected* — reported just as loudly, and handed over rather than silently excluded,
+because the calendar is not always right. Where it is known wrong, the correction is a
+cited entry in ``NSE_ERRATA`` rather than a hand-written holiday list.
+
+Typical use::
+
+    from datetime import date
+    from xman_research.session_store import SessionStore
+
+    store = SessionStore()                       # or SessionStore(root=..., clock=...)
+    res = store.resolve("NIFTY", date(2026, 1, 5), date(2026, 8, 12))
+    print(res)                                   # the gap report, always
+    for ref in res.sessions():                   # refuses while a gap exists
+        frame = store.load_session(ref)
+
+Kept out on purpose, per spec §7: no versioning, no as-of queries, no bitemporal
+storage. The store holds current data and re-runs regenerate.
+
+This subpackage is C2's whole footprint. It is deliberately **not** re-exported from
+``xman_research/__init__.py`` — that file belongs to C4 — so the two components share
+no file that a merge has to reconcile by hand.
+"""
+
+from xman_research.session_store.manifest import (
+    PUBLISHED,
+    QUARANTINED,
+    ManifestReader,
+    ManifestRow,
+)
+from xman_research.session_store.store import (
+    DEFAULT_CORPUS_ROOT,
+    DEFAULT_MANIFEST_PATH,
+    DERIVATION_VERSION,
+    ChecksumMismatchError,
+    EmptyRangeError,
+    MissingSessionsError,
+    RefData,
+    Resolution,
+    SessionNotFoundError,
+    SessionRef,
+    SessionStore,
+    SessionStoreError,
+    content_digest,
+)
+from xman_research.session_store.trading_calendar import (
+    NSE_CALENDAR,
+    NSE_ERRATA,
+    CalendarCoverageError,
+    CalendarErratum,
+    TradingCalendar,
+)
+
+__all__ = [
+    "DEFAULT_CORPUS_ROOT",
+    "DEFAULT_MANIFEST_PATH",
+    "DERIVATION_VERSION",
+    "NSE_CALENDAR",
+    "NSE_ERRATA",
+    "PUBLISHED",
+    "QUARANTINED",
+    "CalendarCoverageError",
+    "CalendarErratum",
+    "ChecksumMismatchError",
+    "EmptyRangeError",
+    "ManifestReader",
+    "ManifestRow",
+    "MissingSessionsError",
+    "RefData",
+    "Resolution",
+    "SessionNotFoundError",
+    "SessionRef",
+    "SessionStore",
+    "SessionStoreError",
+    "TradingCalendar",
+    "content_digest",
+]
