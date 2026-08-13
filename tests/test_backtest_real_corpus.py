@@ -7,12 +7,18 @@ package opens a file for writing.
 
 **The gap path is exercised on purpose, not incidentally** — but not by this window.
 Measured against the calendar, every window inside the captured range resolves complete,
-including the one this file runs; the corpus has no hole in its interior, only an end
-(the vendor subscription lapsed on 2026-06-14). So the fixture asks the store first and
-passes a written reason only if the range is incomplete, and the assertion pins whichever
-answer it got — ``None`` here — rather than assuming the interesting one. The refusal path
-is covered directly by ``test_a_holey_window_refuses_without_a_reason``, which runs past
-the end of capture, which is the real hole.
+including the one this file runs; the corpus has no hole in its interior, only an end. So
+the fixture asks the store first and passes a written reason only if the range is
+incomplete, and the assertion pins whichever answer it got — ``None`` here — rather than
+assuming the interesting one.
+
+The wrapper's refusal path is held on the synthetic corpus, by
+``test_backtest_engine.py::test_a_gap_can_be_accepted_only_against_a_written_reason``,
+which builds a hole rather than borrowing one. It used to be held here instead, by a
+window running into the 2026-06-15..2026-08-12 vendor outage — and the 2026-08-13 backfill
+filled that outage in, which is exactly why a refusal test must not depend on the real
+corpus staying broken. What is left here is the fact only the real corpus can state:
+that the window is now whole, and that asking past its end still refuses.
 """
 
 from __future__ import annotations
@@ -29,7 +35,6 @@ from xman_research.backtest import (
     BacktestConfig,
     Feasibility,
     LotSizeAudit,
-    LotSizeContradictionError,
     ShortAtmStraddle,
     audit_lot_size,
     epoch_for,
@@ -40,7 +45,7 @@ from xman_research.session_store import DEFAULT_CORPUS_ROOT, MissingSessionsErro
 CORPUS_ROOT = Path(os.environ.get("XMAN_RESEARCH_CORPUS_ROOT") or DEFAULT_CORPUS_ROOT)
 UNDERLYING = "NIFTY"
 
-#: A span inside the captured range (2025-12-16 .. 2026-06-12) that covers several weekly
+#: A span inside the captured range (2025-12-16 .. 2026-08-12) that covers several weekly
 #: expiry cycles, so entries, settlements and rollovers all appear.
 #:
 #: **It deliberately crosses 1 April 2026**, the date the STT rates rise from 0.1% to
@@ -50,9 +55,10 @@ UNDERLYING = "NIFTY"
 #: the boundary is crossed by real sessions carrying real turnover, so both regimes are
 #: charged in the same run and the E2E numbers below reflect the change.
 #:
-#: It also starts after 2025-12-30, and must: the December sessions carry a lot size their
-#: own refdata contradicts, and a backtest touching them is refused outright. See
-#: :mod:`xman_research.backtest.lot_size`.
+#: It also starts after 2025-12-30, and still should: the December sessions carry a lot
+#: size their own refdata contradicts. That no longer refuses the run — it stamps it — so
+#: the reason is now about keeping this window's numbers clean rather than about being
+#: allowed to compute them at all. See :mod:`xman_research.backtest.lot_size`.
 START = dt.date(2026, 2, 2)
 END = dt.date(2026, 4, 30)
 
@@ -141,22 +147,37 @@ def test_the_range_resolves_and_the_gap_decision_is_recorded(
         assert recorded is None, "a complete range recorded a gap reason it did not need"
 
 
-def test_a_holey_window_refuses_without_a_reason(store: SessionStore) -> None:
-    """The store's asymmetry survives being wrapped: no reason, no run over a gap.
+def test_the_backfilled_window_is_whole_and_the_end_of_capture_still_refuses(
+    store: SessionStore,
+) -> None:
+    """Both halves of the corpus's current shape, in the one place that can see it.
 
-    Renamed from ``test_a_clean_window_...``: the window is deliberately holey, which is
-    the entire premise, and the old name said the opposite of what the test sets up.
+    Was ``test_a_holey_window_refuses_without_a_reason``. Its window — June into July 2026
+    — was chosen because it certainly had holes, the vendor subscription having lapsed on
+    2026-06-14. The 2026-08-13 backfill landed those 42 sessions, so the window resolves
+    complete and the old assertion is simply false about the world.
 
-    Uses a window that certainly has holes — it runs past the end of capture, which is the
-    live case: the vendor subscription lapsed on 2026-06-14 and every session after
-    2026-06-12 is permanently absent.
+    The refusal it was buying is not lost: it moved to a synthetic corpus, where a hole is
+    constructed rather than borrowed (see the module docstring). Keeping a *real-corpus*
+    refusal here would have meant hunting for whatever hole happened to remain, which is
+    how a test ends up asserting the state of a data pipeline instead of the behaviour of
+    the code.
+
+    So this pins the two facts that are genuinely about this corpus: the window that used
+    to be holey is whole, and the range past the end of capture — which no backfill can
+    fill, because those sessions have not happened — still refuses without a reason.
     """
-    log_window = DataWindow(dt.date(2026, 6, 1), dt.date(2026, 7, 31))
-    resolution = store.resolve(UNDERLYING, log_window.start, log_window.end)
+    filled = store.resolve(UNDERLYING, dt.date(2026, 6, 1), dt.date(2026, 7, 31))
+    assert filled.is_complete
+    assert filled.missing == ()
+    assert len(filled.sessions()) == filled.expected_count > 0
 
-    assert not resolution.is_complete
+    beyond = store.resolve(
+        UNDERLYING, CAPTURE_END + dt.timedelta(days=1), CAPTURE_END + dt.timedelta(days=8)
+    )
+    assert not beyond.is_complete
     with pytest.raises(MissingSessionsError):
-        resolution.sessions()
+        beyond.sessions()
 
 
 def test_the_backtest_traded_settled_and_priced_against_real_data(result) -> None:
@@ -185,7 +206,7 @@ def test_every_intent_carries_a_verdict_and_the_counts_add_up(result) -> None:
 def test_the_run_is_reproducible_against_the_real_corpus(
     result, store: SessionStore, gap_reason: str | None
 ) -> None:
-    """Re-running the same inputs over 119 real sessions must give the identical hash."""
+    """Re-running the same inputs over the same real sessions must give the identical hash."""
     produced, session, hypothesis = result
 
     with session.trial(hypothesis, data_window=DataWindow(START, END)) as trial:
@@ -228,7 +249,15 @@ DECEMBER_LOT_75_SESSIONS = (
 )
 
 CAPTURE_START = dt.date(2025, 12, 16)
-CAPTURE_END = dt.date(2026, 6, 12)
+
+#: Moved from 2026-06-12 by the 2026-08-13 backfill, which is what puts the 42 new
+#: sessions under the audit scan below rather than leaving them unexamined behind a
+#: constant nobody thought to change. The producer reported them clean; a scan that
+#: stopped short of them would have taken that on trust.
+CAPTURE_END = dt.date(2026, 8, 12)
+
+#: Sessions in ``CAPTURE_START..CAPTURE_END``. 119 before the backfill, 161 after.
+CORPUS_SESSIONS = 161
 
 
 @pytest.fixture(scope="module")
@@ -262,7 +291,7 @@ def test_volume_is_in_units_not_contracts_on_every_session(
     it is the stronger claim, that the lot size is the one the refdata *declares*, that
     fails, and it fails on ten sessions the old test never looked at.
     """
-    assert len(corpus_audits) == 119
+    assert len(corpus_audits) == CORPUS_SESSIONS
     for audit in corpus_audits:
         supported = max(audit.declared_volume_share, audit.best_alternative_share)
         assert supported >= 0.99, (
@@ -316,10 +345,26 @@ def test_the_recorded_epoch_agrees_with_what_the_bars_measured() -> None:
     assert all(epoch.evidence for epoch in NIFTY_LOT_SIZE_EPOCHS)
 
 
-def test_a_backtest_touching_december_2025_is_refused_not_computed(
+def test_a_backtest_touching_december_2025_computes_and_carries_the_stamp(
     store: SessionStore,
 ) -> None:
-    """The whole point of the finding: the run does not happen on a wrong lot size."""
+    """The contract that replaced the refusal, pinned as a contract rather than deleted.
+
+    Was ``test_a_backtest_touching_december_2025_is_refused_not_computed``, and the
+    behaviour it asserted is gone by decision, not by accident: as of 2026-08-13 the
+    declared lot size is used for every calculation even where the session's own bars
+    contradict it, and the run is stamped rather than blocked.
+
+    That makes the *stamp reaching the verdict* the thing worth pinning, and it is a
+    stronger property than the refusal was. A refusal is self-announcing — nobody can
+    fail to notice a run that did not happen. A stamp can be dropped anywhere along a
+    chain of four components and the result still looks like a perfectly ordinary number,
+    which is the failure this asserts against: the flag has to be in
+    ``unverified_inputs`` (what C6 reads to decide whether a result is evaluable) *and*
+    the contradicted dates have to be in the provenance (what a human reads to find out
+    which sessions), because those are two different readers and either one alone would
+    leave the other blind.
+    """
     import tempfile
 
     from xman_research import StaticCodeVersion, TrialLog
@@ -333,33 +378,60 @@ def test_a_backtest_touching_december_2025_is_refused_not_computed(
     session = ResearchSession(log)
     hypothesis = HypothesisRecord(
         name="H1 — a window reaching into the December lot-75 regime",
-        mechanism="Irrelevant: the run is refused before any decision is taken.",
+        mechanism="Irrelevant: what is under test is the stamp, not the P&L.",
         null_hypothesis="Irrelevant.",
         thresholds={"deflated_sharpe": 0.0},
         predictors=["iv_30d"],
     )
     window = DataWindow(dt.date(2025, 12, 16), dt.date(2026, 1, 9))
     try:
-        with (
-            session.trial(hypothesis, data_window=window) as trial,
-            pytest.raises(LotSizeContradictionError) as raised,
-        ):
-            run_backtest(
+        with session.trial(hypothesis, data_window=window) as trial:
+            produced = run_backtest(
                 trial,
                 store=store,
                 strategy=ShortAtmStraddle(),
                 config=BacktestConfig(
                     underlying=UNDERLYING,
-                    gap_reason="lot-size refusal test: gaps are not what is under test",
+                    gap_reason="lot-size stamp test: gaps are not what is under test",
                 ),
             )
     finally:
         session.close()
 
-    assert raised.value.audit.session_date == dt.date(2025, 12, 16)
-    assert raised.value.audit.best_alternative == 75
-    assert "declares lot size 65" in str(raised.value)
-    assert "refused rather than run" in str(raised.value)
+    # It computed. A run that quietly produced nothing would satisfy every assertion
+    # about stamps below while testing none of them.
+    assert produced.sessions_run > 0
+    assert produced.fills
+
+    assert "corpus.declared_lot_size_contradicted:unverified" in produced.unverified_inputs
+    contradicted = produced.data_provenance["lot_size_audit"][
+        "sessions_contradicting_declared_lot_size"
+    ]
+    assert contradicted == [day.isoformat() for day in DECEMBER_LOT_75_SESSIONS]
+
+    # And the stamp says what it means. The text is what a reader of the flag gets, so it
+    # has to name the measurement and what survives it, not merely that something is off.
+    december = next(a for a in corpus_audits_for(store) if a.session_date == dt.date(2025, 12, 16))
+    message = december.contradiction_message()
+    assert "declares lot size 65" in message
+    assert "computed on the declared value anyway and stamped" in message
+
+
+def corpus_audits_for(store: SessionStore) -> tuple[LotSizeAudit, ...]:
+    """Audit the December sessions alone — the module fixture scans all 161, which this
+    test does not need and should not wait for."""
+    resolution = store.resolve(
+        UNDERLYING, DECEMBER_LOT_75_SESSIONS[0], DECEMBER_LOT_75_SESSIONS[-1]
+    )
+    return tuple(
+        audit_lot_size(
+            session_date=ref.session_date,
+            underlying=UNDERLYING,
+            frame=store.load_session(ref),
+            refdata=store.load_refdata(ref),
+        )
+        for ref in resolution.sessions()
+    )
 
 
 def test_the_open_interest_outliers_are_reported_without_being_diagnosed(

@@ -21,13 +21,14 @@ convenient and it is not an accident — it is why H1 was chosen as the anchor.
 from __future__ import annotations
 
 import datetime as dt
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from xman_research.backtest.costs import Side
 from xman_research.backtest.engine import BookView, TradeIntent
-from xman_research.backtest.market import OptionType, SessionView
+from xman_research.backtest.market import Contract, OptionType, SessionView
 
 __all__ = ["ShortAtmStraddle"]
 
@@ -46,14 +47,43 @@ class ShortAtmStraddle:
     is a real research decision, not hygiene: a zero-DTE straddle is a different
     hypothesis with a different risk profile, and letting the strategy silently become one
     on expiry Tuesdays would mix two populations inside one trial.
+
+    **Size is an exposure, not a contract count — see :attr:`target_notional`.** This
+    class used to take ``lots``, and that made every headline statistic a function of the
+    exchange's contract multiplier. It is the one thing about a research verdict that
+    must not be true.
     """
 
-    lots: int = 1
+    target_notional: float = 1_500_000.0
+    """Rupees of underlying index exposure the straddle aims at, per open.
+
+    **Why the size is stated in money.** "Does selling index variance earn a premium" is a
+    question about an economic effect. The lot size is an execution-layer rounding
+    constraint — NSE has set NIFTY's at 25, 50, 75 and 65 within living memory, and it
+    will move again. Sizing in *lots* silently makes the position, and therefore the P&L,
+    the margin and the drawdown, proportional to whichever multiplier happened to be in
+    force. A Sharpe survived that (it is scale-free), but the maximum drawdown did not:
+    :func:`~xman_research.validation.statistics.drawdown` runs on returns denominated in a
+    fixed capital base, so a 75/65 change moved it by 15% — and H1's gate bars drawdown at
+    10%. The verdict could flip on an exchange circular about contract size.
+
+    Sizing at a notional target removes it by construction. P&L, margin and every
+    percentage-based statutory cost scale together with the position, so the Sharpe, the
+    deflated Sharpe, the return on margin, the drawdown and the cost-breakeven *ratio* are
+    all invariant to the multiplier. What remains is stated rather than hidden, in
+    :meth:`lots_for`.
+
+    Scale-freeness in *capital* is the caller's to preserve: this number and
+    :attr:`~xman_research.backtest.engine.BacktestConfig.starting_cash` are the numerator
+    and denominator of every return C6 computes, so they must be moved together. Their
+    ratio is the run's leverage and is a research decision; their common scale is not.
+    """
+
     min_days_to_expiry: int = 1
 
     def __post_init__(self) -> None:
-        if self.lots <= 0:
-            raise ValueError(f"lots must be positive, got {self.lots}")
+        if self.target_notional <= 0:
+            raise ValueError(f"target_notional must be positive, got {self.target_notional}")
         if self.min_days_to_expiry < 0:
             raise ValueError("min_days_to_expiry must be non-negative")
 
@@ -62,7 +92,42 @@ class ShortAtmStraddle:
         return "short_atm_straddle"
 
     def parameters(self) -> Mapping[str, Any]:
-        return {"lots": self.lots, "min_days_to_expiry": self.min_days_to_expiry}
+        return {
+            "target_notional": self.target_notional,
+            "min_days_to_expiry": self.min_days_to_expiry,
+        }
+
+    def lots_for(self, *, spot: float, lot_size: int) -> int:
+        """Whole contracts closest to :attr:`target_notional` of exposure at ``spot``.
+
+        **This rounding is the entire residual of the invariance, so it is worth being
+        precise about.** The target is a real number of index units,
+        ``target_notional / spot``; the exchange trades whole contracts. Rounding to
+        nearest leaves a size error of at most half a lot, so the realised exposure differs
+        from the target by at most ``lot_size / (2 * target_units)`` — 3% at 15 contracts,
+        0.5% at 100, and **50% at one**. Two runs at different multipliers therefore agree
+        on every scale-free statistic to about twice that bound, and no better.
+
+        There is no way around it and pretending otherwise would be the error: a book that
+        can only trade one contract *is* sized by the lot, and its drawdown genuinely does
+        move when the lot moves. The property this class provides is that the sizing rule
+        no longer *introduces* the dependence — it survives only where the market's own
+        granularity puts it, and it shrinks as the book grows.
+
+        Nearest, not floor: floor is biased small by half a lot on average, which would
+        make the realised exposure depend on the multiplier in the *mean* as well as in the
+        residual. ``floor(x + 0.5)`` rather than :func:`round`, because :func:`round` is
+        banker's rounding and would break the tie by parity — a rule nobody reading a
+        position size expects, and one that makes the residual depend on the parity of a
+        quotient.
+
+        Returns ``0`` when the target is under half a contract. The caller trades nothing
+        rather than rounding up to one, which would silently take a position larger than
+        the exposure that was asked for.
+        """
+        if spot <= 0 or lot_size <= 0:
+            return 0
+        return math.floor((self.target_notional / spot) / lot_size + 0.5)
 
     def decide(
         self, *, session: SessionView, minute: dt.datetime, book: BookView
@@ -84,11 +149,14 @@ class ShortAtmStraddle:
             return ()
 
         # Both legs share one group, so the engine fills them together or not at all. The
+        # legs also share one size, taken from the CALL's lot size and applied to both:
+        # a straddle whose two legs were sized independently would not be a straddle if
+        # the chain ever listed them at different multipliers.
         # listing guard below is necessary and not sufficient: it establishes that both
         # legs *exist*, while the group establishes that both legs *traded*. A straddle
         # whose PE came back NO_LIQUIDITY used to leave a naked short call.
         group = f"straddle:{expiry.isoformat()}:{strike:g}"
-        intents: list[TradeIntent] = []
+        legs: list[Contract] = []
         for option_type in (OptionType.CALL, OptionType.PUT):
             contract = session.universe.get(expiry, strike, option_type)
             if contract is None:
@@ -96,16 +164,23 @@ class ShortAtmStraddle:
                 # the leg that exists would open a naked directional position under a
                 # market-neutral hypothesis's name.
                 return ()
-            intents.append(
-                TradeIntent(
-                    trading_symbol=contract.trading_symbol,
-                    side=Side.SELL,
-                    lots=self.lots,
-                    tag="entry",
-                    leg_group=group,
-                )
+            legs.append(contract)
+
+        lots = self.lots_for(spot=spot, lot_size=legs[0].lot_size)
+        if lots <= 0:
+            # The targeted exposure is under half a contract. Nothing is traded, and the
+            # session simply carries no position — see lots_for for why not one lot.
+            return ()
+        return tuple(
+            TradeIntent(
+                trading_symbol=contract.trading_symbol,
+                side=Side.SELL,
+                lots=lots,
+                tag="entry",
+                leg_group=group,
             )
-        return tuple(intents)
+            for contract in legs
+        )
 
 
 def _next_expiry_after(session: SessionView, expiry: dt.date) -> dt.date | None:

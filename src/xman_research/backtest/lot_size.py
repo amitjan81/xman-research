@@ -21,17 +21,23 @@ on those dates. **Nothing in the corpus ever declares 75.** The evidence for the
 regime is entirely in the bars, which is why it is recorded here as an epoch rather than
 read from a file.
 
-**The refusal.** A backtest whose window touches a session whose declared lot size is
-contradicted by that session's own bars does not run. Participation caps, order
-quantities and cost bases would all be computed on a lot size that never applied —
-trades of 65 units on a day when 65 units could not be traded — and none of it would
-show up in the result as anything other than plausible numbers. This module's own
-neighbours already argue the principle: :class:`~xman_research.backtest.costs.
-RateNotInForceError` refuses rather than charge a rate it cannot date, and the session
-store refuses a range with holes rather than quietly skip them. This is the same refusal
-about a different fact, and it is deliberately **not** overridable — a gap can be
-honestly disclosed and reasoned around, but there is no honest way to disclose "every
-quantity below is a multiple of the wrong number".
+**The stamp.** A backtest whose window touches such a session runs, on the **declared**
+lot size, and says so: the result carries ``corpus.declared_lot_size_contradicted`` in its
+``unverified_inputs`` and the contradicted dates in
+``data_provenance["lot_size_audit"]``. This was an unoverridable refusal until 2026-08-13;
+the owner's decision reversed it, and :func:`~xman_research.backtest.engine.run_backtest`
+carries the argument on both sides at the point where the stamp is applied.
+
+What makes the stamp defensible rather than a shrug is that the damage is **bounded and
+uneven, not diffuse**. Since sizing became an exposure target rather than a contract count
+(:class:`~xman_research.backtest.strategies.ShortAtmStraddle`), the lot size no longer
+scales the position: the strategy buys the same rupees of index either way and the
+multiplier only decides the rounding. So the scale-free statistics a verdict rests on —
+Sharpe, deflated Sharpe, return on peak margin, drawdown, the cost-breakeven ratio — are
+invariant to it up to that rounding. What genuinely does move is the *feasibility* verdict,
+because participation caps floor to whole lots against a lot size that never applied, and
+the flat per-order brokerage, which scales with nothing. Those are exactly the questions
+the stamp tells a reader to distrust.
 
 **Volume is the inference series, open interest is only reported.** Every trade at the
 exchange is struck in lots, so traded volume in units is a multiple of the lot size by
@@ -60,7 +66,6 @@ __all__ = [
     "CANDIDATE_LOT_SIZES",
     "NIFTY_LOT_SIZE_EPOCHS",
     "LotSizeAudit",
-    "LotSizeContradictionError",
     "LotSizeEpoch",
     "audit_lot_size",
     "epoch_for",
@@ -88,18 +93,6 @@ _ALTERNATIVE_CEILING = 0.99
 #: symbols this finds sit at 88-100% non-conforming, and the ones it correctly ignores
 #: sit at ~0%.
 _SYMBOL_FLOOR = 0.5
-
-
-class LotSizeContradictionError(Exception):
-    """A session's declared lot size is contradicted by that session's own bars.
-
-    Raised in place of running the backtest. Carries the :class:`LotSizeAudit` so the
-    caller can report *what* the data said rather than only that something was wrong.
-    """
-
-    def __init__(self, message: str, audit: LotSizeAudit) -> None:
-        super().__init__(message)
-        self.audit = audit
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,8 +248,14 @@ class LotSizeAudit:
             "contradicts_declared": self.contradicts_declared,
         }
 
-    def failure_message(self) -> str:
-        """Why the run is being refused, in terms of what was measured."""
+    def contradiction_message(self) -> str:
+        """What the stamp on this session means, in terms of what was measured.
+
+        Renamed from ``failure_message``: nothing fails any more. The text is the
+        explanation a reader of ``corpus.declared_lot_size_contradicted`` needs, and it
+        must state what is and is not damaged — a stamp that only said "something is wrong
+        here" would be read as either fatal or ignorable, and it is neither.
+        """
         declared = ", ".join(str(lot) for lot in self.declared_lot_sizes) or "nothing"
         epoch = epoch_for(self.session_date, underlying=self.underlying)
         known = ""
@@ -271,12 +270,14 @@ class LotSizeAudit:
             f"size {declared}, but only {self.declared_volume_share:.1%} of "
             f"{self.volume_rows} positive volume rows divide by it, while "
             f"{self.best_alternative_share:.1%} divide by {self.best_alternative}. The "
-            "declared lot size did not apply on this date, so every participation cap, "
-            "order quantity and cost base computed from it would be a multiple of the "
-            "wrong number — and would look entirely ordinary in the result. This backtest "
-            "is refused rather than run on it." + known + " The refdata belongs to the "
-            "producer repository (xman) and must be regenerated there; nothing in this "
-            "package may rewrite the corpus."
+            "declared lot size did not apply on this date. The run is computed on the "
+            "declared value anyway and stamped, per the owner's decision of 2026-08-13: "
+            "position sizing targets a notional rather than a contract count, so the "
+            "scale-free statistics survive the wrong multiplier, while the participation "
+            "caps and the flat per-order brokerage on this session do not and should not "
+            "be relied on." + known + " The refdata belongs to the producer repository "
+            "(xman) and must be regenerated there; nothing in this package may rewrite "
+            "the corpus."
         )
 
     @staticmethod

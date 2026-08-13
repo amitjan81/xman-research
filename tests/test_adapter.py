@@ -147,7 +147,7 @@ def build_result(
         config_provenance={"starting_cash": STARTING_CASH, "gap_reason": None},
         data_provenance={"underlying": "NIFTY", "missing": [], "manifest_available": False},
         strategy_name="short_atm_straddle",
-        strategy_parameters={"lots": 1, "min_days_to_expiry": 1},
+        strategy_parameters={"target_notional": 1_495_000.0, "min_days_to_expiry": 1},
         unverified_inputs=unverified,
     )
 

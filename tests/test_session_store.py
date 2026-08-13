@@ -728,6 +728,18 @@ def test_gaps_are_grouped_by_trading_day_adjacency_not_calendar_days(
     one_run = store.resolve("NIFTY", dt.date(2026, 1, 19), dt.date(2026, 1, 23))
     assert one_run.missing_runs() == ((dt.date(2026, 1, 20), dt.date(2026, 1, 21)),)
     assert "in 1 run:" in one_run.summary()
+    # A run of four days or fewer is listed date by date, so this one reads as dates.
+    assert "2026-01-20, 2026-01-21" in one_run.summary()
+
+    # The abbreviated span, which is the rendering a long outage gets. This guarantee used
+    # to be held against the real corpus's 42-session vendor outage
+    # ("2026-06-15..2026-08-12 (42 days)"), which the 2026-08-13 backfill filled in. A
+    # gap-rendering guarantee cannot be held by a corpus that is allowed to become
+    # complete, so it is held here, where the gap is constructed and therefore permanent.
+    long_run = store.resolve("NIFTY", dt.date(2026, 2, 2), dt.date(2026, 3, 6))
+    (run,) = long_run.missing_runs()
+    assert len(run) > 4
+    assert f"{run[0].isoformat()}..{run[-1].isoformat()} ({len(run)} days)" in long_run.summary()
 
     # 2026-01-20/21 are absent, then everything from 2026-02-04 on is absent.
     wide = store.resolve("NIFTY", dt.date(2026, 1, 19), dt.date(2026, 2, 6))

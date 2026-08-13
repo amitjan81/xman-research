@@ -29,6 +29,13 @@ STRIKE = 23_000.0
 LOT = 65
 PREMIUM = 100.0
 
+#: One contract of exposure in this fixture — lot size 65 at spot 23,000. Sizing is stated
+#: as a notional, so a test that wants N lots asks for N lots' worth of index rather than
+#: for N lots. Written as the product rather than as a literal so it stays exact: the
+#: strategy rounds ``target_notional / spot / lot_size`` to nearest, and a rounded-off
+#: literal would silently ask for 201 lots where the test says 200.
+LOT_NOTIONAL = 65 * 23_000.0
+
 # The last half hour of the expiry session ramps 23,100 -> 23,129, so settlement is
 # 23,114.5: the call finishes 114.5 in the money and the put finishes worthless.
 SETTLEMENT_RAMP = {345 + step: 23_100.0 + float(step) for step in range(30)}
@@ -84,7 +91,9 @@ def test_a_second_backtest_against_the_same_token_is_refused(
         run_backtest(trial, store=store, strategy=ShortAtmStraddle())
 
         with pytest.raises(TokenAlreadyUsedError, match="already run a backtest"):
-            run_backtest(trial, store=store, strategy=ShortAtmStraddle(lots=2))
+            run_backtest(
+                trial, store=store, strategy=ShortAtmStraddle(target_notional=2 * LOT_NOTIONAL)
+            )
 
 
 def test_a_sweep_must_mint_one_trial_per_backtest(
@@ -94,7 +103,10 @@ def test_a_sweep_must_mint_one_trial_per_backtest(
     for lots in (1, 2, 3):
         with session.trial(h1, data_window=window, params={"lots": lots}) as trial:
             run_backtest(
-                trial, store=store, strategy=ShortAtmStraddle(lots=lots), config=BacktestConfig()
+                trial,
+                store=store,
+                strategy=ShortAtmStraddle(target_notional=lots * LOT_NOTIONAL),
+                config=BacktestConfig(),
             )
 
     assert session.count_trials(h1) == 3
@@ -236,7 +248,9 @@ def test_a_participation_cap_binds_and_the_resize_is_recorded_end_to_end(
     store = synthetic_store()
 
     with session.trial(h1, data_window=DataWindow(ENTRY_DAY, EXPIRY_DAY)) as trial:
-        result = run_backtest(trial, store=store, strategy=ShortAtmStraddle(lots=5))
+        result = run_backtest(
+            trial, store=store, strategy=ShortAtmStraddle(target_notional=5 * LOT_NOTIONAL)
+        )
 
     resized = result.resized_fills()
     assert len(resized) == 2
@@ -499,7 +513,10 @@ def test_legs_capped_differently_are_cut_to_one_size_so_the_structure_stays_bala
 
     with session.trial(h1, data_window=window) as trial:
         result = run_backtest(
-            trial, store=store, strategy=ShortAtmStraddle(lots=200), config=BacktestConfig()
+            trial,
+            store=store,
+            strategy=ShortAtmStraddle(target_notional=200 * LOT_NOTIONAL),
+            config=BacktestConfig(),
         )
 
     entry_fills = [fill for fill in result.fills if fill.tag == "entry"]

@@ -65,7 +65,6 @@ from xman_research.backtest.execution import (
 )
 from xman_research.backtest.lot_size import (
     LotSizeAudit,
-    LotSizeContradictionError,
     audit_lot_size,
     audit_sessions,
 )
@@ -569,9 +568,26 @@ def run_backtest(
     for ref in refs:
         frame = store.load_session(ref, verify=config.verify_checksums)
         refdata = store.load_refdata(ref)
-        # Before anything is sized: does this session's declared lot size survive contact
-        # with its own bars? See xman_research.backtest.lot_size for the December 2025
-        # regime this found, and for why the refusal is not overridable.
+        # Does this session's declared lot size survive contact with its own bars?
+        # See xman_research.backtest.lot_size for the December 2025 regime this found.
+        #
+        # OWNER DECISION (2026-08-13): the DECLARED lot size is used for every
+        # calculation, including where the session's own volume contradicts it. This
+        # was an unoverridable refusal; it is now a stamp.
+        #
+        # The argument against, weighed and overruled: lot size is time-varying (NIFTY
+        # has been 25/50/75/65), so one value across a multi-year window puts positions
+        # in different years on different real footings while the model asserts they
+        # match. Recorded here so the trade-off stays visible instead of being
+        # re-litigated, and so anyone reading a verdict stamped
+        # `corpus.declared_lot_size_contradicted` knows exactly what it means.
+        #
+        # A stamp rather than silence, because the effect is uneven: the
+        # scale-invariant statistics (Sharpe, ROC, drawdown, the breakeven RATIO) are
+        # genuinely unaffected — double the lot and P&L, margin and percentage costs
+        # double together — while flat per-order brokerage and the participation caps
+        # are not. So a verdict computed over such a session stays honest about it
+        # without being blocked.
         audit = audit_lot_size(
             session_date=ref.session_date,
             underlying=config.underlying,
@@ -579,7 +595,7 @@ def run_backtest(
             refdata=refdata,
         )
         if audit.contradicts_declared:
-            raise LotSizeContradictionError(audit.failure_message(), audit)
+            unverified.add(f"corpus.declared_lot_size_contradicted:{Confidence.UNVERIFIED}")
         audits.append(audit)
         if audit.non_conforming_symbols:
             unverified.add(
