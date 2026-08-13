@@ -103,6 +103,14 @@ A candidate that could not clear its in-sample bar has nothing for the holdout t
 Spending it here would have converted an intact one-shot resource into a second
 underpowered number.
 
+**The one contact that did happen, stated so nobody has to find it.** While sizing the
+split, `SessionStore.resolve()` was called on `2026-05-01 .. 2026-06-12` and reported 29
+complete sessions. That is a question to the *trading calendar and the file manifest* — how
+many sessions exist and are any missing — not a read of a single price, return or contract.
+No backtest ran over those dates, no trial in the log names them, and `inspect_holdout`
+reads the log. Counting the days in an envelope is not opening it, but the distinction is
+worth naming rather than leaving to be discovered.
+
 The holdout path is not untested code, though — it would be a poor claim to say "we never
 ran it" and leave it unproven. `tests/test_h1_decision.py` executes the whole branch against
 the real corpus on throwaway windows, a throwaway log and a deliberately permissive gate, so
@@ -145,8 +153,20 @@ bucketed costs by the session that paid them, from the fill and settlement recor
 than smearing `total_costs` evenly. The cost-breakeven multiple is the MVP's headline
 number and it got the honest cost allocation.
 
-`feasibility.not_reported` is also absent: the run reported real feasibility facts, and they
-were clean — 0 of 36 intents infeasible, 0 of 80 sessions stale.
+`feasibility.not_reported` is also absent: the run reported real feasibility facts rather
+than staying silent, and the infeasibility side is clean — **0 of 36 intents infeasible**,
+read directly from the verdict counts.
+
+**The stale-mark count is not evidenced here, and this record will not assert it.** C5's
+`metrics()` does not surface `sessions_with_stale_marks`, so `decision.json` does not carry
+it and neither does the verdict. What *is* evidenced is only the bound: the not-evaluable
+rule on stale marks did not fire, so the stale fraction is at most the 0.20 limit. An
+earlier draft of this section claimed "0 of 80 sessions stale"; that number was never read
+from the payload and has been withdrawn rather than re-derived, because re-deriving it means
+re-running the backtest, and re-running it against the canonical log appends a trial and
+moves the selection count this whole verdict rests on. **Follow-up: surface
+`sessions_with_stale_marks` in the run summary, so the next decision can state it instead of
+bounding it.**
 
 ---
 
@@ -234,6 +254,12 @@ and it cannot be re-cut.
 ---
 
 ## 6. Reproducing this
+
+> **Do not run the second command against the existing canonical log.** It appends a trial,
+> moving the family count from 1 to 2 — the very selection count the deflated Sharpe above
+> was computed against — and the reproduction would then disagree with the record it was
+> meant to reproduce. Move or delete `research/h1/h1_research.db` first, or just read
+> `decision.json`.
 
 ```bash
 uv run python -m xman_research.h1.calibrate_thresholds     # the synthetic threshold calibration
