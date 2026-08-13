@@ -12,7 +12,7 @@
 
 H26 failed one pre-registered threshold — the deflated Sharpe — and passed the other three.
 **A failure is a successful deliverable.** Nothing below was tuned to reach it: the
-thresholds were committed in `dccb379` and superseded in `1b5eb82`, both before any number
+thresholds were committed in `dccb379` and superseded in `3988b6a`, both before any number
 existed, and **no bar was moved at any point**.
 
 The headline is not the verdict. It is that **the mechanism's directional prediction came
@@ -63,7 +63,7 @@ gap arm adds **+16.30%/yr**. H26's annualised Sharpe of 0.92 is nearly double H1
 deflation then subtracts the expected maximum of **five** logged trials (SR\* = 0.1350
 against an observed 0.0579 per period) and the deflated Sharpe collapses to **0.2413**.
 
-The gate said this would happen, in advance, in `1b5eb82`: at N=4 even a *true* annualised
+The gate said this would happen, in advance, in `3988b6a`: at N=4 even a *true* annualised
 Sharpe of 3.0 has a median deflated Sharpe of 0.782, under the bar. The realised N was 5,
 worse still. **This gate was close to unreachable before the run started, and the record
 said so before the run started.** That is why the bar was not moved afterwards.
@@ -123,7 +123,7 @@ margin is not checked — so **+16.30%/yr is an upper bound**, not an estimate.
 ## 3. The trial count, and what it cost
 
 **5, read from the log, never typed.** The pre-registered inventory in `dccb379` said 3 and
-the superseding gate in `1b5eb82` said 4. **Both were wrong, and the disagreement is the
+the superseding gate in `3988b6a` said 4. **Both were wrong, and the disagreement is the
 finding the inventory existed to surface:**
 
 | # | Trial | Hypothesis | Outcome |
