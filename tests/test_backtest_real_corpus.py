@@ -157,15 +157,15 @@ def test_the_backfilled_window_is_whole_and_the_end_of_capture_still_refuses(
     2026-06-14. The 2026-08-13 backfill landed those 42 sessions, so the window resolves
     complete and the old assertion is simply false about the world.
 
-    The refusal it was buying is not lost: it moved to a synthetic corpus, where a hole is
-    constructed rather than borrowed (see the module docstring). Keeping a *real-corpus*
-    refusal here would have meant hunting for whatever hole happened to remain, which is
-    how a test ends up asserting the state of a data pipeline instead of the behaviour of
-    the code.
+    The *general* refusal guarantee it was buying now lives on a synthetic corpus, where a
+    hole is constructed rather than borrowed (see the module docstring). What is kept here
+    is deliberately narrower and is the one hole no backfill can ever fill: the range past
+    the end of capture, whose sessions have not happened yet. That one is safe to depend
+    on, where hunting for whatever hole happened to remain inside the corpus would have
+    been asserting the state of a data pipeline rather than the behaviour of the code.
 
     So this pins the two facts that are genuinely about this corpus: the window that used
-    to be holey is whole, and the range past the end of capture — which no backfill can
-    fill, because those sessions have not happened — still refuses without a reason.
+    to be holey is whole, and asking past the end still refuses.
     """
     filled = store.resolve(UNDERLYING, dt.date(2026, 6, 1), dt.date(2026, 7, 31))
     assert filled.is_complete
