@@ -75,9 +75,25 @@ class DecisionRun:
     hypothesis: HypothesisRecord
     in_sample_result: BacktestResult
     holdout_result: BacktestResult | None
-    trial_count: int
     trial_rows: tuple[dict[str, Any], ...]
     holdout_spent: bool
+
+    @property
+    def trial_count(self) -> int:
+        """The family trial count, derived from the rows the log handed back.
+
+        A read-only property and **not** a constructor field. That distinction is not
+        cosmetic: ``tests/test_no_caller_supplied_count.py`` refuses any public callable in
+        this package that accepts a parameter looking like a trial count, and it refused
+        this class when the count arrived alongside the rows. It was right to. A count
+        passed next to the evidence it describes is a count that can disagree with it, and
+        the one number the researcher must never supply is this one.
+
+        :func:`run_h1_decision` still asks the log's own ``count_family_trials`` and refuses
+        a disagreement with these rows, so the authority stays with the log rather than with
+        ``len()``.
+        """
+        return len(self.trial_rows)
 
     def as_dict(self) -> dict[str, Any]:
         payload = self.decision.as_dict()
@@ -219,14 +235,22 @@ def run_h1_decision(
 
     with open_session(config.trial_log_path) as session:
         rows = tuple(_trial_row(row) for row in session.family_trials(record))
-        count = session.count_family_trials(record)
+        # The log's own counter is the authority; the rows are what the record quotes. They
+        # must agree, and a disagreement is refused rather than resolved in either
+        # direction — one of the two would then be describing a different family.
+        counted = session.count_family_trials(record)
+    if counted != len(rows):
+        raise RuntimeError(
+            f"the log counts {counted} trials in the family of {record.id} but handed back "
+            f"{len(rows)} rows. The deflated Sharpe is computed against that count, so the "
+            "two cannot be allowed to differ."
+        )
 
     return DecisionRun(
         decision=decision,
         hypothesis=record,
         in_sample_result=in_sample_result,
         holdout_result=holdout_result,
-        trial_count=count,
         trial_rows=rows,
         holdout_spent=holdout_verdict is not None,
     )

@@ -50,8 +50,17 @@ def synthetic(n: int, annualised_sharpe: float, *, seed: int) -> ReturnSeries:
     )
 
 
-def universe_of_size(trials: int) -> SelectionUniverse:
-    """A throwaway log holding ``trials`` rows, so the deflation reads the count it must."""
+def _universe_of_size(trials: int) -> SelectionUniverse:
+    """A throwaway log holding ``trials`` rows, so the deflation reads the count it must.
+
+    **Private on purpose.** ``tests/test_no_caller_supplied_count.py`` refuses any *public*
+    callable in this package that takes a parameter shaped like a trial count, and it
+    refused this one. The guard is blunt by design and it is pointing at something real: a
+    public helper that manufactures a trial count is one import away from being used to
+    supply one. This function creates synthetic rows in a temporary database and is an
+    internal fixture of a calibration script, so it is named accordingly rather than
+    renamed to slip past the check.
+    """
     log = TrialLog(
         Path(tempfile.mkdtemp(prefix="h1_calibration_")) / "calibration.db",
         clock=ManualClock(dt.datetime(2026, 1, 1, tzinfo=dt.UTC)),
@@ -77,7 +86,7 @@ def universe_of_size(trials: int) -> SelectionUniverse:
 
 def main() -> None:
     for sessions, trials in CASES:
-        universe = universe_of_size(trials)
+        universe = _universe_of_size(trials)
         print(f"--- n={sessions} sessions, N={universe.size} logged trials")
         for sharpe in TRUE_SHARPES:
             values = sorted(
