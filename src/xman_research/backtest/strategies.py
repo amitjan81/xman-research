@@ -174,10 +174,16 @@ class ClockSplitShortStraddle:
     lots: int = 1
     open_time: dt.time = dt.time(9, 20)
     close_time: dt.time = dt.time(15, 29)
+    min_calendar_days_to_expiry: int = 2
 
     def __post_init__(self) -> None:
         if self.lots <= 0:
             raise ValueError(f"lots must be positive, got {self.lots}")
+        if self.min_calendar_days_to_expiry < 1:
+            raise ValueError(
+                "min_calendar_days_to_expiry must be at least 1: a contract expiring on "
+                "the session date cannot be held overnight at all."
+            )
         if self.open_time >= self.close_time:
             raise ValueError(
                 f"open_time {self.open_time} must be strictly before close_time "
@@ -198,6 +204,7 @@ class ClockSplitShortStraddle:
         return {
             "hold": self.hold.value,
             "lots": self.lots,
+            "min_calendar_days_to_expiry": self.min_calendar_days_to_expiry,
             "open_time": self.open_time.isoformat(),
             "close_time": self.close_time.isoformat(),
         }
@@ -209,13 +216,26 @@ class ClockSplitShortStraddle:
         opens_here = at_close if self.hold is ClockSide.GAP else not at_close
         if opens_here:
             return self._entry(session, minute) if book.is_flat else ()
-        return self._exit(book)
+        return self._exit(book, session.session_date)
 
     def _entry(self, session: SessionView, minute: dt.datetime) -> Sequence[TradeIntent]:
         expiry = session.universe.nearest_expiry(session.session_date)
-        if expiry is None or expiry <= session.session_date:
-            # Expiry today (or no listed expiry): the contract does not survive the night.
-            # Both arms decline — see the class docstring on identical eligibility.
+        if expiry is None:
+            return ()
+        if (expiry - session.session_date).days < self.min_calendar_days_to_expiry:
+            # **The expiring contract is absent from the instrument master ON its own
+            # expiry date.** Not merely illiquid — dropped: `by_symbol` returns None and
+            # the engine raises rather than guessing, which is correct, because a symbol
+            # the master does not list is exactly what a composed symbol looks like.
+            #
+            # So a straddle cannot be bought back on the morning its contract expires, and
+            # an expiry-eve entry has no exit. Both boundaries of the weekly cycle are
+            # therefore dark: no entry ON expiry day (the contract dies that evening) and
+            # no entry the session BEFORE it (the contract is unlistable at the exit
+            # minute). With Tuesday expiries and front-week-only capture this removes every
+            # Monday and every Tuesday entry, which is why the observable-gap count is far
+            # below the calendar-gap count. It is a CAPTURE/REFDATA limitation, not a
+            # market fact, and `research/h26/DECISION.md` counts it explicitly.
             return ()
         spot = session.spot_at(minute)
         if spot is None:
@@ -240,7 +260,7 @@ class ClockSplitShortStraddle:
             )
         return tuple(intents)
 
-    def _exit(self, book: BookView) -> Sequence[TradeIntent]:
+    def _exit(self, book: BookView, session_date: dt.date) -> Sequence[TradeIntent]:
         """Buy back everything, as one group.
 
         **Grouped, like the entry, and for a reason that cuts the other way.** If one leg
@@ -257,6 +277,15 @@ class ClockSplitShortStraddle:
         group = f"clocksplit-exit:{self.hold.value}"
         for position in book.positions():
             if not position.is_short:
+                continue
+            if position.contract.expiry == session_date:
+                # Residual case the entry guard cannot see: the guard counts CALENDAR days,
+                # but a holiday can still make the next trading session the expiry session
+                # (Friday entry, Monday shut, Tuesday expiry). The contract is gone from
+                # this session's master, so no buy-back can be expressed. The position is
+                # left to cash-settle and the run reports a non-zero settlement count —
+                # which is the flag. Emitting the intent anyway would raise and lose the
+                # whole run; settling silently without counting would be worse.
                 continue
             lots = abs(position.units) // position.contract.lot_size
             if lots <= 0:

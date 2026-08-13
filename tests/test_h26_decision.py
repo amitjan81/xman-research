@@ -25,7 +25,13 @@ from xman_research.backtest.engine import BacktestConfig, _decision_minutes
 from xman_research.backtest.strategies import ClockSide, ClockSplitShortStraddle
 from xman_research.h1.hypothesis import h1_record
 from xman_research.h26.h1_replay import H1RecordDriftError, replay_h1_family
-from xman_research.h26.hypothesis import CLOSE_DECISION, OPEN_DECISION, THRESHOLDS, h26_record
+from xman_research.h26.hypothesis import (
+    CLOSE_DECISION,
+    OPEN_DECISION,
+    THRESHOLDS,
+    _h26_v1_record,
+    h26_record,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 GATE = REPO / "research" / "h26" / "gate.toml"
@@ -43,16 +49,27 @@ def _log(path: Path) -> TrialLog:
 
 
 def test_h26_is_an_amendment_of_h1_not_a_new_family() -> None:
-    """The whole multiple-testing argument rests on this link existing."""
-    record = h26_record()
-    assert record.parent_id == h1_record().id
-    assert record.id != h1_record().id
+    """The whole multiple-testing argument rests on this chain existing.
+
+    H1 -> H26 v1 (pre-registered in dccb379) -> H26 v2 (the superseding correction). The
+    correction must COST a trial, not save one, so it amends rather than replaces.
+    """
+    v1, v2 = _h26_v1_record(), h26_record()
+    assert v1.parent_id == h1_record().id
+    assert v2.parent_id == v1.id
+    assert len({h1_record().id, v1.id, v2.id}) == 3
+
+
+def test_supersession_moved_no_threshold() -> None:
+    """A narrowed sample is not licence to revisit a bar."""
+    assert dict(h26_record().thresholds) == dict(_h26_v1_record().thresholds)
 
 
 def test_family_count_spans_h1_and_h26(tmp_path: Path) -> None:
     """An amendment must not reset the trial count — that is C4's documented hole."""
     log = _log(tmp_path / "family.db")
     replay_h1_family(log, decision_path=H1_DECISION)
+    log.register_hypothesis(_h26_v1_record())
     h26 = h26_record()
     log.register_hypothesis(h26)
     assert log.count_family_trials(h26.id) == 1  # H1's replayed row, before H26 runs
@@ -205,6 +222,7 @@ def test_session_open_registers_the_family_without_error(tmp_path: Path) -> None
     """An amendment whose parent is unregistered cannot be logged; order matters."""
     with open_session(tmp_path / "order.db") as session:
         replay_h1_family(session.log, decision_path=H1_DECISION)
+        session.register(_h26_v1_record())
         record = session.register(h26_record())
         assert isinstance(record, HypothesisRecord)
         assert session.count_family_trials(record) == 1

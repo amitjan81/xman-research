@@ -34,7 +34,13 @@ from xman_research.adapter import evidence_from_result
 from xman_research.backtest import BacktestConfig, BacktestResult, run_backtest
 from xman_research.backtest.strategies import ClockSide, ClockSplitShortStraddle
 from xman_research.h26.h1_replay import replay_h1_family
-from xman_research.h26.hypothesis import CLOSE_DECISION, OPEN_DECISION, h26_record
+from xman_research.h26.hypothesis import (
+    CLOSE_DECISION,
+    MIN_CALENDAR_DAYS_TO_EXPIRY,
+    OPEN_DECISION,
+    _h26_v1_record,
+    h26_record,
+)
 from xman_research.session_store import SessionStore
 from xman_research.validation import Decision, GateStatus, ValidationConfig, Validator, Verdict
 
@@ -155,10 +161,18 @@ def _arms(lots: int = 1) -> tuple[ClockSplitShortStraddle, ClockSplitShortStradd
     # one without anything noticing.
     return (
         ClockSplitShortStraddle(
-            hold=ClockSide.GAP, lots=lots, open_time=OPEN_DECISION, close_time=CLOSE_DECISION
+            hold=ClockSide.GAP,
+            lots=lots,
+            open_time=OPEN_DECISION,
+            close_time=CLOSE_DECISION,
+            min_calendar_days_to_expiry=MIN_CALENDAR_DAYS_TO_EXPIRY,
         ),
         ClockSplitShortStraddle(
-            hold=ClockSide.SESSION, lots=lots, open_time=OPEN_DECISION, close_time=CLOSE_DECISION
+            hold=ClockSide.SESSION,
+            lots=lots,
+            open_time=OPEN_DECISION,
+            close_time=CLOSE_DECISION,
+            min_calendar_days_to_expiry=MIN_CALENDAR_DAYS_TO_EXPIRY,
         ),
     )
 
@@ -186,6 +200,10 @@ def run_h26_decision(
         # whose parent is unknown to the log cannot be registered, and a family count
         # taken before the replay would be short by one.
         _, h1_rows_replayed = replay_h1_family(session.log)
+        # The whole chain, parent-first: an amendment cannot be registered against a
+        # parent the log has never seen, and a family count taken before the chain is
+        # complete would be short. H1 -> H26 v1 (pre-registered, superseded) -> H26 v2.
+        session.register(_h26_v1_record())
         session.register(record)
 
         candidate_result = _backtest(

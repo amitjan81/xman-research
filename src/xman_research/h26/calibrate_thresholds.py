@@ -44,7 +44,7 @@ TRUE_SHARPES = (0.5, 1.0, 1.5, 2.0, 2.5, 3.0)
 #: ``(70, 6)`` is the holdout case: 71 sessions, and a family that by then also carries
 #: the holdout touch row and the holdout's own two runs. ``(70, 3)`` brackets it from
 #: below in case the touch row lands differently than projected.
-CASES = ((79, 1), (79, 3), (79, 6), (70, 3), (70, 6))
+CASES = ((79, 1), (79, 3), (79, 4), (79, 6), (70, 3), (70, 6))
 
 
 def synthetic(n: int, annualised_sharpe: float, *, seed: int) -> ReturnSeries:

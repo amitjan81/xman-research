@@ -4,9 +4,16 @@
 # The canonical trial log for the H1/H26 FAMILY. Every count the deflated Sharpe uses is
 # read from this file and no other.
 #
-# It sits in research/h26/ rather than research/h1/ only because that is where this
-# decision's artefacts live; what makes the count correct is the amendment's parent link,
-# not the file's location. The log is seeded with H1's replayed row before H26 runs — see
+# THE PATH IS ABSOLUTE AND OUTSIDE EVERY WORKTREE, AND THAT IS THE POINT. H1's log was
+# written inside the H1 worktree and vanished when that worktree was removed during
+# post-merge cleanup, taking the only auditable evidence for H1's trial count with it. A
+# count that lives inside a disposable directory is a count that will eventually be
+# reconstructed from prose. /home/qa/runtime/data/ is the durable data root; `research/`
+# is a new subdirectory created for this file and nothing here writes to the read-only
+# corpus under backtest/.
+#
+# What makes the count CORRECT is the amendment's parent link; what makes it SURVIVE is
+# this path. The log is seeded with H1's replayed row before H26 runs — see
 # gate.toml's trial inventory, and xman_research.h26.h1_replay for the mechanism and its
 # refusal branch.
 #
@@ -14,7 +21,7 @@
 # would change a repo convention to suit one branch. research/h26/trial_log_export.json IS
 # committed, and unlike H1's — which DECISION.md cited but which was never actually written
 # — it is produced by the decision run itself.
-trial_log_path = "h26_research.db"
+trial_log_path = "/home/qa/runtime/data/research/trial_log.db"
 
 gate_path = "gate.toml"
 

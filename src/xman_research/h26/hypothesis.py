@@ -29,7 +29,13 @@ import datetime as dt
 from xman_research import HypothesisRecord
 from xman_research.h1.hypothesis import h1_record
 
-__all__ = ["CLOSE_DECISION", "OPEN_DECISION", "THRESHOLDS", "h26_record"]
+__all__ = [
+    "CLOSE_DECISION",
+    "MIN_CALENDAR_DAYS_TO_EXPIRY",
+    "OPEN_DECISION",
+    "THRESHOLDS",
+    "h26_record",
+]
 
 #: The decision minutes, fixed HERE, inside the content-addressed record.
 #:
@@ -71,8 +77,14 @@ THRESHOLDS = {
 }
 
 
-def h26_record() -> HypothesisRecord:
-    """The H26 record, as an amendment of H1. Deterministic: same text, same id."""
+def _h26_v1_record() -> HypothesisRecord:
+    """The record as first pre-registered, in commit ``dccb379``. Superseded, never edited.
+
+    Kept verbatim so the supersession is auditable from source as well as from git: the
+    amendment below points at this record's id, and that link is what keeps the trial
+    count spanning the pre-registration and its correction. It is NOT what the runner
+    grades — see :func:`h26_record`.
+    """
     return h1_record().amend(
         name="H26 — overnight vs intraday variance premium (amendment of H1)",
         mechanism=(
@@ -161,5 +173,61 @@ def h26_record() -> HypothesisRecord:
             "the same thing as evidence the premium is free. This sentence is written "
             "before the run precisely so a favourable number cannot be read as more than "
             "it is."
+        ),
+    )
+
+
+#: The entry guard, in CALENDAR days between the session and the front expiry.
+#:
+#: 2, not 1, and the reason is a data fact discovered only by running the thing: **the
+#: expiring contract is absent from the instrument master on its own expiry date.** It is
+#: dropped, not merely thin, so a buy-back on expiry morning cannot even be expressed —
+#: ``by_symbol`` returns ``None`` and the engine refuses. An expiry-eve entry therefore has
+#: no exit, and the guard must bar it in advance rather than discover it mid-run.
+MIN_CALENDAR_DAYS_TO_EXPIRY = 2
+
+
+def h26_record() -> HypothesisRecord:
+    """The H26 record actually graded: an amendment of the pre-registered v1 record.
+
+    **Why this is an amendment and not an edit.** ``research/h26/gate.toml`` was committed
+    ahead of any result in ``dccb379``, and the entry guard it describes turned out to be
+    unrunnable — the expiry-eve entry has no exit, because the contract leaves the
+    instrument master on its expiry date. Correcting it changes ``entry_rule``, which is
+    id-bearing, so the honest form is a *superseding record whose parent is the original*,
+    not a quiet rewrite of a file that has already been used to pre-register.
+
+    The chain is therefore H1 -> H26 v1 -> H26 v2, and ``count_family_trials`` spans all
+    three. The correction costs a trial rather than saving one, which is the direction a
+    correction discovered mid-run should cost.
+
+    **No threshold moved.** The bars in :data:`THRESHOLDS` are exactly those committed in
+    ``dccb379``, and they are carried through unchanged. The correction narrows the
+    tradeable population; it is not licence to revisit a number after the sample shrank.
+    """
+    v1 = _h26_v1_record()
+    return v1.amend(
+        name="H26 — overnight vs intraday variance premium (amendment of H1, v2)",
+        entry_rule={
+            **dict(v1.entry_rule),
+            "eligibility": (
+                "both arms trade only sessions whose front expiry is at least "
+                f"{MIN_CALENDAR_DAYS_TO_EXPIRY} calendar days after the session date, so "
+                "the contract is still listed in the instrument master at the exit "
+                "minute. Identical for both arms, so they face one population."
+            ),
+            "min_calendar_days_to_expiry": MIN_CALENDAR_DAYS_TO_EXPIRY,
+        },
+        notes=(
+            v1.notes + "\n\nSUPERSEDES the pre-registered v1 record (see gate.toml). v1 required "
+            "only that the expiry be strictly after the session date. That is unrunnable: "
+            "the expiring contract is DROPPED from the instrument master on its expiry "
+            "date, so a straddle entered on expiry eve can never be bought back, and the "
+            "run raises rather than silently trading an unlisted symbol. Both boundaries "
+            "of the weekly cycle are consequently unobservable — no entry on expiry day, "
+            "none on the session before it — so with Tuesday expiries every Monday and "
+            "every Tuesday entry is absent, and the OBSERVABLE gap count is far below the "
+            "calendar gap count (in-sample: 45 observable against 79 session "
+            "transitions). No threshold was changed in this amendment."
         ),
     )

@@ -23,13 +23,29 @@
 # THE GAP-EVENT CENSUS, which is the real sample size for this hypothesis. The unit of
 # evidence is not the session, it is the overnight transition the candidate holds:
 #
-#   in-sample observable gaps: 62      (43 one-day, 2 two-day, 15 weekend, 2 holiday-extended)
-#   of which multi-day:        19
-#   holdout observable gaps:   55      (40 one-day, 1 two-day, 13 weekend, 1 holiday-extended)
+#   in-sample observable gaps: 45      (30 one-day, 2 two-day, 12 weekend, 1 holiday-extended)
+#   of which multi-day:        15
+#   holdout observable gaps:   40      (25 one-day, 1 two-day, 13 weekend, 1 holiday-extended)
 #
-# 62 is fewer than the 79 sessions because 17 in-sample sessions are expiry sessions, on
-# which no straddle can be held overnight with front-week-only capture (see the record's
-# notes), and one is the final session, whose entry never closes.
+# THE OBSERVABLE COUNT IS FAR BELOW THE CALENDAR COUNT, and the two must never be confused.
+# In-sample there are 79 session transitions; only 45 of them can be traded. The funnel,
+# stated so nobody has to reconstruct it:
+#
+#   79 session transitions in-sample
+#   -> 63 sessions whose front expiry is after the session date   (17 expiry sessions out)
+#   -> 50 sessions surviving the >=2-calendar-day entry guard     (13 expiry-eve out)
+#   -> 45 observable gaps  (4 residual holiday cases where the next session IS the expiry
+#                           session, plus 1 dangling final session whose entry never closes)
+#
+# Both boundaries of the weekly expiry cycle are dark, for two DIFFERENT reasons. No entry
+# ON expiry day: the contract cash-settles that evening. No entry the session BEFORE it:
+# the expiring contract is DROPPED from the instrument master on its expiry date, so the
+# buy-back cannot be expressed at all. With Tuesday expiries this removes every Monday and
+# every Tuesday entry — the surviving entry weekdays are Wednesday, Thursday and Friday
+# only. All 12 in-sample weekend gaps survive, which is what matters most for the wedge.
+#
+# This is a CAPTURE/REFDATA limitation (front weekly expiry only, spec 3 C1), not a market
+# fact. Nothing here is evidence about post-expiry or pre-expiry overnights.
 #
 # This census was computed from the trading calendar, the instrument master and the
 # question "did this contract print a bar at this minute" — date arithmetic and bar
@@ -38,7 +54,7 @@
 # not opening it") extended one step, and it is stated rather than left to be discovered.
 # =======================================================================================
 
-hypothesis_id = "h_4095cf35d1443d87c0199a2441d158ab"
+hypothesis_id = "h_cacfc556d38a2bda25efef59eb5544cf"
 recorded_at = 2026-08-13T00:00:00Z
 
 amendment_justification = """
@@ -69,6 +85,27 @@ twelfth hypothesis would inherit a count inflated by eleven unrelated tries. Dat
 multiplicity is a real problem and `amend()` is not the tool that solves it. H26 qualifies
 because it makes a claim about the SAME premium — when it accrues rather than whether it
 exists — not merely because it reads the same files.
+"""
+
+supersession = """
+THIS GATE SUPERSEDES ITS OWN FIRST VERSION, committed in dccb379, and the original is left
+in git history rather than edited away.
+
+dccb379 pre-registered hypothesis h_4095cf35d1443d87c0199a2441d158ab, whose entry rule
+required only that the front expiry be strictly after the session date. That rule is
+UNRUNNABLE, and only running it revealed why: the expiring contract is dropped from the
+instrument master on its expiry date, so a straddle entered on expiry eve can never be
+bought back and the engine refuses to trade a symbol the master does not list.
+
+The correction changes `entry_rule`, which is id-bearing, so it was made as a SUPERSEDING
+AMENDMENT — h_cacfc556d38a2bda25efef59eb5544cf, whose parent is the v1 record — and not as
+an edit to a record that had already been used to pre-register. The chain H1 -> v1 -> v2 is
+intact and the trial count spans all three, so the correction COSTS a trial rather than
+saving one. That is the direction a mid-run correction should cost.
+
+NO THRESHOLD MOVED. Every bar in this file is exactly the number committed in dccb379. The
+correction narrowed the tradeable population from 62 observable gaps to 45; it is not
+licence to revisit a bar after the sample shrank, and the bars were not revisited.
 """
 
 holdout_disposition = """
@@ -132,6 +169,7 @@ settlement count so the condition is checked rather than assumed.
 #   true annualised Sharpe:    0.5    1.0    1.5    2.0    2.5    3.0
 #   median DSR (n=79, N=1):   0.661  0.758  0.837  0.896  0.938  0.965
 #   median DSR (n=79, N=3):   0.332  0.441  0.554  0.662  0.757  0.835
+#   median DSR (n=79, N=4):   0.263  0.365  0.475  0.588  0.692  0.782   <- the REALISED N
 #
 # N=3 is not a guess, it is the pre-registered trial inventory below. The second row is the
 # one that governs, and it changes the problem: at N=3 even a TRUE annualised Sharpe of 3.0
@@ -147,6 +185,27 @@ settlement count so the condition is checked rather than assumed.
 # buys a 20% false-positive rate given three tries — weaker than H1's 10%, and that is a
 # real cost, stated rather than hidden. It retains genuine power only against a large
 # effect: a true annualised Sharpe of about 3.0 clears it more often than not, 2.5 does not.
+#
+# WHAT THE REALISED TRIAL COUNT DID TO THIS BAR, added after the count was known and
+# BEFORE the graded run, with the threshold deliberately NOT moved.
+#
+# The bar was calibrated at N=3, the pre-registered inventory. The log will actually hold
+# FOUR rows (below), and at N=4 even a true annualised Sharpe of 3.0 has a median deflated
+# Sharpe of 0.782 — under the bar. On the calibrated grid this gate is therefore close to
+# UNREACHABLE, and a FAILS_THRESHOLD verdict on `deflated_sharpe` is very nearly
+# predetermined.
+#
+# The bar stays at 0.80 anyway. Lowering a threshold after discovering it is hard to clear
+# is the single move this apparatus exists to prevent, and "the deflation turned out
+# harsher than I planned" is not a new fact about the market. The fourth row exists because
+# of two deliberate choices, each made in the conservative direction: a crashed run's row
+# was kept rather than deleted, and correcting the entry guard was done as a superseding
+# amendment that costs a trial rather than as an edit that costs none.
+#
+# The honest consequence is therefore recorded in advance: this run's Sharpe verdict is
+# dominated by the SELECTION COUNT, not by the market. Read a miss as a statement about the
+# apparatus and the sample, and read the cost-breakeven multiple and the risk-matched
+# increment — neither of which the trial count touches — for what the data actually says.
 #
 # Pre-written, because it is the honest reading of a miss: at 79 observations and three
 # logged trials this test cannot distinguish a true annualised Sharpe below roughly 2.5
@@ -272,10 +331,20 @@ optimistic_costs_below = 1.0
 # typed, but what the log is EXPECTED to hold is written here in advance so that a
 # disagreement is visible rather than absorbed.
 #
-# At in-sample grading the family should hold exactly three rows:
+# At in-sample grading the family should hold exactly FOUR rows. Three were pre-registered
+# in dccb379; the fourth is disclosed here, before the graded run, with its cause:
 #   1. H1's trial, replayed from research/h1/decision.json (see below).
-#   2. H26's in-sample CANDIDATE backtest.
-#   3. H26's in-sample BENCHMARK backtest.
+#   2. A row with outcome=error and NO metrics: the first candidate attempt, which died on
+#      a TypeError in the exit path before computing anything. It is KEPT. Deleting a row
+#      from an append-only research log to reach a pre-registered count is the flattering
+#      move even when it is justified, and no result was ever observed from it, so nothing
+#      was selected on. It is logged against the v1 record and counts in the family.
+#   3. H26's in-sample CANDIDATE backtest.
+#   4. H26's in-sample BENCHMARK backtest.
+#
+# The count is read from the log at grading time and never typed. The DISAGREEMENT between
+# this inventory (4) and dccb379's (3) is itself reported in DECISION.md rather than
+# absorbed, which is what the pre-registered inventory was for.
 #
 # Row 3 is new relative to H1, which presented one run twice under two labels. H26's arms
 # are genuinely two backtests, each burning its own single-use token, and the benchmark is
