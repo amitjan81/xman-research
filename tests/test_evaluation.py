@@ -304,7 +304,9 @@ def test_a_wrong_typed_window_is_refused_before_the_body_runs(
 
     with (
         pytest.raises(TypeError, match="DataWindow"),
-        session.trial(h1, data_window=("2023-01-01", "2024-12-31")) as trial,  # type: ignore[arg-type]
+        session.trial(  # type: ignore[arg-type]
+            h1, data_window=("2023-01-01", "2024-12-31")
+        ) as trial,
     ):
         body_ran = True
         trial.record_metrics(sharpe=2.5)

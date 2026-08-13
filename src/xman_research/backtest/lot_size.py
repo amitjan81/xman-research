@@ -198,9 +198,13 @@ class LotSizeAudit:
     **Reported, not diagnosed.** On this corpus the finding is confined to whole symbols
     at round-thousand strikes — the 30Mar2026 22000 and 23000 CE/PE on 2026-03-25, 03-27
     and 03-30, and the 30Dec2025 26000 CE/PE on 2025-12-24 through 12-30 — and it is
-    open interest only, never volume. Between 88% and 100% of each affected symbol's
-    rows fail, and the handful that pass are consistent with chance at 1/13, so the
-    passing rows are noise rather than a partially-correct series. The values are
+    open interest only, never volume. **On the same symbol in the same session, volume is
+    100% divisible by the lot size while open interest is 0-12%** — measured on all four
+    March symbols. That is the sharpest fact here and the one most useful to the producer:
+    whatever went wrong did not corrupt whole rows, it reached the ``oi`` field alone.
+    Between 88% and 100% of each affected symbol's open-interest rows fail, and the
+    handful that pass are consistent with chance at 1/13, so the passing rows are noise
+    rather than a partially-correct series. The values are
     multiples of 5 (December's additionally of 25) and their residues mod 13 are spread
     uniformly over 1..12, so no lot size in :data:`CANDIDATE_LOT_SIZES` explains them and
     none is proposed: what produced them is a question for the producer repo, and a

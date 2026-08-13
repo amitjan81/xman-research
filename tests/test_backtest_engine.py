@@ -102,7 +102,9 @@ def test_a_sweep_must_mint_one_trial_per_backtest(
 
 def test_the_backtest_refuses_anything_that_is_not_a_trial_context(store) -> None:
     with pytest.raises(TypeError, match="TrialContext"):
-        run_backtest("not-a-token", store=store, strategy=ShortAtmStraddle())  # type: ignore[arg-type]
+        run_backtest(  # type: ignore[arg-type]
+            "not-a-token", store=store, strategy=ShortAtmStraddle()
+        )
 
 
 def test_a_failed_run_still_burns_its_token(

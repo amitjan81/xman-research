@@ -5,12 +5,14 @@ cleanly when the corpus is absent so the suite still runs on a machine that does
 it. Everything it reads is read-only — the corpus is irreplaceable and no code in this
 package opens a file for writing.
 
-**The gap path is exercised on purpose, not incidentally.** The real corpus has a missing
-session inside its span, so a window chosen for being clean would leave the honesty path
-untested and would silently start failing the day capture changes. This asks the store
-first, and where the range is incomplete it passes a written reason and asserts the reason
-reaches the result — which is what a researcher would have to do, and what the trial row
-must record about why a number was computed over a partial window.
+**The gap path is exercised on purpose, not incidentally** — but not by this window.
+Measured against the calendar, every window inside the captured range resolves complete,
+including the one this file runs; the corpus has no hole in its interior, only an end
+(the vendor subscription lapsed on 2026-06-14). So the fixture asks the store first and
+passes a written reason only if the range is incomplete, and the assertion pins whichever
+answer it got — ``None`` here — rather than assuming the interesting one. The refusal path
+is covered directly by ``test_a_holey_window_refuses_without_a_reason``, which runs past
+the end of capture, which is the real hole.
 """
 
 from __future__ import annotations
@@ -122,11 +124,21 @@ def test_the_range_resolves_and_the_gap_decision_is_recorded(
 
     assert produced.sessions_run > 0
     assert produced.data_provenance["underlying"] == UNDERLYING
-    # Compares the recorded reason against the fixture's decision. The previous form of
-    # this line compared the field with itself, which is true of every possible value.
-    assert produced.config_provenance["gap_reason"] == gap_reason
+
+    # The original form of this assertion was `gap_reason == gap_reason`, true of every
+    # possible value. Comparing the recorded field against the fixture is better but still
+    # weak on its own -- the fixture is what built the result, so it cannot distinguish a
+    # faithfully recorded reason from an echo. The discriminating check is against the
+    # *literal* expected content, and against the independent `missing` field: a holey
+    # range must carry a written reason, and a clean one must carry none.
+    recorded = produced.config_provenance["gap_reason"]
+    assert recorded == gap_reason
     if produced.data_provenance["missing"]:
-        assert produced.config_provenance["gap_reason"]
+        assert recorded is not None, "a range with holes ran without a recorded reason"
+        assert "C5 full-chain test" in recorded
+        assert "the mechanics, not the P&L" in recorded
+    else:
+        assert recorded is None, "a complete range recorded a gap reason it did not need"
 
 
 def test_a_holey_window_refuses_without_a_reason(store: SessionStore) -> None:
