@@ -19,6 +19,11 @@ dependencies = [
     "pandas>=3.0",
     "pyarrow>=16",
     "pandas_market_calendars>=5.4",
+    # C6's CSCV enumerates C(16,8) = 12,870 symmetric splits and computes a Sharpe per
+    # configuration on each. Declared explicitly rather than leant on through pandas:
+    # `tests/test_no_caller_supplied_count.py` imports every module in the package, so an
+    # undeclared transitive import fails the whole guard rather than one test.
+    "numpy>=2.0",
 ]
 
 [build-system]
