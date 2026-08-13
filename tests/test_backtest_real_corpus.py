@@ -129,8 +129,11 @@ def test_the_range_resolves_and_the_gap_decision_is_recorded(
         assert produced.config_provenance["gap_reason"]
 
 
-def test_a_clean_window_still_refuses_without_a_reason(store: SessionStore) -> None:
+def test_a_holey_window_refuses_without_a_reason(store: SessionStore) -> None:
     """The store's asymmetry survives being wrapped: no reason, no run over a gap.
+
+    Renamed from ``test_a_clean_window_...``: the window is deliberately holey, which is
+    the entire premise, and the old name said the opposite of what the test sets up.
 
     Uses a window that certainly has holes — it runs past the end of capture, which is the
     live case: the vendor subscription lapsed on 2026-06-14 and every session after
@@ -325,17 +328,19 @@ def test_a_backtest_touching_december_2025_is_refused_not_computed(
     )
     window = DataWindow(dt.date(2025, 12, 16), dt.date(2026, 1, 9))
     try:
-        with session.trial(hypothesis, data_window=window) as trial:
-            with pytest.raises(LotSizeContradictionError) as raised:
-                run_backtest(
-                    trial,
-                    store=store,
-                    strategy=ShortAtmStraddle(),
-                    config=BacktestConfig(
-                        underlying=UNDERLYING,
-                        gap_reason="lot-size refusal test: gaps are not what is under test",
-                    ),
-                )
+        with (
+            session.trial(hypothesis, data_window=window) as trial,
+            pytest.raises(LotSizeContradictionError) as raised,
+        ):
+            run_backtest(
+                trial,
+                store=store,
+                strategy=ShortAtmStraddle(),
+                config=BacktestConfig(
+                    underlying=UNDERLYING,
+                    gap_reason="lot-size refusal test: gaps are not what is under test",
+                ),
+            )
     finally:
         session.close()
 
@@ -388,7 +393,7 @@ def test_a_run_over_the_march_outliers_says_so_in_its_unverified_inputs(result) 
     """The E2E window covers 2026-03-25/27/30, so the flag has to reach the result."""
     produced, _, _ = result
 
-    assert "corpus.open_interest_not_divisible_by_lot_size" in produced.unverified_inputs
+    assert "corpus.open_interest_not_divisible_by_lot_size:unverified" in produced.unverified_inputs
     audit_summary = produced.data_provenance["lot_size_audit"]
     assert audit_summary["sessions_contradicting_declared_lot_size"] == []
     assert "NIFTY-30Mar2026-23000-CE" in audit_summary["symbols_with_non_conforming_open_interest"]

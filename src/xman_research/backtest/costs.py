@@ -179,34 +179,30 @@ class RateSchedule:
 # is a known hole, is surfaced on every CostBreakdown that touches it, and should be
 # closed before any result is acted upon.
 
+#: **The pre-2024 premium-side history has been deleted, on purpose.**
+#:
+#: Two entries used to sit here: 0.05% from 1 June 2016 (Finance Act 2016) and 0.0625%
+#: from 1 September 2019 (Finance (No. 2) Act 2019). Both were UNVERIFIED, and the second
+#: is very likely wrong on both counts — the premium-side rise to 0.0625% appears to be
+#: **Finance Act 2023, effective 1 April 2023**, with 0.05% holding from 2016 to 2023.
+#: What Finance (No. 2) Act 2019 actually changed was the *exercise* side: the base moved
+#: from settlement price to intrinsic value. See :data:`STT_ON_EXERCISE`.
+#:
+#: They were carried so that a backfill would "not hit RateNotInForceError with no
+#: warning". That reasoning is backwards by this module's own standard, and
+#: :class:`RateNotInForceError`'s own docstring is the argument against it: charging a
+#: rate nobody has checked produces a plausible wrong answer, which is the single failure
+#: mode the whole dated-schedule design exists to prevent. A refusal is a research task; a
+#: silently mis-scaled five-year backtest is a published mistake.
+#:
+#: One attempt was made to reach the primary text at incometaxindia.gov.in; it returned
+#: HTTP 403, as it had for the reviewer. **No replacement dates were invented from
+#: recollection** — the corrected dates above are themselves unverified, which is exactly
+#: why they are in a comment and not in the table. Anyone needing a pre-October-2024
+#: window reads the Finance Act texts and adds the entries with citations.
 STT_ON_SELL_PREMIUM = RateSchedule(
     name="stt.sell_option_premium",
     entries=(
-        StatutoryRate(
-            effective_from=dt.date(2016, 6, 1),
-            rate=0.0005,
-            base="option premium turnover",
-            side="sell",
-            source="Finance Act 2016, Securities Transaction Tax schedule",
-            source_url="https://incometaxindia.gov.in/pages/acts/finance-act.aspx",
-            confidence=Confidence.UNVERIFIED,
-            note=(
-                "0.05%. The pre-2024 history is not needed by the current corpus "
-                "(2025-12-16 onward) and is carried only so a five-year backfill does not "
-                "hit RateNotInForceError with no warning. Verify before running a window "
-                "that reaches back this far."
-            ),
-        ),
-        StatutoryRate(
-            effective_from=dt.date(2019, 9, 1),
-            rate=0.000625,
-            base="option premium turnover",
-            side="sell",
-            source="Finance (No. 2) Act 2019",
-            source_url="https://incometaxindia.gov.in/pages/acts/finance-act.aspx",
-            confidence=Confidence.UNVERIFIED,
-            note="0.0625%. The rate in force immediately before the 1 Oct 2024 change.",
-        ),
         StatutoryRate(
             effective_from=dt.date(2024, 10, 1),
             rate=0.001,
@@ -243,12 +239,13 @@ STT_ON_EXERCISE = RateSchedule(
     name="stt.exercised_option_intrinsic",
     entries=(
         StatutoryRate(
-            effective_from=dt.date(2016, 6, 1),
+            effective_from=dt.date(2019, 9, 1),
             rate=0.00125,
             base="intrinsic value (settlement price minus strike, per unit)",
             side="purchaser",
             source="Income Tax Act STT schedule — sale of an option in securities, "
-            "where option is exercised",
+            "where option is exercised; base changed to intrinsic by Finance (No. 2) "
+            "Act 2019",
             source_url="https://zerodha.com/z-connect/trending/stt-options-nse-bse-mcx-sx",
             confidence=Confidence.CORROBORATED,
             note=(
@@ -257,7 +254,18 @@ STT_ON_EXERCISE = RateSchedule(
                 "which moved only the premium-side rate. A stale secondary source "
                 "describes the base as the entire contract value; every current source "
                 "says intrinsic, and intrinsic is used here. See ExerciseSttRule for why "
-                "the payer is a field rather than a sign convention."
+                "the payer is a field rather than a sign convention. "
+                "**This entry used to start on 2016-06-01 and no longer does.** Before "
+                "Finance (No. 2) Act 2019 the exercise base was the SETTLEMENT PRICE, not "
+                "intrinsic, so extending an intrinsic-based entry back to 2016 charged the "
+                "right rate on the wrong base for three years of any backfill — and the "
+                "difference is not small, since a deep-in-the-money option's settlement "
+                "price is a multiple of its intrinsic value. The 2019-09-01 boundary is "
+                "itself UNVERIFIED (the primary text returned HTTP 403); it is the date "
+                "from which this entry's own stated base is defensible, not a sourced "
+                "commencement. A window reaching earlier must read the Act and add the "
+                "settlement-price entry — until then RateNotInForceError fires, which is "
+                "the intended outcome."
             ),
         ),
         StatutoryRate(
@@ -576,20 +584,26 @@ class BrokerageModel:
 
 @dataclass(frozen=True, slots=True)
 class FlatPerOrderBrokerage(BrokerageModel):
-    """Flat rupees per executed order, optionally capped at a percentage of turnover.
+    """Flat rupees per executed order.
 
     Zerodha's published F&O rate is a **flat** Rs 20 per executed order with no percentage
     alternative — the familiar "Rs 20 or 0.03%, whichever is lower" is their *equity
-    intraday* pricing and does not apply here, which is why ``pct_of_turnover`` defaults
-    to ``None`` rather than to a number that would quietly discount every small order.
-    Settlement is charged nothing by default — brokers
-    differ on whether expiry settlement attracts brokerage, and charging zero is the
-    assumption that does *not* flatter a held-to-expiry short-variance strategy, since
+    intraday* pricing and does not apply here. Settlement is charged nothing by default —
+    brokers differ on whether expiry settlement attracts brokerage, and charging zero is
+    the assumption that does *not* flatter a held-to-expiry short-variance strategy, since
     zero brokerage there would understate cost. It is a parameter for that reason.
+
+    **``pct_of_turnover`` was removed rather than repaired** (spec 1.1 scope). It capped a
+    *per-order* charge against the *total* turnover of the trade and then multiplied the
+    result by the order count, so with two orders the cap was applied twice to one
+    turnover figure and the "cap" exceeded itself. Nothing in any default path set it, no
+    test covered it, and the pricing it modelled does not exist for F&O — so there was no
+    correct behaviour to restore, only a wrong formula to delete. A future broker that
+    genuinely prices this way needs per-order turnover, which this signature does not
+    carry.
     """
 
     rupees_per_order: float = BROKERAGE_ZERODHA_FNO
-    pct_of_turnover: float | None = None
     charge_on_settlement: bool = False
 
     def charge(self, trade: ChargeableTrade) -> float:
@@ -597,10 +611,7 @@ class FlatPerOrderBrokerage(BrokerageModel):
             return 0.0
         if trade.orders == 0 or trade.quantity_units == 0:
             return 0.0
-        per_order = self.rupees_per_order
-        if self.pct_of_turnover is not None:
-            per_order = min(per_order, self.pct_of_turnover * trade.turnover)
-        return per_order * trade.orders
+        return self.rupees_per_order * trade.orders
 
 
 class StatutoryCostStack:
@@ -646,7 +657,12 @@ class StatutoryCostStack:
         def rate(schedule: RateSchedule) -> float:
             entry = schedule.at(on)
             if entry.confidence is not Confidence.CONFIRMED:
-                unverified.append(schedule.name)
+                # The TIER travels, not just the name. A bare schedule name makes a
+                # CORROBORATED rate and a wholly UNVERIFIED one indistinguishable in
+                # `unverified_inputs`, which is the field C6 reads — so the rule "any
+                # UNVERIFIED input means the result is not evaluable" could not be
+                # expressed, let alone enforced, against the old format.
+                unverified.append(f"{schedule.name}:{entry.confidence}")
             return entry.rate
 
         turnover = trade.turnover
@@ -655,13 +671,24 @@ class StatutoryCostStack:
         if is_settlement:
             # Three separately-sourced answers, not one blanket rule. See the flags.
             exchange_base = turnover if SETTLEMENT_ATTRACTS_EXCHANGE_CHARGE else 0.0
+            # **Only an exercised or assigned contract attracts the fee.** NSE's wording,
+            # quoted on SETTLEMENT_ATTRACTS_SEBI_FEE_ON_NOTIONAL itself, says turnover is
+            # "additionally computed on the basis of notional value of option contracts
+            # exercised or assigned" — and an option expiring out of the money is neither.
+            # It lapses. Charging on its notional put roughly -1.97 rupees on every
+            # worthless leg, which for a short straddle held to expiry is one leg of every
+            # pair, every week. `trade.price` is the per-unit intrinsic on a SETTLEMENT, so
+            # it is exactly the in-the-money test.
+            exercised = trade.price > 0.0
             sebi_base = (
                 (trade.notional_price or 0.0) * trade.quantity_units
-                if SETTLEMENT_ATTRACTS_SEBI_FEE_ON_NOTIONAL
+                if SETTLEMENT_ATTRACTS_SEBI_FEE_ON_NOTIONAL and exercised
                 else 0.0
             )
             if not SETTLEMENT_ATTRACTS_EXCHANGE_CHARGE:
-                unverified.append("settlement.exchange_charge_assumed_not_levied")
+                unverified.append(
+                    f"settlement.exchange_charge_assumed_not_levied:{Confidence.UNVERIFIED}"
+                )
         else:
             exchange_base = turnover
             sebi_base = turnover
@@ -674,7 +701,9 @@ class StatutoryCostStack:
             if trade.side is self._exercise_stt_rule.payer:
                 stt_on_exercise = rate(self._stt_exercise) * turnover
                 if self._exercise_stt_rule.confidence is not Confidence.CONFIRMED:
-                    unverified.append("stt.exercise_payer_attribution")
+                    unverified.append(
+                        f"stt.exercise_payer_attribution:{self._exercise_stt_rule.confidence}"
+                    )
         elif trade.side is Side.SELL:
             stt = rate(self._stt_sell_premium) * turnover
 

@@ -48,26 +48,22 @@ def _sell(trade_date: dt.date) -> ChargeableTrade:
     )
 
 
-def test_sell_before_the_1_oct_2024_stt_change(stack: StatutoryCostStack) -> None:
-    """Turnover 100 x 65 = 6,500.
+def test_a_sell_before_1_oct_2024_is_refused_rather_than_charged_a_guessed_rate(
+    stack: StatutoryCostStack,
+) -> None:
+    """The pre-2024 premium-side history was deleted, so this date now refuses.
 
-    STT       0.0625%  x 6,500 = 4.0625
-    exchange  0.05%    x 6,500 = 3.25
-    SEBI      0.0001%  x 6,500 = 0.0065
-    stamp     buy side only    = 0
-    brokerage flat              = 20
-    GST       18% x (20 + 3.25 + 0.0065) = 18% x 23.2565 = 4.18617
-    total                                = 31.50517
+    **This test used to assert 0.0625% on 2024-09-30 and it was asserting a guess.** That
+    entry was UNVERIFIED and is very likely wrong on both its rate date and its attribution
+    — the premium-side rise to 0.0625% appears to be Finance Act 2023 effective 1 Apr 2023,
+    with 0.05% holding 2016-2023, while Finance (No. 2) Act 2019 changed the *exercise*
+    base instead. The entries were carried so a backfill would not hit RateNotInForceError
+    "with no warning", which inverts this module's own principle: that error exists
+    precisely because a plausible wrong answer is worse than a refusal. One attempt to
+    reach the primary text returned HTTP 403, and no dates were invented to replace it.
     """
-    costs = stack.charge(_sell(dt.date(2024, 9, 30)))
-
-    assert costs.stt == pytest.approx(4.0625)
-    assert costs.exchange_transaction_charge == pytest.approx(3.25)
-    assert costs.sebi_turnover_fee == pytest.approx(0.0065)
-    assert costs.stamp_duty == 0.0
-    assert costs.brokerage == 20.0
-    assert costs.gst == pytest.approx(4.18617)
-    assert costs.total == pytest.approx(31.50517)
+    with pytest.raises(RateNotInForceError, match=r"stt\.sell_option_premium"):
+        stack.charge(_sell(dt.date(2024, 9, 30)))
 
 
 def test_sell_on_the_day_the_1_oct_2024_change_takes_effect(stack: StatutoryCostStack) -> None:
@@ -93,11 +89,17 @@ def test_sell_on_the_day_the_1_oct_2024_change_takes_effect(stack: StatutoryCost
 
 
 def test_the_stt_change_is_a_step_not_a_ramp(stack: StatutoryCostStack) -> None:
-    """Sell-side STT jumps by exactly 60% across the boundary: 0.0625% -> 0.1%."""
-    before = stack.charge(_sell(dt.date(2024, 9, 30))).stt
-    after = stack.charge(_sell(dt.date(2024, 10, 1))).stt
+    """A step, asserted at the boundary the table can still defend.
 
-    assert after / before == pytest.approx(0.001 / 0.000625)
+    The 1 Oct 2024 step used to be measured against the deleted 0.0625% entry. The
+    1 Apr 2026 boundary is measured instead: both sides of it are CORROBORATED, both are
+    inside the corpus, and it makes the same point about a dated schedule -- the rate
+    changes on a date rather than easing across one.
+    """
+    before = stack.charge(_sell(dt.date(2026, 3, 31))).stt
+    after = stack.charge(_sell(dt.date(2026, 4, 1))).stt
+
+    assert after / before == pytest.approx(0.0015 / 0.001)
 
 
 def test_the_1_april_2026_stt_rise_is_charged_too(stack: StatutoryCostStack) -> None:
@@ -265,7 +267,8 @@ def test_unverified_rates_are_reported_on_every_breakdown(stack: StatutoryCostSt
     costs = stack.charge(_sell(dt.date(2026, 1, 6)))
 
     assert not costs.is_fully_verified
-    assert "stt.sell_option_premium" in costs.unverified_components
+    # The tier travels with the name, so C6 can tell a CORROBORATED rate from a guess.
+    assert "stt.sell_option_premium:corroborated" in costs.unverified_components
 
 
 def test_confirmed_rates_do_not_raise_the_flag() -> None:

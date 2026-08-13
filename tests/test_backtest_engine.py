@@ -267,18 +267,40 @@ def test_an_untradeable_contract_produces_an_infeasible_verdict_and_no_position(
     assert result.total_costs.total == 0.0
 
 
-def test_margin_is_charged_while_the_short_is_open_and_released_after_settlement(
+def test_margin_is_charged_for_the_session_the_short_was_actually_held(
     session: ResearchSession, h1: HypothesisRecord, store, window: DataWindow
 ) -> None:
+    """Expiry day carries margin, and it carries the 2% ELM add-on.
+
+    **This test previously asserted the opposite** — ``expiry_day.margin.total == 0.0`` —
+    and it was pinning a bug, not a decision. Margin was computed after settlement had
+    already removed every expiring position, so on expiry day the book showed zero while a
+    short straddle was in fact held 09:20 to 15:30 and the exchange demanded SPAN plus
+    exposure plus the expiry-day ELM for all of it. Because ``ShortLeg.expires_today``
+    requires ``expiry == session_date`` and those legs were gone by the time margin was
+    measured, the 2% ELM — the only margin component with a date and a worked source — was
+    unreachable outside the margin model's own unit tests. The assertion is corrected
+    rather than the code, per the rule that a test must not be updated to match wrong
+    behaviour; here it was the test that had been.
+    """
     result = _run(session, h1, store, window)
 
     entry_day, expiry_day = result.daily
     assert entry_day.open_positions == 2
     assert entry_day.margin.total > 0
+    # No leg expires on entry day, so no ELM — the component is date-driven, not constant.
+    assert entry_day.margin.expiry_day_elm_component == 0.0
+
+    # The book is empty at the close, and margin still reflects the day that was traded.
     assert expiry_day.open_positions == 0
-    assert expiry_day.margin.total == 0.0
-    assert result.peak_margin == entry_day.margin.total
+    assert expiry_day.margin.total > 0
+    assert expiry_day.margin.short_legs == 2
+    assert expiry_day.margin.expiry_day_elm_component > 0
+
+    # peak_margin is the return-on-capital denominator, so which session peaks matters.
+    assert result.peak_margin == max(entry_day.margin.total, expiry_day.margin.total)
     assert result.return_on_peak_margin is not None
+    assert all(record.unmargined_shorts == 0 for record in result.daily)
 
 
 def test_the_result_reports_its_unverified_inputs(
@@ -287,8 +309,14 @@ def test_the_result_reports_its_unverified_inputs(
     """A headline number computed on a guessed rate has to say so."""
     result = _run(session, h1, store, window)
 
-    assert "margin.simplified_approximation" in result.unverified_inputs
+    assert "margin.simplified_approximation:unverified" in result.unverified_inputs
     assert any(name.startswith("stt") for name in result.unverified_inputs)
+    # Every input carries its confidence tier, so "any UNVERIFIED input means this
+    # result is not evaluable" is a rule C6 can actually express against this field.
+    assert all(":" in name for name in result.unverified_inputs)
+    tiers = {name.rsplit(":", 1)[1] for name in result.unverified_inputs}
+    assert tiers <= {"corroborated", "unverified"}
+    assert "unverified" in tiers and "corroborated" in tiers
 
 
 # ------------------------------------------------------------------- reproducibility
@@ -400,3 +428,146 @@ def test_a_trial_context_is_what_the_entrypoint_wants(
 
     assert "net_pnl" in metrics
     assert session.count_trials(h1) == 1
+
+
+# ------------------------------------------------- leg-group atomicity and the decision view
+
+
+def _straddle_with_leg_volumes(root, ce_volume: float, pe_volume: float) -> None:
+    """Both sessions written with the two legs carrying deliberately different liquidity."""
+    legs = [
+        SyntheticContract(STRIKE, "CE", EXPIRY_DAY, PREMIUM, ce_volume, 6_500_000.0),
+        SyntheticContract(STRIKE, "PE", EXPIRY_DAY, PREMIUM, pe_volume, 6_500_000.0),
+    ]
+    write_synthetic_session(root, ENTRY_DAY, spot=23_000.0, contracts=legs)
+    write_synthetic_session(
+        root, EXPIRY_DAY, spot=23_000.0, contracts=legs, spot_by_minute=SETTLEMENT_RAMP
+    )
+
+
+def test_one_dead_leg_stops_the_whole_straddle_rather_than_leaving_a_naked_short(
+    session: ResearchSession, h1: HypothesisRecord, synthetic_store, window: DataWindow
+) -> None:
+    """The failure this exists to prevent: CE fillable, PE not, and a naked call held.
+
+    ``ShortAtmStraddle`` guards that both legs are *listed*, which is a different question
+    from whether both *fill*. Before leg groups, the engine executed intents independently
+    and this input opened a short call with no put against it — under a market-neutral
+    hypothesis's name, with no flag and no metric to condition on.
+    """
+    _straddle_with_leg_volumes(synthetic_store.root, ce_volume=1_300_000.0, pe_volume=0.0)
+    store = synthetic_store()
+
+    with session.trial(h1, data_window=window) as trial:
+        result = run_backtest(trial, store=store, strategy=ShortAtmStraddle())
+
+    entry_fills = [fill for fill in result.fills if fill.tag == "entry"]
+    assert len(entry_fills) == 2
+    assert all(fill.filled_lots == 0 for fill in entry_fills)
+
+    by_symbol = {fill.trading_symbol: fill for fill in entry_fills}
+    call = next(fill for symbol, fill in by_symbol.items() if symbol.endswith("CE"))
+    put = next(fill for symbol, fill in by_symbol.items() if symbol.endswith("PE"))
+
+    # The put failed on its own liquidity; the call failed only because the put did.
+    assert put.feasibility.verdict is Feasibility.NO_LIQUIDITY
+    assert put.feasibility.group_bound is False
+    assert call.feasibility.verdict is Feasibility.GROUP_INCOMPLETE
+    assert call.feasibility.group_bound is True
+
+    # Nothing was opened, so nothing was settled and no cost was paid.
+    assert result.settlements == ()
+    assert result.total_costs.total == 0.0
+    assert result.metrics()["fills_group_bound"] == 1
+    assert all(record.open_positions == 0 for record in result.daily)
+
+
+def test_legs_capped_differently_are_cut_to_one_size_so_the_structure_stays_balanced(
+    session: ResearchSession, h1: HypothesisRecord, synthetic_store, window: DataWindow
+) -> None:
+    """The subtler asymmetry: both legs fill, at different sizes, leaving an unbalanced short.
+
+    The volume cap is 1% of bar volume, so 1,300,000 traded units allow 200 lots of 65 and
+    650,000 allow 100. Asking for 200 used to give a 200-lot call against a 100-lot put —
+    a position that is 100 lots of straddle plus 100 lots of naked call, reported as a
+    straddle. Both legs now take the smaller size.
+    """
+    _straddle_with_leg_volumes(synthetic_store.root, ce_volume=1_300_000.0, pe_volume=650_000.0)
+    store = synthetic_store()
+
+    with session.trial(h1, data_window=window) as trial:
+        result = run_backtest(
+            trial, store=store, strategy=ShortAtmStraddle(lots=200), config=BacktestConfig()
+        )
+
+    entry_fills = [fill for fill in result.fills if fill.tag == "entry"]
+    assert {fill.filled_lots for fill in entry_fills} == {100}
+
+    call = next(fill for fill in entry_fills if fill.trading_symbol.endswith("CE"))
+    put = next(fill for fill in entry_fills if fill.trading_symbol.endswith("PE"))
+    # The put was bound by its own cap; the call was bound by the put.
+    assert put.feasibility.group_bound is False
+    assert call.feasibility.group_bound is True
+    assert call.feasibility.verdict is Feasibility.RESIZED
+    assert result.metrics()["fills_group_bound"] == 1
+
+    # Balanced: equal and opposite unit counts on the two legs.
+    assert call.filled_lots * call.lot_size == put.filled_lots * put.lot_size
+
+
+def test_the_strategy_cannot_see_a_bar_later_than_its_decision_minute(
+    session: ResearchSession, h1: HypothesisRecord, store, window: DataWindow
+) -> None:
+    """The classic backtest lie, made unrepresentable rather than merely not committed.
+
+    The shipped strategy does not look ahead. This asserts the engine does not *let* one:
+    the view handed to ``decide`` ends at the decision minute, so a future variant that
+    asks for a later bar gets ``None`` instead of tomorrow's answer today.
+    """
+    seen: list[tuple[dt.datetime, int, object]] = []
+
+    class Peeker:
+        """Reaches for a bar half an hour after its decision minute, and records what it got."""
+
+        name = "peeker"
+
+        def parameters(self):
+            return {}
+
+        def decide(self, *, session, minute, book):
+            later = minute + dt.timedelta(minutes=30)
+            symbol = next(iter(session.universe)).trading_symbol
+            seen.append(
+                (max(session.minutes()), len(session.minutes()), session.bar(symbol, later))
+            )
+            return ()
+
+    with session.trial(h1, data_window=window) as trial:
+        run_backtest(trial, store=store, strategy=Peeker())
+
+    assert seen
+    for last_minute, _count, peeked in seen:
+        assert peeked is None, "a bar after the decision minute was visible to the strategy"
+        assert last_minute.time() <= dt.time(9, 20)
+
+
+def test_the_settlement_methodology_reaches_the_unverified_inputs(
+    session: ResearchSession, h1: HypothesisRecord, store, window: DataWindow
+) -> None:
+    """The field C6 gates on has to see the settlement rule, not only the cost schedules.
+
+    The engine used to collect ``unverified_inputs`` from ``CostBreakdown`` alone, so the
+    settlement methodology — CORROBORATED, and an *unweighted* mean of minute closes where
+    the exchange's rule is volume-weighted — never appeared, despite shaping every
+    held-to-expiry payoff.
+    """
+    result = _run(session, h1, store, window)
+
+    assert result.settlements
+    settlement_inputs = [
+        name for name in result.unverified_inputs if name.startswith("settlement.")
+    ]
+    assert any("mean_of_underlying_minute_close_over_window" in name for name in settlement_inputs)
+    # Carries its tier, so an UNVERIFIED input is distinguishable from a CORROBORATED one.
+    assert all(":" in name for name in settlement_inputs)
+    assert any(name.endswith(":corroborated") for name in settlement_inputs)

@@ -83,6 +83,11 @@ class ShortAtmStraddle:
         if strike is None:
             return ()
 
+        # Both legs share one group, so the engine fills them together or not at all. The
+        # listing guard below is necessary and not sufficient: it establishes that both
+        # legs *exist*, while the group establishes that both legs *traded*. A straddle
+        # whose PE came back NO_LIQUIDITY used to leave a naked short call.
+        group = f"straddle:{expiry.isoformat()}:{strike:g}"
         intents: list[TradeIntent] = []
         for option_type in (OptionType.CALL, OptionType.PUT):
             contract = session.universe.get(expiry, strike, option_type)
@@ -97,6 +102,7 @@ class ShortAtmStraddle:
                     side=Side.SELL,
                     lots=self.lots,
                     tag="entry",
+                    leg_group=group,
                 )
             )
         return tuple(intents)

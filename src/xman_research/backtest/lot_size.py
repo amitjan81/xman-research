@@ -304,12 +304,8 @@ def audit_lot_size(
     volume = _positive(options, "volume")
     open_interest = _positive(options, "oi")
 
-    declared_volume_share = max(
-        (_share(volume, lot) for lot in declared), default=0.0
-    )
-    declared_oi_share = max(
-        (_share(open_interest, lot) for lot in declared), default=0.0
-    )
+    declared_volume_share = max((_share(volume, lot) for lot in declared), default=0.0)
+    declared_oi_share = max((_share(open_interest, lot) for lot in declared), default=0.0)
 
     # **Ties break to the largest candidate, and that is not a detail.** Divisibility can
     # only ever establish a *lower bound* on the lot size: every multiple of 75 is also a
@@ -330,11 +326,11 @@ def audit_lot_size(
         session_date=session_date,
         underlying=underlying,
         declared_lot_sizes=declared,
-        volume_rows=int(len(volume)),
+        volume_rows=len(volume),
         declared_volume_share=declared_volume_share,
         best_alternative=best_alternative,
         best_alternative_share=best_alternative_share,
-        open_interest_rows=int(len(open_interest)),
+        open_interest_rows=len(open_interest),
         declared_open_interest_share=declared_oi_share,
         non_conforming_symbols=(),
     )
@@ -392,9 +388,7 @@ def audit_sessions(
 ) -> Mapping[str, Any]:
     """Summarise a run's per-session audits for the result's provenance record."""
     contradicted = [audit for audit in audits if audit.contradicts_declared]
-    non_conforming = sorted(
-        {symbol for audit in audits for symbol in audit.non_conforming_symbols}
-    )
+    non_conforming = sorted({symbol for audit in audits for symbol in audit.non_conforming_symbols})
     return {
         "sessions_audited": len(audits),
         "sessions_contradicting_declared_lot_size": [

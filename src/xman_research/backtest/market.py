@@ -298,6 +298,31 @@ class SessionView:
         bar = self.bar(self._underlying, minute)
         return bar.close if bar is not None else None
 
+    def through(self, minute: dt.datetime) -> SessionView:
+        """This session as it was knowable at ``minute`` — no bar after it exists.
+
+        **The strategy is handed one of these, never the whole session.** A full-day view
+        contains every bar to 15:29, including the 15:00-15:30 settlement window, and one
+        ``session.bar(symbol, later_minute)`` inside a ``decide()`` is a backtest that
+        trades on prices it could not have seen. That error is invisible in every number a
+        run produces — the equity curve looks better and nothing else changes — so it
+        cannot be caught downstream and has to be made unrepresentable here.
+
+        The shipped :class:`~xman_research.backtest.strategies.ShortAtmStraddle` does not
+        do this. The point is the seam: :class:`~xman_research.backtest.engine.Strategy`
+        is a Protocol, every future variant plugs into it, and the guarantee should be a
+        property of the engine rather than of each author's discipline.
+
+        Costs one dictionary rebuild per session (~16,000 rows, a few milliseconds), paid
+        once per session rather than per lookup.
+        """
+        return SessionView(
+            self._session_date,
+            self._underlying,
+            {key: bar for key, bar in self._bars.items() if key[1] <= minute},
+            self._universe,
+        )
+
     def minute_at_or_after(self, time_of_day: dt.time) -> dt.datetime | None:
         """The first minute at or after ``time_of_day`` IST.
 

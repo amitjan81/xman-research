@@ -49,6 +49,7 @@ from xman_research._canonical import json_safe
 from xman_research.backtest.costs import (
     ZERO_COST,
     ChargeableTrade,
+    Confidence,
     CostBreakdown,
     Side,
     StatutoryCostStack,
@@ -68,7 +69,12 @@ from xman_research.backtest.lot_size import (
     audit_lot_size,
     audit_sessions,
 )
-from xman_research.backtest.margin import MarginRequirement, ShortLeg, SimplifiedMarginModel
+from xman_research.backtest.margin import (
+    MARGIN_CONFIDENCE,
+    MarginRequirement,
+    ShortLeg,
+    SimplifiedMarginModel,
+)
 from xman_research.backtest.market import Contract, SessionView
 from xman_research.backtest.settlement import (
     SETTLEMENT_RULES,
@@ -138,6 +144,27 @@ class TradeIntent:
     side: Side
     lots: int
     tag: str = "entry"
+    leg_group: str | None = None
+    """Legs sharing a non-``None`` value fill together at one size, or not at all.
+
+    **Without this, a multi-leg structure has no atomicity and the engine cannot notice.**
+    Intents were executed independently: a straddle whose CE was fillable and whose PE
+    came back ``NO_LIQUIDITY`` left a *naked short call* held to expiry, and a straddle
+    whose two legs hit different participation caps left an unbalanced one — both under a
+    market-neutral hypothesis's name, both with no flag, no metric and nothing C6 could
+    condition on. The strategy cannot prevent it either: ``ShortAtmStraddle`` guards that
+    both legs are *listed*, which is a different question from whether both *fill*.
+
+    The rule the engine enforces is: if any leg in the group is unfillable, none of them
+    trade (:attr:`~xman_research.backtest.execution.Feasibility.GROUP_INCOMPLETE`); and
+    if the caps grant different sizes across the group, all legs take the smallest, so the
+    structure shrinks but stays balanced. Shrinking is preferred to refusing because a
+    smaller straddle is still the hypothesis, whereas half a straddle is not. Every leg
+    the group altered is marked
+    :attr:`~xman_research.backtest.execution.FeasibilityVerdict.group_bound`.
+
+    ``None`` means the intent stands alone and is executed exactly as before.
+    """
 
     def __post_init__(self) -> None:
         if self.lots <= 0:
@@ -251,6 +278,16 @@ class SettlementRecord:
     costs: CostBreakdown
     feasibility: FeasibilityVerdict
     rule_effective_from: dt.date
+    rule_method: str = ""
+    rule_confidence: str = ""
+    """The settlement rule's own confidence tier, carried so it can reach the result.
+
+    It could not before: the engine collected ``unverified_inputs`` from
+    :class:`CostBreakdown` alone, so the settlement methodology — CORROBORATED, and
+    computing an *unweighted* mean of minute closes where the exchange's rule is
+    volume-weighted — was invisible to the one field C6 reads to decide whether a result
+    is evaluable. It shapes every held-to-expiry payoff, which is all of them for the
+    strategy shipped here."""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -263,6 +300,8 @@ class SettlementRecord:
             "costs": self.costs.as_dict(),
             "feasibility": self.feasibility.as_dict(),
             "rule_effective_from": self.rule_effective_from.isoformat(),
+            "rule_method": self.rule_method,
+            "rule_confidence": self.rule_confidence,
         }
 
 
@@ -282,6 +321,15 @@ class DailyRecord:
     A non-zero value means that session's equity is partly an estimate. It is counted
     rather than silently absorbed, so C6 can refuse to compute a return series over a
     stretch where the marks went stale."""
+    unmargined_shorts: int = 0
+    """Short legs charged no margin because the underlying printed no bar this session.
+
+    The same failure class as :attr:`stale_marks` and it was silent: margin is a
+    percentage of *underlying* notional, so with no spot the leg contributes nothing and
+    the session's margin simply reads lower — which flatters
+    :attr:`BacktestResult.return_on_peak_margin`, whose denominator this is. Counted for
+    the same reason ``stale_marks`` is: a zero that means "not measured" must not be
+    readable as a zero that means "none required"."""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -292,6 +340,7 @@ class DailyRecord:
             "margin": self.margin.as_dict(),
             "open_positions": self.open_positions,
             "stale_marks": self.stale_marks,
+            "unmargined_shorts": self.unmargined_shorts,
         }
 
 
@@ -326,6 +375,11 @@ class BacktestConfig:
             "fill_assumptions": self.fill_model.assumptions,
             "margin_assumptions": self.margin_model.assumptions,
             "settlement_rules": [rule.effective_from.isoformat() for rule in self.settlement_rules],
+            # Every rate the stack could apply, with its source and confidence. Without
+            # this a stored result could not say which rates produced it — the method
+            # existed, was JSON-safe and deterministic, and nothing called it, so the
+            # provenance it was written for never reached a single run.
+            "cost_schedules": [dict(entry) for entry in self.cost_stack.schedule_provenance()],
             "gap_reason": self.gap_reason,
         }
 
@@ -412,6 +466,14 @@ class BacktestResult:
                 counts[str(Feasibility.NO_BAR)]
                 + counts[str(Feasibility.NO_LIQUIDITY)]
                 + counts[str(Feasibility.CAPPED_TO_ZERO)]
+                + counts[str(Feasibility.GROUP_INCOMPLETE)]
+            ),
+            # Legs whose outcome was decided by a sibling rather than by their own
+            # liquidity. Non-zero means the market let part of a structure through and not
+            # the rest, which changes which hypothesis the run actually tested.
+            "fills_group_bound": sum(1 for fill in self.fills if fill.feasibility.group_bound),
+            "sessions_with_unmargined_shorts": sum(
+                1 for record in self.daily if record.unmargined_shorts
             ),
             "settlements": len(self.settlements),
             "net_pnl": self.net_pnl,
@@ -455,6 +517,14 @@ class BacktestResult:
         the reproducibility criterion impossible to satisfy rather than hard to violate.
         ``resolved_at`` is excluded from the data provenance for the same reason, and is
         the only field so excluded.
+
+        **It covers input *content* only via the manifest's sha256s.** The digests reach
+        this hash through :attr:`data_provenance`, so when the manifest is available two
+        runs over different bytes cannot collide. When it is not — ``manifest_available:
+        False`` — the provenance names files and dates but nothing derived from their
+        contents, and two runs over materially different bytes at the same paths would
+        fingerprint identically. The hash is then a statement about the run, not about the
+        data underneath it.
         """
         payload = self.as_dict()
         payload.pop("trial_id")
@@ -512,34 +582,48 @@ def run_backtest(
             raise LotSizeContradictionError(audit.failure_message(), audit)
         audits.append(audit)
         if audit.non_conforming_symbols:
-            unverified.add("corpus.open_interest_not_divisible_by_lot_size")
+            unverified.add(
+                f"corpus.open_interest_not_divisible_by_lot_size:{Confidence.UNVERIFIED}"
+            )
         session = SessionView.from_frame(ref.session_date, config.underlying, frame, refdata)
 
         minute = session.minute_at_or_after(config.decision_time)
         if minute is not None:
+            # The strategy sees the session truncated at its decision minute, never the
+            # whole day. See SessionView.through for why this is the engine's job.
             intents = strategy.decide(
-                session=session, minute=minute, book=BookView(positions, cash)
+                session=session.through(minute), minute=minute, book=BookView(positions, cash)
             )
-            for intent in intents:
-                record, cash = _execute(intent, session, minute, config, cash, positions)
+            session_fills, cash = _execute_all(intents, session, minute, config, cash, positions)
+            for record in session_fills:
                 fills.append(record)
                 total_costs = total_costs + record.costs
                 unverified.update(record.costs.unverified_components)
+
+        # **Margin is measured before settlement, not after.** _settle_expiring removes
+        # every position expiring today, and a margin computed on what remains can never
+        # see an expiry-day leg — which made the 2% expiry-day ELM, the one margin
+        # component with a date and a worked source, structurally unreachable outside its
+        # own unit tests. It also understated the truth on its own terms: a short straddle
+        # held 09:20 to 15:30 on expiry day had the exchange demanding SPAN + exposure +
+        # ELM all day, while the book recorded zero. peak_margin is the ROC denominator.
+        margin, unmargined = _margin_for_session(session, config, positions)
 
         session_settlements, cash = _settle_expiring(session, config, cash, positions)
         for record in session_settlements:
             settlements.append(record)
             total_costs = total_costs + record.costs
             unverified.update(record.costs.unverified_components)
+            unverified.add(_settlement_rule_input(record))
 
-        daily.append(_close_of_session(session, config, cash, positions))
+        daily.append(_close_of_session(session, config, cash, positions, margin, unmargined))
 
     # The margin approximation is never sourced well enough to be treated as verified, so
     # every run carries the flag whether or not any short leg was ever held. A run with no
     # margin exposure has a trivially correct margin number and the flag is harmless; a run
     # that quietly dropped the flag when the book happened to be flat would be the kind of
     # conditional honesty that is worse than none.
-    unverified.add("margin.simplified_approximation")
+    unverified.add(f"margin.simplified_approximation:{MARGIN_CONFIDENCE}")
 
     result = BacktestResult(
         trial_id=trial.trial_id,
@@ -586,15 +670,128 @@ def _consume_token(trial: TrialContext) -> None:
     _CONSUMED_TRIAL_IDS.add(trial.trial_id)
 
 
-def _execute(
-    intent: TradeIntent,
+@dataclass(frozen=True, slots=True)
+class _Proposal:
+    """One intent, priced and judged, before its leg group has had its say."""
+
+    intent: TradeIntent
+    contract: Contract
+    bar: Any
+    verdict: FeasibilityVerdict
+
+
+def _execute_all(
+    intents: Sequence[TradeIntent],
+    session: SessionView,
+    minute: dt.datetime,
+    config: BacktestConfig,
+    cash: float,
+    positions: dict[str, Position],
+) -> tuple[list[FillRecord], float]:
+    """Judge every intent, then let each leg group decide as one.
+
+    Two passes, and the order matters: nothing may be applied to the book until every leg
+    of its group has a verdict, because the group's answer depends on all of them. Doing
+    it in one pass is what allowed a half-filled straddle.
+    """
+    records: list[FillRecord] = []
+    for group in _group_intents(intents):
+        proposals = [_propose(intent, session, minute, config) for intent in group]
+        grant = _group_grant(proposals)
+        for proposal in proposals:
+            record, cash = _apply(proposal, grant, session, minute, config, cash, positions)
+            records.append(record)
+    return records, cash
+
+
+def _group_intents(intents: Sequence[TradeIntent]) -> list[list[TradeIntent]]:
+    """Intents bucketed by leg group, in first-appearance order.
+
+    An intent with no ``leg_group`` becomes its own single-member group, so the atomicity
+    rule below reduces to exactly the previous behaviour for it rather than to a special
+    case that has to be maintained separately.
+    """
+    groups: dict[Any, list[TradeIntent]] = {}
+    for index, intent in enumerate(intents):
+        key = intent.leg_group if intent.leg_group is not None else ("", index)
+        groups.setdefault(key, []).append(intent)
+    return list(groups.values())
+
+
+def _group_grant(proposals: Sequence[_Proposal]) -> int:
+    """The one size the whole group trades at: zero, or the smallest any leg was granted."""
+    if any(not proposal.verdict.is_fillable for proposal in proposals):
+        return 0
+    return min(proposal.verdict.granted_lots for proposal in proposals)
+
+
+def _apply(
+    proposal: _Proposal,
+    grant: int,
     session: SessionView,
     minute: dt.datetime,
     config: BacktestConfig,
     cash: float,
     positions: dict[str, Position],
 ) -> tuple[FillRecord, float]:
-    """Ask the market whether the intent was possible, then apply it if it was."""
+    """Book one leg at the size its group settled on."""
+    intent, contract, bar = proposal.intent, proposal.contract, proposal.bar
+    verdict = proposal.verdict
+    if grant < verdict.granted_lots:
+        blocked = intent.leg_group or ""
+        if grant <= 0:
+            verdict = replace(
+                verdict,
+                verdict=Feasibility.GROUP_INCOMPLETE,
+                granted_lots=0,
+                group_bound=True,
+                reason=(
+                    f"this leg was fillable, but leg group '{blocked}' had a leg that was "
+                    "not, so none of them traded — filling this one alone would leave an "
+                    "unbalanced or naked position under the structure's name"
+                ),
+            )
+        else:
+            verdict = replace(
+                verdict,
+                verdict=Feasibility.RESIZED,
+                granted_lots=grant,
+                group_bound=True,
+                reason=(
+                    f"cut from {verdict.granted_lots} lots to {grant} to match the "
+                    f"smallest size any leg of group '{blocked}' was granted, so the "
+                    "structure stays balanced"
+                ),
+            )
+
+    if not verdict.is_fillable or bar is None:
+        return (
+            FillRecord(
+                session_date=session.session_date,
+                minute=minute,
+                trading_symbol=intent.trading_symbol,
+                side=intent.side,
+                tag=intent.tag,
+                requested_lots=intent.lots,
+                filled_lots=0,
+                lot_size=contract.lot_size,
+                price=0.0,
+                gross_value=0.0,
+                costs=ZERO_COST,
+                feasibility=verdict,
+            ),
+            cash,
+        )
+    return _book(intent, contract, bar, verdict, session, minute, config, cash, positions)
+
+
+def _propose(
+    intent: TradeIntent,
+    session: SessionView,
+    minute: dt.datetime,
+    config: BacktestConfig,
+) -> _Proposal:
+    """Ask the market whether the intent was possible. Changes nothing."""
     contract = session.universe.by_symbol(intent.trading_symbol)
     if contract is None:
         raise KeyError(
@@ -624,25 +821,21 @@ def _execute(
                 "rather than a market fact, and the two must not be read the same way"
             ),
         )
-    if not verdict.is_fillable or bar is None:
-        return (
-            FillRecord(
-                session_date=session.session_date,
-                minute=minute,
-                trading_symbol=intent.trading_symbol,
-                side=intent.side,
-                tag=intent.tag,
-                requested_lots=intent.lots,
-                filled_lots=0,
-                lot_size=contract.lot_size,
-                price=0.0,
-                gross_value=0.0,
-                costs=ZERO_COST,
-                feasibility=verdict,
-            ),
-            cash,
-        )
+    return _Proposal(intent=intent, contract=contract, bar=bar, verdict=verdict)
 
+
+def _book(
+    intent: TradeIntent,
+    contract: Contract,
+    bar: Any,
+    verdict: FeasibilityVerdict,
+    session: SessionView,
+    minute: dt.datetime,
+    config: BacktestConfig,
+    cash: float,
+    positions: dict[str, Position],
+) -> tuple[FillRecord, float]:
+    """Apply a granted fill to cash and the book."""
     lots = verdict.granted_lots
     units = lots * contract.lot_size
     price = config.fill_model.fill_price(bar=bar, side=intent.side, contract=contract, lots=lots)
@@ -750,9 +943,53 @@ def _settle_expiring(
                     ),
                 ),
                 rule_effective_from=settled.rule.effective_from,
+                rule_method=settled.rule.method,
+                rule_confidence=str(settled.rule.confidence),
             )
         )
     return records, cash
+
+
+def _settlement_rule_input(record: SettlementRecord) -> str:
+    """The settlement methodology as a tiered ``unverified_inputs`` entry."""
+    return f"settlement.{record.rule_method}:{record.rule_confidence}"
+
+
+def _margin_for_session(
+    session: SessionView,
+    config: BacktestConfig,
+    positions: Mapping[str, Position],
+) -> tuple[MarginRequirement, int]:
+    """Margin on the book as it stood *during* the session, and the legs it could not price.
+
+    Called before :func:`_settle_expiring`, so a leg expiring today is still here and its
+    2% ELM add-on is charged — the whole reason this is a separate function rather than a
+    line inside :func:`_close_of_session`.
+
+    The underlying's spot is taken from the last bar the **index itself** printed, not
+    from whatever instrument happened to print in the session's final minute. A short leg
+    held on a session where the index printed nothing at all cannot be margined; it is
+    counted in the second return value rather than contributing zero.
+    """
+    underlying_bars = session.underlying_bars()
+    spot = underlying_bars[-1].close if underlying_bars else None
+    short_legs: list[ShortLeg] = []
+    unmargined = 0
+    for symbol in sorted(positions):
+        position = positions[symbol]
+        if not position.is_short:
+            continue
+        if spot is None:
+            unmargined += 1
+            continue
+        short_legs.append(
+            ShortLeg(
+                quantity_units=abs(position.units),
+                underlying_price=spot,
+                expires_today=position.contract.expiry == session.session_date,
+            )
+        )
+    return config.margin_model.requirement(short_legs), unmargined
 
 
 def _close_of_session(
@@ -760,8 +997,15 @@ def _close_of_session(
     config: BacktestConfig,
     cash: float,
     positions: dict[str, Position],
+    margin: MarginRequirement,
+    unmargined_shorts: int,
 ) -> DailyRecord:
-    """Mark the book at the session's last observed price and charge margin on it.
+    """Mark the surviving book at the session's last observed price.
+
+    ``margin`` is computed by :func:`_margin_for_session` **before** settlement and passed
+    in, because by the time this runs every position expiring today has already been
+    removed. Marking is the other way round — the marks that matter are the ones on
+    positions still held — so the two are measured at different moments on purpose.
 
     A position whose contract printed no bar at all this session is carried at its last
     observed mark and counted in :attr:`DailyRecord.stale_marks`. Marking it to zero
@@ -769,11 +1013,8 @@ def _close_of_session(
     book its entire unrealised premium as profit, and every position this package's own
     strategy opens is short.
     """
-    last_minute = session.minutes()[-1] if session.minutes() else None
     open_value = 0.0
     stale = 0
-    short_legs: list[ShortLeg] = []
-    spot = session.spot_at(last_minute) if last_minute is not None else None
 
     for symbol in sorted(positions):
         position = positions[symbol]
@@ -789,21 +1030,14 @@ def _close_of_session(
         else:
             positions[symbol] = replace(position, last_mark=mark)
         open_value += mark * position.units
-        if position.is_short and spot is not None:
-            short_legs.append(
-                ShortLeg(
-                    quantity_units=abs(position.units),
-                    underlying_price=spot,
-                    expires_today=position.contract.expiry == session.session_date,
-                )
-            )
 
     return DailyRecord(
         session_date=session.session_date,
         cash=cash,
         open_position_value=open_value,
         equity=cash + open_value,
-        margin=config.margin_model.requirement(short_legs),
+        margin=margin,
         open_positions=len(positions),
         stale_marks=stale,
+        unmargined_shorts=unmargined_shorts,
     )

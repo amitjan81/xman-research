@@ -63,7 +63,10 @@ class Feasibility(StrEnum):
     ``NO_LIQUIDITY`` — a bar exists but nothing traded in it. ``CAPPED_TO_ZERO`` — the
     caps allowed less than one lot, which is a refusal rather than a resize.
     ``SETTLED`` — not a fill at all: the exchange cash-settled the position at expiry,
-    which no participant can fail to receive.
+    which no participant can fail to receive. ``GROUP_INCOMPLETE`` — this leg was
+    fillable on its own and did not trade because a sibling leg in its
+    :attr:`~xman_research.backtest.engine.TradeIntent.leg_group` was not; see that field
+    for why a multi-leg intent is all-or-none.
     """
 
     FILLABLE = "fillable"
@@ -71,6 +74,7 @@ class Feasibility(StrEnum):
     NO_BAR = "no_bar"
     NO_LIQUIDITY = "no_liquidity"
     CAPPED_TO_ZERO = "capped_to_zero"
+    GROUP_INCOMPLETE = "group_incomplete"
     SETTLED = "settled"
 
 
@@ -118,6 +122,13 @@ class FeasibilityVerdict:
     observed_volume_units: float
     observed_open_interest_units: float
     reason: str
+    group_bound: bool = False
+    """Whether a sibling leg, rather than this leg's own liquidity, decided the outcome.
+
+    Set when leg-group atomicity refused this leg or cut it below what its own caps
+    allowed. Counted on the result so the run can say how often the market let one leg of
+    a structure through and not the other — a fact that changes which hypothesis was
+    actually tested, and which nothing recorded before."""
 
     @property
     def is_fillable(self) -> bool:
@@ -136,6 +147,7 @@ class FeasibilityVerdict:
             "observed_volume_units": self.observed_volume_units,
             "observed_open_interest_units": self.observed_open_interest_units,
             "reason": self.reason,
+            "group_bound": self.group_bound,
         }
 
 
@@ -278,9 +290,12 @@ class BarCloseFillModel:
     def assumptions(self) -> str:
         return (
             "fills at the minute bar's close with "
-            f"{self.slippage_bps} bps of adverse slippage on premium; no quote data "
-            "exists in this corpus, so no spread, depth or intra-minute sequence is "
-            "modelled and none of this is calibrated against realised fills"
+            f"{self.slippage_bps} bps of adverse slippage on premium; the decision is "
+            "made ON the close of the same bar it fills AT, so the decision inputs at "
+            "minute t include the price the trade receives — the standard backtest "
+            "convention, and a half-bar of optimism that no cost figure here offsets; no "
+            "quote data exists in this corpus, so no spread, depth or intra-minute "
+            "sequence is modelled and none of this is calibrated against realised fills"
         )
 
     def fill_price(self, *, bar: Bar, side: Side, contract: Contract, lots: int) -> float:
