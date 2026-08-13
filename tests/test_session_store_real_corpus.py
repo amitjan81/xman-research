@@ -32,16 +32,22 @@ NIFTY = CORPUS_ROOT / "NIFTY"
 
 # The corpus's own boundaries, as they stand.
 FIRST_SESSION = dt.date(2025, 12, 16)
-LAST_SESSION = dt.date(2026, 6, 12)
-TODAY = dt.date(2026, 8, 12)
+LAST_SESSION = dt.date(2026, 8, 12)
+TODAY = dt.date(2026, 9, 30)
 
-# Counts, re-derived rather than remembered: 119 parquet files and 119 producer manifest
-# rows between FIRST_SESSION and LAST_SESSION, against 119 calendar sessions once
-# NSE_ERRATA removes 2026-01-15 (pandas_market_calendars 5.4.0 offers 120). The dead
-# capture window from 2026-06-15 to TODAY is 42 further sessions, giving 161 expected
-# across the whole span.
-CAPTURED_SESSIONS = 119
-DEAD_WINDOW_SESSIONS = 42
+# Counts, re-derived rather than remembered: 161 parquet files and 161 producer manifest
+# rows between FIRST_SESSION and LAST_SESSION, against 161 calendar sessions once
+# NSE_ERRATA removes 2026-01-15. The dead capture window from 2026-08-13 to TODAY is 34
+# further sessions, giving 195 expected across the whole span.
+#
+# **These moved once already, and that is the point of re-deriving them.** The corpus
+# previously stopped at 2026-06-12 and the numbers here were 119 and 42. A vendor backfill
+# then filled 2026-06-15..2026-08-12, and every assertion pinned to the old boundary failed
+# — correctly. The tests were measuring a real property of the corpus, and the corpus
+# changed; the outage boundary moved rather than disappeared, so the shape of each test
+# below is unchanged and only the dates and counts are restated.
+CAPTURED_SESSIONS = 161
+DEAD_WINDOW_SESSIONS = 34
 
 pytestmark = pytest.mark.skipif(not NIFTY.is_dir(), reason=f"real corpus not present at {NIFTY}")
 
@@ -50,7 +56,7 @@ pytestmark = pytest.mark.skipif(not NIFTY.is_dir(), reason=f"real corpus not pre
 def store() -> SessionStore:
     return SessionStore(
         CORPUS_ROOT,
-        clock=ManualClock(datetime(2026, 8, 12, 9, 15, tzinfo=UTC)),
+        clock=ManualClock(datetime(2026, 9, 30, 9, 15, tzinfo=UTC)),
         manifest_path=MANIFEST_PATH,
     )
 
@@ -58,16 +64,16 @@ def store() -> SessionStore:
 def test_the_dead_capture_window_is_reported_as_missing(store: SessionStore) -> None:
     """The headline criterion, against the live failure it was written for.
 
-    Capture died on 2026-06-14. A range that runs from inside the corpus to today must
+    Capture stops after 2026-08-12. A range that runs from inside the corpus to today must
     say so — loudly, with the count — rather than hand back the sessions it happens to
-    have and let a Sharpe ratio be computed over a two-month hole.
+    have and let a Sharpe ratio be computed over a seven-week hole.
     """
-    resolution = store.resolve("NIFTY", dt.date(2026, 6, 1), TODAY)
+    resolution = store.resolve("NIFTY", dt.date(2026, 8, 1), TODAY)
 
     assert not resolution.is_complete
     assert resolution.missing_count == DEAD_WINDOW_SESSIONS
     assert resolution.missing_runs() == (resolution.missing,), "one unbroken outage"
-    assert min(resolution.missing) == dt.date(2026, 6, 15)
+    assert min(resolution.missing) == dt.date(2026, 8, 13)
     assert max(resolution.missing) == TODAY
     assert "MISSING" in resolution.summary()
 
@@ -75,7 +81,7 @@ def test_the_dead_capture_window_is_reported_as_missing(store: SessionStore) -> 
         resolution.sessions()
 
     # The sessions are reachable, but only deliberately and with a reason on the record.
-    accepted = resolution.accept_gaps("known vendor outage from 2026-06-14; see ops log")
+    accepted = resolution.accept_gaps("capture stops after 2026-08-12; see ops log")
     assert all(ref.session_date <= LAST_SESSION for ref in accepted)
 
 
@@ -200,17 +206,17 @@ def test_weekends_and_real_holidays_are_never_counted_as_capture_gaps(
 def test_the_whole_span_reports_the_capture_outage_and_nothing_else(
     store: SessionStore,
 ) -> None:
-    """The headline numbers, in one place: 119 found of 161 expected, 42 missing in 1 run.
+    """The headline numbers, in one place: 161 found of 195 expected, 34 missing in 1 run.
 
     Everything between the first captured session and today, which is the range a
     researcher asking "what do we have?" would actually type.
     """
     resolution = store.resolve("NIFTY", FIRST_SESSION, TODAY)
 
-    assert resolution.expected_count == CAPTURED_SESSIONS + DEAD_WINDOW_SESSIONS == 161
+    assert resolution.expected_count == CAPTURED_SESSIONS + DEAD_WINDOW_SESSIONS == 195
     assert resolution.found_count == CAPTURED_SESSIONS
     assert resolution.missing_count == DEAD_WINDOW_SESSIONS
     assert resolution.unexpected == ()
     assert resolution.missing_runs() == (resolution.missing,)
     assert "in 1 run:" in resolution.summary()
-    assert "2026-06-15..2026-08-12 (42 days)" in resolution.summary()
+    assert "2026-08-13..2026-09-30 (34 days)" in resolution.summary()

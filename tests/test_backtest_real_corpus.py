@@ -148,10 +148,12 @@ def test_a_holey_window_refuses_without_a_reason(store: SessionStore) -> None:
     the entire premise, and the old name said the opposite of what the test sets up.
 
     Uses a window that certainly has holes — it runs past the end of capture, which is the
-    live case: the vendor subscription lapsed on 2026-06-14 and every session after
-    2026-06-12 is permanently absent.
+    live case: every session after 2026-08-12 is absent. The window moved once already,
+    when a vendor backfill filled 2026-06-15..2026-08-12 and made the previous choice
+    (2026-06-01..2026-07-31) complete, which turned this test green for the wrong reason
+    and then red for the right one.
     """
-    log_window = DataWindow(dt.date(2026, 6, 1), dt.date(2026, 7, 31))
+    log_window = DataWindow(dt.date(2026, 8, 1), dt.date(2026, 9, 30))
     resolution = store.resolve(UNDERLYING, log_window.start, log_window.end)
 
     assert not resolution.is_complete
@@ -228,7 +230,7 @@ DECEMBER_LOT_75_SESSIONS = (
 )
 
 CAPTURE_START = dt.date(2025, 12, 16)
-CAPTURE_END = dt.date(2026, 6, 12)
+CAPTURE_END = dt.date(2026, 8, 12)
 
 
 @pytest.fixture(scope="module")
@@ -262,7 +264,7 @@ def test_volume_is_in_units_not_contracts_on_every_session(
     it is the stronger claim, that the lot size is the one the refdata *declares*, that
     fails, and it fails on ten sessions the old test never looked at.
     """
-    assert len(corpus_audits) == 119
+    assert len(corpus_audits) == 161
     for audit in corpus_audits:
         supported = max(audit.declared_volume_share, audit.best_alternative_share)
         assert supported >= 0.99, (

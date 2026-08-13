@@ -1,0 +1,399 @@
+# H26 decision gate — the thresholds, written down BEFORE the run.
+#
+# Committed in its own commit, ahead of any commit carrying a result, for the reason
+# research/h1/gate.toml gives: a `recorded_at` inside a file is a string the author typed,
+# and git history is what makes a pre-registration checkable.
+#
+# Every threshold below carries its derivation. H1's bars are NOT inherited: two inputs
+# moved (the family trial count, and the holdout's size), and a number copied across that
+# change would be a preference wearing a pre-registration's clothes.
+#
+# =======================================================================================
+# THE SAMPLE
+#
+# Corpus: 2025-12-31 .. 2026-08-12, 151 NIFTY sessions, complete, zero interior gaps.
+#   * Before 2025-12-31: refused by C5's lot-size guard. NIFTY traded at lot 75 through
+#     2025-12-30 while every refdata bundle declares 65. The refusal is correct.
+#   * 2026-06-13 .. 2026-08-12 is a vendor BACKFILL of what was previously a capture
+#     outage. It is new data, and where it goes is decided in `holdout_first_date` below.
+#
+# In-sample: 2025-12-31 .. 2026-04-30, 80 sessions, 79 return observations.
+# Holdout:   2026-05-01 .. 2026-08-12, 71 sessions, SEALED.
+#
+# THE GAP-EVENT CENSUS, which is the real sample size for this hypothesis. The unit of
+# evidence is not the session, it is the overnight transition the candidate holds:
+#
+#   in-sample observable gaps: 45      (30 one-day, 2 two-day, 12 weekend, 1 holiday-extended)
+#   of which multi-day:        15
+#   holdout observable gaps:   40      (25 one-day, 1 two-day, 13 weekend, 1 holiday-extended)
+#
+# THE OBSERVABLE COUNT IS FAR BELOW THE CALENDAR COUNT, and the two must never be confused.
+# In-sample there are 79 session transitions; only 45 of them can be traded. The funnel,
+# stated so nobody has to reconstruct it:
+#
+#   79 session transitions in-sample
+#   -> 63 sessions whose front expiry is after the session date   (17 expiry sessions out)
+#   -> 50 sessions surviving the >=2-calendar-day entry guard     (13 expiry-eve out)
+#   -> 45 observable gaps  (4 residual holiday cases where the next session IS the expiry
+#                           session, plus 1 dangling final session whose entry never closes)
+#
+# Both boundaries of the weekly expiry cycle are dark, for two DIFFERENT reasons. No entry
+# ON expiry day: the contract cash-settles that evening. No entry the session BEFORE it:
+# the expiring contract is DROPPED from the instrument master on its expiry date, so the
+# buy-back cannot be expressed at all. With Tuesday expiries this removes every Monday and
+# every Tuesday entry — the surviving entry weekdays are Wednesday, Thursday and Friday
+# only. All 12 in-sample weekend gaps survive, which is what matters most for the wedge.
+#
+# This is a CAPTURE/REFDATA limitation (front weekly expiry only, spec 3 C1), not a market
+# fact. Nothing here is evidence about post-expiry or pre-expiry overnights.
+#
+# This census was computed from the trading calendar, the instrument master and the
+# question "did this contract print a bar at this minute" — date arithmetic and bar
+# PRESENCE. No price, return or P&L was read from any session, in-sample or holdout, before
+# this file was committed. That distinction is H1's ("counting the days in an envelope is
+# not opening it") extended one step, and it is stated rather than left to be discovered.
+# =======================================================================================
+
+hypothesis_id = "h_cacfc556d38a2bda25efef59eb5544cf"
+recorded_at = 2026-08-13T00:00:00Z
+
+amendment_justification = """
+H26 is registered as an AMENDMENT of H1 (h_817b33ff6b9f68e288161f5990739744), so the
+deflated Sharpe deflates against a family trial count that includes H1's trial.
+
+THE ARGUMENT THAT WAS REJECTED, recorded because it is the intuitive one and it is wrong.
+An earlier draft said H26's returns are an exact PARTITION of H1's — close-to-open plus
+open-to-close is the whole session — so H26 merely re-slices a stream H1 already tested.
+That is false. H1 entered once per expiry cycle and held to cash settlement: 18 straddles
+over 80 sessions, never re-striking, never paying an exit spread. H26 re-strikes twice
+daily at strikes chosen at two different minutes, pays entry and exit costs H1 never paid,
+and never settles. The two clocks partition the DAY, not H1's traded P&L.
+
+THE ARGUMENT THAT HOLDS: direction of error. Classifying H26 as an amendment inflates N,
+deflates the Sharpe, and can only make H26 HARDER to pass. Classifying it as a fresh family
+resets the count to zero and makes it easier — and that is C4's one documented hole, the
+way a trial count silently resets. Between an error that can only cost a true positive and
+an error that manufactures false ones, the first is the one to make. The returns are also
+genuinely entangled with H1's — same corpus, same instrument, same sessions, and the two
+arms are mechanically correlated with H1's held position — so this is not a distant idea
+being dragged into the family for the sake of conservatism.
+
+THE LIMIT OF THIS REASONING, stated so it is not over-applied: "it uses the same corpus"
+is NOT sufficient to make something an amendment. Taken as a rule it would make every
+future hypothesis an amendment of H1, "family" would collapse into "the dataset", and the
+twelfth hypothesis would inherit a count inflated by eleven unrelated tries. Dataset-level
+multiplicity is a real problem and `amend()` is not the tool that solves it. H26 qualifies
+because it makes a claim about the SAME premium — when it accrues rather than whether it
+exists — not merely because it reads the same files.
+"""
+
+supersession = """
+THIS GATE SUPERSEDES ITS OWN FIRST VERSION, committed in dccb379, and the original is left
+in git history rather than edited away.
+
+dccb379 pre-registered hypothesis h_4095cf35d1443d87c0199a2441d158ab, whose entry rule
+required only that the front expiry be strictly after the session date. That rule is
+UNRUNNABLE, and only running it revealed why: the expiring contract is dropped from the
+instrument master on its expiry date, so a straddle entered on expiry eve can never be
+bought back and the engine refuses to trade a symbol the master does not list.
+
+The correction changes `entry_rule`, which is id-bearing, so it was made as a SUPERSEDING
+AMENDMENT — h_cacfc556d38a2bda25efef59eb5544cf, whose parent is the v1 record — and not as
+an edit to a record that had already been used to pre-register. The chain H1 -> v1 -> v2 is
+intact and the trial count spans all three, so the correction COSTS a trial rather than
+saving one. That is the direction a mid-run correction should cost.
+
+NO THRESHOLD MOVED. Every bar in this file is exactly the number committed in dccb379. The
+correction narrowed the tradeable population from 62 observable gaps to 45; it is not
+licence to revisit a bar after the sample shrank, and the bars were not revisited.
+"""
+
+holdout_disposition = """
+THE SEALED MONTHS STAY SEALED, and this is the single most consequential decision in this
+file.
+
+H1 sealed 2026-05-01 onward and did not read it: its in-sample verdict FAILED, and
+`decide()` reaches for the holdout only from a PASSED verdict. Because H26 is an amendment,
+it is in the SAME family, and that holdout is the family's one-shot resource.
+
+The vendor backfill created an obvious temptation: move `holdout_first_date` to 2026-06-13,
+gaining 29 sessions of in-sample evidence on a question already short of it. That move is
+refused. `holdout_first_date` is per-config, editable, and bound to no content-addressed
+record — so it is precisely the channel through which a disappointing result can be
+rescued, and using it once establishes that a holdout is negotiable whenever someone wants
+more data. Nothing in the machinery would have stopped it; that is the reason to write the
+refusal down rather than rely on it.
+
+So the boundary is INHERITED UNCHANGED at 2026-05-01, and the backfill is spent on the
+other side: the family's holdout grows from 29 sessions to 71. The new data is used — as a
+materially stronger confirmation resource, not as a weaker seal.
+
+THE PRICE, stated plainly because it is real and it is paid by this run: in-sample stays at
+79 return observations and 62 gap events, so H26 is graded on a sample that H1 already
+demonstrated is too short to resolve an effect of this size. A FAILS_THRESHOLD verdict is
+the likely outcome and is a legitimate deliverable. It is not a reason to have moved the
+boundary.
+"""
+
+cross_epoch_justification = """
+The in-sample window crosses one epoch boundary: stt_rise_2026 (2026-04-01). It is
+permitted on exactly H1's reasoning, which applies here unchanged: a tax-rate change alters
+the COST LEVEL of the trade, not the population of trades, the contract specification, the
+expiry calendar or the flow the hypothesis is about; C5 charges each side at its own
+date-effective rate within the one run, so no session is charged the wrong rate.
+
+It matters slightly MORE here than it did for H1, and that is worth naming rather than
+inheriting the paragraph wholesale: H26 trades roughly six times as often, so a change in
+the statutory rate touches far more fills. It remains a change in level rather than in
+kind, and the cost-breakeven multiple is the metric that absorbs exactly that.
+
+This does NOT justify a window crossing weekly_expiry_cull_2024 or nse_expiry_tuesday_2025,
+which changed the traded object. Note also that the HOLDOUT window ends 2026-08-12 and so
+contains 2026-08-03, the NSE Closing Auction Session settlement change, which C5 carries
+with implemented=false and REFUSES to settle against. H26 never settles — both arms exit by
+trading, and the eligibility guard bars expiry-session entries — so the refusal is not
+reached. That immunity is conditional on exits succeeding, and the run reports its
+settlement count so the condition is checked rather than assumed.
+"""
+
+# =======================================================================================
+# IN-SAMPLE THRESHOLDS
+# =======================================================================================
+
+[thresholds]
+
+# Recalibrated, and it had to be. Synthetic Gaussian series at 79 observations, graded
+# through this package's own deflated_sharpe_ratio, 40 seeds per point, median reported.
+# Reproduce with: uv run python -m xman_research.h26.calibrate_thresholds
+#
+#   true annualised Sharpe:    0.5    1.0    1.5    2.0    2.5    3.0
+#   median DSR (n=79, N=1):   0.661  0.758  0.837  0.896  0.938  0.965
+#   median DSR (n=79, N=3):   0.332  0.441  0.554  0.662  0.757  0.835
+#   median DSR (n=79, N=4):   0.263  0.365  0.475  0.588  0.692  0.782   <- the REALISED N
+#
+# N=3 is not a guess, it is the pre-registered trial inventory below. The second row is the
+# one that governs, and it changes the problem: at N=3 even a TRUE annualised Sharpe of 3.0
+# produces a median deflated Sharpe of 0.835.
+#
+# So H1's 0.90 cannot be inherited — it would be AUTO-FAILING, unreachable by any effect
+# size calibrated here, and H1's own holdout reasoning rejects an auto-failing bar because
+# it "tells the operator nothing at all". Equally, H1 rejected 0.60-0.70 in-sample on the
+# ground that "a gate that admits noise a third of the time is not a gate", which rules out
+# calibrating for even odds against a 2.0 Sharpe (that would be 0.66).
+#
+# 0.80 is the only band that satisfies both of the precedent's own stated principles. It
+# buys a 20% false-positive rate given three tries — weaker than H1's 10%, and that is a
+# real cost, stated rather than hidden. It retains genuine power only against a large
+# effect: a true annualised Sharpe of about 3.0 clears it more often than not, 2.5 does not.
+#
+# WHAT THE REALISED TRIAL COUNT DID TO THIS BAR, added after the count was known and
+# BEFORE the graded run, with the threshold deliberately NOT moved.
+#
+# The bar was calibrated at N=3, the pre-registered inventory. The log will actually hold
+# FOUR rows (below), and at N=4 even a true annualised Sharpe of 3.0 has a median deflated
+# Sharpe of 0.782 — under the bar. On the calibrated grid this gate is therefore close to
+# UNREACHABLE, and a FAILS_THRESHOLD verdict on `deflated_sharpe` is very nearly
+# predetermined.
+#
+# The bar stays at 0.80 anyway. Lowering a threshold after discovering it is hard to clear
+# is the single move this apparatus exists to prevent, and "the deflation turned out
+# harsher than I planned" is not a new fact about the market. The fourth row exists because
+# of two deliberate choices, each made in the conservative direction: a crashed run's row
+# was kept rather than deleted, and correcting the entry guard was done as a superseding
+# amendment that costs a trial rather than as an edit that costs none.
+#
+# The honest consequence is therefore recorded in advance: this run's Sharpe verdict is
+# dominated by the SELECTION COUNT, not by the market. Read a miss as a statement about the
+# apparatus and the sample, and read the cost-breakeven multiple and the risk-matched
+# increment — neither of which the trial count touches — for what the data actually says.
+#
+# Pre-written, because it is the honest reading of a miss: at 79 observations and three
+# logged trials this test cannot distinguish a true annualised Sharpe below roughly 2.5
+# from zero at ANY bar that also controls false positives. A miss at 0.80 is therefore
+# evidence of INSUFFICIENT DATA AND AN INFLATED SELECTION COUNT, not evidence of no effect,
+# and it must not be read as a refutation of H26.
+deflated_sharpe = { at_least = 0.80 }
+
+# NOT inherited from H1's 2.0. Derived from this strategy's trade mix, because the number
+# is a tolerance for UNMODELLED cost and H26's unmodelled cost is structurally worse.
+#
+# A breakeven multiple of m says the edge survives modelled costs rising m-fold, i.e. it
+# tolerates unmodelled costs of (m-1)x the modelled stack. What is unmodelled is the same
+# list as H1's — bid-ask spread, market impact, slippage — since fills are at the bar close.
+#
+# The arithmetic that moves the bar:
+#   * H1 crossed the spread on ENTRIES ONLY. Its exits were cash settlements, which cross
+#     no spread by construction, and exercise STT was among its largest modelled costs. Two
+#     spread-bearing legs per straddle cycle.
+#   * H26 crosses on FOUR legs per session — sell two, buy back two — while its modelled
+#     stack simultaneously LOSES the settlement components H1 carried. So the ratio of
+#     unmodelled to modelled cost is worse on both the numerator and the denominator.
+#   * The buy-back lands at the open decision, among the least settled bars of the day,
+#     where the true spread is widest. The record moves that decision to 09:20 rather than
+#     the 09:15 first bar for exactly this reason, which mitigates but does not remove it.
+#
+# Roughly twice the spread-bearing legs against a smaller modelled base puts the honest
+# floor at 3.0, and 3.0 is what is registered. Unlike the Sharpe bar this one is unaffected
+# by sample length — it is the criterion 79 observations does not weaken.
+#
+# NOTE, and it is the crux of this whole gate: spread cancels between the two ARMS, since
+# both trade equally often, so `risk_matched_increment` is largely spread-robust. It does
+# NOT cancel here. This metric and the deflated Sharpe are computed on the CANDIDATE ALONE,
+# whose fills are spread-free bar closes. A symmetric comparison does not rescue an
+# asymmetric absolute number.
+cost_breakeven_multiple = { at_least = 3.0 }
+
+# Ruin avoidance, as a fraction of the fixed ₹10,00,000 capital base.
+#
+# RE-DERIVED FROM MEASURED MARGIN, which discharges the outstanding follow-up in H1's
+# DECISION.md disclosure (c). H1's gate justified this same 0.10 by asserting one NIFTY lot
+# ties up "around 15%" of capital, making a 10% drawdown roughly two-thirds of posted
+# margin. The run then measured peak margin of ₹4,76,378 — 47.6% of capital — so the
+# rationale was wrong by a factor of three. Carrying that premise into a fresh
+# pre-registration, now that it is known false, would be worse than H1's original error.
+#
+# The corrected reading: at ~48% of capital posted, a drawdown of 10% of capital is about
+# 21% of posted margin — uncomfortable, but not the region where a book is closed out at
+# the worst possible moment. The bar is kept at 0.10 anyway, on a different and now
+# defensible ground: it is a bound on the LOSS, not on the margin ratio, and 10% of capital
+# lost by a one-lot book is the point at which the strategy has stopped being the thing
+# described. The short-straddle payoff earns a little most sessions and loses a lot rarely,
+# so this remains the criterion the Sharpe is structurally blind to.
+max_drawdown = { at_most = 0.10 }
+
+# THE HYPOTHESIS'S OWN HEADLINE, and a substitution that must be declared.
+#
+# Spec 3 C6 requires the increment over the "naive always-on" benchmark. The benchmark used
+# here is NOT always-on: it is the intraday arm — the same straddle held open-to-close. That
+# is a deliberate substitution, because H26's null is written about exactly this contrast
+# ("not distinguishable from the return to holding the same exposure across trading time").
+# Gating against a hold-to-settlement straddle would answer a different question.
+#
+# THE DISCLOSURE THIS DEMANDS, and it is H26's analogue of H1's cannot-fail admission.
+# H1 recorded that its increment was STRUCTURALLY zero and could not fail. H26's can fail —
+# candidate and benchmark are genuinely different portfolios, which is an improvement — but
+# it is CONDITIONALLY TOOTHLESS: the mechanism under test predicts the intraday arm loses
+# money, so under the hypothesis's own prior an increment above zero is close to implied. A
+# pass here should be read as "the arms differ in the predicted direction", not as
+# independent corroboration. The deflated Sharpe is the threshold doing the real work.
+risk_matched_increment = { at_least = 0.0 }
+
+# NOT GATED, deliberately: `pbo` (one configuration is run, so CSCV has nothing to compare
+# and manufacturing a grid would add trials that deflate the very Sharpe the grid was
+# invented to validate); `annualised_sharpe` (subsumed by deflated_sharpe); and
+# `expected_shortfall` (max_drawdown already carries the tail criterion).
+
+# =======================================================================================
+# HOLDOUT THRESHOLDS — recorded now, at the same moment as the others, because after the
+# in-sample verdict is exactly when they may no longer be recorded.
+#
+# Synthetic calibration at the holdout's own shape, 70 return observations and a family
+# that by then carries six trials (H1's row, the in-sample candidate and benchmark, the
+# touch row the read itself writes, and the holdout's own two runs):
+#
+#   true annualised Sharpe:    0.5    1.0    1.5    2.0    2.5    3.0
+#   median DSR (n=70, N=6):   0.143  0.223  0.325  0.443  0.550  0.651
+#
+# 0.50 is the minimal confirmatory statement — after deflation the unseen months still
+# favour a positive true Sharpe more likely than not — and it is not auto-failing at that
+# selection count. The holdout's job is to confirm or contradict an edge already
+# established in-sample, not to establish one from 70 sessions against six trials.
+# =======================================================================================
+
+[holdout_thresholds]
+deflated_sharpe = { at_least = 0.50 }
+cost_breakeven_multiple = { at_least = 3.0 }
+max_drawdown = { at_most = 0.10 }
+risk_matched_increment = { at_least = 0.0 }
+
+# =======================================================================================
+# NOT-EVALUABLE RULES — spec 6's fourth outcome, checked before pass/fail. Left at C6's
+# defaults, which is itself a decision and is recorded as one: they were NOT set after
+# looking at a run, and nothing in this repository has computed an infeasible or stale
+# fraction against this strategy.
+#
+# One H26-specific note. `max_infeasible_fraction` had almost no bite for H1, which issued
+# 36 intents and had zero infeasible. H26 issues roughly 250 in-sample and includes
+# buy-backs at the open, so this limit can genuinely fire — which is the correct behaviour,
+# not a problem to tune around. Related: a failed buy-back leaves the position held another
+# night and the arm silently stops measuring a pure gap; if such a position ever reached
+# its expiry the engine would settle it. DECISION.md reports the counts rather than
+# assuming they are zero.
+# =======================================================================================
+
+[not_evaluable]
+max_infeasible_fraction = 0.10
+max_stale_fraction = 0.20
+optimistic_costs_below = 1.0
+
+# =======================================================================================
+# THE PRE-REGISTERED TRIAL INVENTORY. N is read from the log at grading time and never
+# typed, but what the log is EXPECTED to hold is written here in advance so that a
+# disagreement is visible rather than absorbed.
+#
+# At in-sample grading the family should hold exactly FOUR rows. Three were pre-registered
+# in dccb379; the fourth is disclosed here, before the graded run, with its cause:
+#   1. H1's trial, replayed from research/h1/decision.json (see below).
+#   2. A row with outcome=error and NO metrics: the first candidate attempt, which died on
+#      a TypeError in the exit path before computing anything. It is KEPT. Deleting a row
+#      from an append-only research log to reach a pre-registered count is the flattering
+#      move even when it is justified, and no result was ever observed from it, so nothing
+#      was selected on. It is logged against the v1 record and counts in the family.
+#   3. H26's in-sample CANDIDATE backtest.
+#   4. H26's in-sample BENCHMARK backtest.
+#
+# The count is read from the log at grading time and never typed. The DISAGREEMENT between
+# this inventory (4) and dccb379's (3) is itself reported in DECISION.md rather than
+# absorbed, which is what the pre-registered inventory was for.
+#
+# Row 3 is new relative to H1, which presented one run twice under two labels. H26's arms
+# are genuinely two backtests, each burning its own single-use token, and the benchmark is
+# logged under H26's id because it IS in the family. That inflates N and makes the verdict
+# harder, which is the conservative and correct direction.
+#
+# THE REPLAY, and its failure branch. H1's canonical trial log does not exist: `*.db` is
+# gitignored repo-wide and the worktree that held it is gone. research/h1/DECISION.md cites
+# research/h1/trial_log_export.json as the committed substitute; that file was never
+# committed either. The only surviving copy of H1's trial row is inside
+# research/h1/decision.json, and H26 replays it so the family count is genuinely READ from
+# a log rather than asserted. The replay is gated on the reconstructed H1 record hashing to
+# h_817b33ff6b9f68e288161f5990739744. IF THAT HASH DOES NOT MATCH, THE ANSWER IS TO STOP —
+# not to proceed at N=2, which would be the flattering direction.
+#
+# What the hash does and does not prove, stated because it is easy to over-claim: it
+# validates the HYPOTHESIS record only. The trial row's fidelity rests entirely on
+# decision.json's say-so, and three of its fields cannot be reconstructed — `created_at` and
+# `code_sha`/`code_dirty` are stamped by the log's own clock and code-version provider with
+# no override, and the H1 export carried neither `code_sha` nor `error` in the first place.
+# The replayed row is a COUNT-PRESERVING STUB, not H1's trial. decision.json remains the
+# authoritative record of H1.
+#
+# Every re-run of H26's decision against the canonical log appends TWO more trials and
+# moves N. See DECISION.md's reproduction warning.
+# =======================================================================================
+
+# =======================================================================================
+# THE DESCRIPTIVE ANALYSIS, pre-registered so it cannot become a narrative escape hatch.
+#
+# A FAILS_THRESHOLD verdict sitting beside an attractive dose-response reads, in prose, as
+# a pass. So its status, its exact form and its predicted direction are fixed here, before
+# any of it is computed.
+#
+# STATUS: descriptive, UNGRADED, and incapable of changing the outcome. No threshold reads
+# it. It appears in DECISION.md under a heading that says so.
+#
+# FORM: the candidate's per-gap net return regressed on the number of CALENDAR DAYS the gap
+# spans, over all in-sample gaps, with each gap attributed to the session it ENDS on (the
+# session whose equity change realises it). Gap-level returns are netted consistently: each
+# observation carries the P&L of the gap it closes and the costs of that same round trip,
+# so the entry cost of the NEXT gap is not charged to this one.
+#
+# PREDICTED SIGN, committed in advance: the mechanism predicts a POSITIVE slope — a gap
+# spanning three calendar days should earn more than one spanning a single day, because it
+# charges more decay against the same zero trading time. The result is reported whichever
+# way it points, including if the slope is negative or indistinguishable from zero.
+#
+# WHAT IT CANNOT SUPPORT: 19 in-sample multi-day gaps and 2 holiday-extended ones. Two
+# events are not a sample. No claim about holiday-extended gaps specifically is admissible
+# from this window, and none will be made.
+# =======================================================================================
