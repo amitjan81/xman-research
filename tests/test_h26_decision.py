@@ -196,7 +196,7 @@ def test_reversed_clock_is_refused() -> None:
 
 def test_close_decision_lands_on_a_minute_every_session_prints() -> None:
     """15:30 would silently resolve to None and the arm would simply stop trading."""
-    assert CLOSE_DECISION <= dt.time(15, 29)
+    assert dt.time(15, 29) >= CLOSE_DECISION
     assert OPEN_DECISION < CLOSE_DECISION
 
 
