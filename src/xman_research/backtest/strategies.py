@@ -255,7 +255,7 @@ class ClockSplitShortStraddle:
         """
         intents: list[TradeIntent] = []
         group = f"clocksplit-exit:{self.hold.value}"
-        for position in book.positions:
+        for position in book.positions():
             if not position.is_short:
                 continue
             lots = abs(position.units) // position.contract.lot_size
