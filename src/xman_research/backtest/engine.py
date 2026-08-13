@@ -362,9 +362,43 @@ class BacktestConfig:
     settlement_rules: tuple[SettlementRule, ...] = SETTLEMENT_RULES
     gap_reason: str | None = None
     verify_checksums: bool = False
+    decision_times: tuple[dt.time, ...] | None = None
+    """Every minute-of-day the strategy is asked to decide, or ``None`` for just one.
+
+    **One decision per session was an assumption, not a law, and it excluded a whole class
+    of hypothesis.** A question about *when* a return accrues — H26's overnight/intraday
+    split is the worked case — cannot be asked at all with one observation point per day:
+    separating the close-to-open return from the open-to-close return requires the book to
+    be actionable at both ends of the session. No strategy can work around it, because
+    :func:`run_backtest` and not the strategy owns the clock.
+
+    ``None`` means ``(decision_time,)`` and is the default, so every run written before
+    this field existed behaves *identically* — see :meth:`resolved_decision_times`. That
+    equivalence is load-bearing rather than polite: H1's decision is committed with a run
+    fingerprint taken over this very provenance dict, and a key that appeared in it
+    unconditionally would silently invalidate the one result this repository has already
+    published. Hence the conditional key in :meth:`provenance`.
+    """
+
+    def resolved_decision_times(self) -> tuple[dt.time, ...]:
+        """The decision times actually used: ascending, deduplicated.
+
+        Sorted rather than taken in the order given, so the book is always acted on
+        chronologically — a strategy handed its close decision before its open decision
+        would be reasoning about a book from the future.
+        """
+        if self.decision_times is None:
+            return (self.decision_time,)
+        if not self.decision_times:
+            raise ValueError(
+                "decision_times is empty: a run with no decision minute could never "
+                "trade, and would report a flat book as a result rather than as a "
+                "misconfiguration. Pass None for the single-decision default."
+            )
+        return tuple(sorted(set(self.decision_times)))
 
     def provenance(self) -> dict[str, Any]:
-        return {
+        provenance: dict[str, Any] = {
             "underlying": self.underlying,
             "decision_time": self.decision_time.isoformat(),
             "starting_cash": self.starting_cash,
@@ -381,6 +415,15 @@ class BacktestConfig:
             "cost_schedules": [dict(entry) for entry in self.cost_stack.schedule_provenance()],
             "gap_reason": self.gap_reason,
         }
+        # Present only when a run actually asked for more than one decision minute. See
+        # the field docstring: an unconditional key would change the provenance dict of
+        # every single-decision run, and the fingerprint hashed over it, retroactively
+        # breaking H1's committed record for a run whose behaviour did not change.
+        if self.decision_times is not None:
+            provenance["decision_times"] = [
+                value.isoformat() for value in self.resolved_decision_times()
+            ]
+        return provenance
 
 
 @dataclass(frozen=True)
@@ -603,8 +646,23 @@ def run_backtest(
             )
         session = SessionView.from_frame(ref.session_date, config.underlying, frame, refdata)
 
-        minute = session.minute_at_or_after(config.decision_time)
-        if minute is not None:
+        # **Margin is measured before settlement, not after.** _settle_expiring removes
+        # every position expiring today, and a margin computed on what remains can never
+        # see an expiry-day leg — which made the 2% expiry-day ELM, the one margin
+        # component with a date and a worked source, structurally unreachable outside its
+        # own unit tests. It also understated the truth on its own terms: a short straddle
+        # held 09:20 to 15:30 on expiry day had the exchange demanding SPAN + exposure +
+        # ELM all day, while the book recorded zero. peak_margin is the ROC denominator.
+        #
+        # **With several decision minutes it is measured at each and the largest kept.**
+        # A book that is short all day and flat by the close ties up margin all day, and
+        # reading it once at the end would report zero for a session that was margined
+        # throughout — the same understatement the paragraph above was written about,
+        # arriving through a different door. For a single decision minute this reduces to
+        # exactly one measurement taken after that minute, which is what it always was.
+        margin: MarginRequirement | None = None
+        unmargined = 0
+        for minute in _decision_minutes(session, config):
             # The strategy sees the session truncated at its decision minute, never the
             # whole day. See SessionView.through for why this is the engine's job.
             intents = strategy.decide(
@@ -615,15 +673,15 @@ def run_backtest(
                 fills.append(record)
                 total_costs = total_costs + record.costs
                 unverified.update(record.costs.unverified_components)
+            step_margin, step_unmargined = _margin_for_session(session, config, positions)
+            if margin is None or step_margin.total > margin.total:
+                margin, unmargined = step_margin, step_unmargined
 
-        # **Margin is measured before settlement, not after.** _settle_expiring removes
-        # every position expiring today, and a margin computed on what remains can never
-        # see an expiry-day leg — which made the 2% expiry-day ELM, the one margin
-        # component with a date and a worked source, structurally unreachable outside its
-        # own unit tests. It also understated the truth on its own terms: a short straddle
-        # held 09:20 to 15:30 on expiry day had the exchange demanding SPAN + exposure +
-        # ELM all day, while the book recorded zero. peak_margin is the ROC denominator.
-        margin, unmargined = _margin_for_session(session, config, positions)
+        if margin is None:
+            # No decision minute resolved — the session ended before the strategy's first
+            # decision time. The book still carries whatever it carried in, and it is
+            # still margined; this is the pre-existing behaviour for that case.
+            margin, unmargined = _margin_for_session(session, config, positions)
 
         session_settlements, cash = _settle_expiring(session, config, cash, positions)
         for record in session_settlements:
@@ -684,6 +742,29 @@ def _consume_token(trial: TrialContext) -> None:
             "new trial per backtest — that is the true count."
         )
     _CONSUMED_TRIAL_IDS.add(trial.trial_id)
+
+
+def _decision_minutes(session: SessionView, config: BacktestConfig) -> tuple[dt.datetime, ...]:
+    """The minutes this session's strategy is actually asked to decide at.
+
+    Each configured time-of-day resolves through
+    :meth:`SessionView.minute_at_or_after`, which is why a session that ends early simply
+    yields fewer decisions instead of raising: "the market shut before your close
+    decision" is a fact about the session, and the run should record a missed decision
+    rather than invent a minute that never printed.
+
+    **Deduplicated, and that matters on short sessions.** Two configured times can resolve
+    to the same printed minute — an open decision at 09:15 and a close decision at 15:25
+    both land on the only bar of a one-minute session. Asking the strategy twice at one
+    minute would let it act twice on one observation, opening and closing a position
+    against a single price, which is not a round trip anyone could have made.
+    """
+    minutes: list[dt.datetime] = []
+    for time_of_day in config.resolved_decision_times():
+        minute = session.minute_at_or_after(time_of_day)
+        if minute is not None and minute not in minutes:
+            minutes.append(minute)
+    return tuple(minutes)
 
 
 @dataclass(frozen=True, slots=True)

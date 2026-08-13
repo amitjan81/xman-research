@@ -24,13 +24,14 @@ import datetime as dt
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from xman_research.backtest.costs import Side
 from xman_research.backtest.engine import BookView, TradeIntent
 from xman_research.backtest.market import Contract, OptionType, SessionView
 
-__all__ = ["ShortAtmStraddle"]
+__all__ = ["ClockSide", "ClockSplitShortStraddle", "ShortAtmStraddle"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,3 +197,181 @@ def _next_expiry_after(session: SessionView, expiry: dt.date) -> dt.date | None:
         if candidate > expiry:
             return candidate
     return None
+
+
+class ClockSide(StrEnum):
+    """Which side of the clock a position is held over."""
+
+    GAP = "gap"
+    """Sold at the session close, bought back at the next session's open.
+
+    Holds only *non-trading* time: the underlying provably cannot move, and calendar
+    decay accrues anyway. The exposure H26 claims is paid a premium."""
+
+    SESSION = "session"
+    """Sold at the session open, bought back at the same session's close.
+
+    Holds only *trading* time: the mirror image, and the control."""
+
+
+@dataclass(frozen=True, slots=True)
+class ClockSplitShortStraddle:
+    """H26 expressed as positions: one short ATM straddle, held over exactly one clock side.
+
+    **The two arms are one class with a flag, and that is the whole design.** H26's claim
+    is a *difference* between two holding windows, so the comparison is only worth
+    anything if the two arms are otherwise identical — same instrument, same strike rule,
+    same size, same eligibility, same number of round trips, same cost model. Written as
+    two classes they would be free to drift apart in some detail nobody re-checked, and
+    the drift would present as a premium. Written as one class parameterised by
+    :class:`ClockSide`, every line below is shared and the *only* asymmetry that can exist
+    is which decision minute opens and which closes. That is exactly the asymmetry under
+    test.
+
+    **Eligibility is deliberately identical for both arms, and it costs the control
+    something.** A straddle can only be held overnight if its contract survives the night,
+    so the GAP arm cannot trade on an expiry session. The SESSION arm *could* — nothing
+    stops an intraday round trip on expiry day — but it is barred too, because a control
+    that trades a population the candidate cannot reach is measuring a different thing.
+    On this corpus that removes every Tuesday (see the class of gap this leaves
+    unobservable in ``research/h26/DECISION.md``), and the corpus carries only the front
+    weekly expiry, so rolling to the next contract is not available as an alternative:
+    those bars were never captured (spec §3 C1). The exclusion is a capture-scope
+    limitation, not a market fact, and it must not be read as one.
+
+    ``entry_time``/``exit_time`` are the strategy's own, and :attr:`decision_times` is
+    what the runner hands to :class:`~xman_research.backtest.engine.BacktestConfig`, so
+    the engine's clock and the strategy's reading of it come from one source and cannot
+    disagree. Configuring them separately is how an arm silently stops trading.
+    """
+
+    hold: ClockSide = ClockSide.GAP
+    lots: int = 1
+    open_time: dt.time = dt.time(9, 20)
+    close_time: dt.time = dt.time(15, 29)
+    min_calendar_days_to_expiry: int = 2
+
+    def __post_init__(self) -> None:
+        if self.lots <= 0:
+            raise ValueError(f"lots must be positive, got {self.lots}")
+        if self.min_calendar_days_to_expiry < 1:
+            raise ValueError(
+                "min_calendar_days_to_expiry must be at least 1: a contract expiring on "
+                "the session date cannot be held overnight at all."
+            )
+        if self.open_time >= self.close_time:
+            raise ValueError(
+                f"open_time {self.open_time} must be strictly before close_time "
+                f"{self.close_time}; with the two reversed a 'gap' would be an intraday "
+                "hold and the arms would silently swap."
+            )
+
+    @property
+    def name(self) -> str:
+        return f"clock_split_short_straddle:{self.hold.value}"
+
+    @property
+    def decision_times(self) -> tuple[dt.time, ...]:
+        """The engine clock this strategy needs. Pass straight to ``BacktestConfig``."""
+        return (self.open_time, self.close_time)
+
+    def parameters(self) -> Mapping[str, Any]:
+        return {
+            "hold": self.hold.value,
+            "lots": self.lots,
+            "min_calendar_days_to_expiry": self.min_calendar_days_to_expiry,
+            "open_time": self.open_time.isoformat(),
+            "close_time": self.close_time.isoformat(),
+        }
+
+    def decide(
+        self, *, session: SessionView, minute: dt.datetime, book: BookView
+    ) -> Sequence[TradeIntent]:
+        at_close = minute.timetz().replace(tzinfo=None) >= self.close_time
+        opens_here = at_close if self.hold is ClockSide.GAP else not at_close
+        if opens_here:
+            return self._entry(session, minute) if book.is_flat else ()
+        return self._exit(book, session.session_date)
+
+    def _entry(self, session: SessionView, minute: dt.datetime) -> Sequence[TradeIntent]:
+        expiry = session.universe.nearest_expiry(session.session_date)
+        if expiry is None:
+            return ()
+        if (expiry - session.session_date).days < self.min_calendar_days_to_expiry:
+            # **The expiring contract is absent from the instrument master ON its own
+            # expiry date.** Not merely illiquid — dropped: `by_symbol` returns None and
+            # the engine raises rather than guessing, which is correct, because a symbol
+            # the master does not list is exactly what a composed symbol looks like.
+            #
+            # So a straddle cannot be bought back on the morning its contract expires, and
+            # an expiry-eve entry has no exit. Both boundaries of the weekly cycle are
+            # therefore dark: no entry ON expiry day (the contract dies that evening) and
+            # no entry the session BEFORE it (the contract is unlistable at the exit
+            # minute). With Tuesday expiries and front-week-only capture this removes every
+            # Monday and every Tuesday entry, which is why the observable-gap count is far
+            # below the calendar-gap count. It is a CAPTURE/REFDATA limitation, not a
+            # market fact, and `research/h26/DECISION.md` counts it explicitly.
+            return ()
+        spot = session.spot_at(minute)
+        if spot is None:
+            return ()
+        strike = session.universe.atm_strike(spot, expiry)
+        if strike is None:
+            return ()
+        group = f"clocksplit:{self.hold.value}:{expiry.isoformat()}:{strike:g}"
+        intents: list[TradeIntent] = []
+        for option_type in (OptionType.CALL, OptionType.PUT):
+            contract = session.universe.get(expiry, strike, option_type)
+            if contract is None:
+                return ()
+            intents.append(
+                TradeIntent(
+                    trading_symbol=contract.trading_symbol,
+                    side=Side.SELL,
+                    lots=self.lots,
+                    tag="entry",
+                    leg_group=group,
+                )
+            )
+        return tuple(intents)
+
+    def _exit(self, book: BookView, session_date: dt.date) -> Sequence[TradeIntent]:
+        """Buy back everything, as one group.
+
+        **Grouped, like the entry, and for a reason that cuts the other way.** If one leg
+        cannot be bought back, closing only the other would leave a naked short — a
+        directional position held under a market-neutral hypothesis's name, which is the
+        failure ``leg_group`` exists to prevent. The cost of grouping is the opposite
+        failure: neither leg closes, and the straddle is carried into a *further* session,
+        so that observation stops being a pure gap (or a pure session) and quietly
+        measures both. Neither outcome is acceptable silently, so the engine records the
+        refusal as ``GROUP_INCOMPLETE`` and ``research/h26/DECISION.md`` reports how often
+        it happened rather than assuming it never did.
+        """
+        intents: list[TradeIntent] = []
+        group = f"clocksplit-exit:{self.hold.value}"
+        for position in book.positions():
+            if not position.is_short:
+                continue
+            if position.contract.expiry == session_date:
+                # Residual case the entry guard cannot see: the guard counts CALENDAR days,
+                # but a holiday can still make the next trading session the expiry session
+                # (Friday entry, Monday shut, Tuesday expiry). The contract is gone from
+                # this session's master, so no buy-back can be expressed. The position is
+                # left to cash-settle and the run reports a non-zero settlement count —
+                # which is the flag. Emitting the intent anyway would raise and lose the
+                # whole run; settling silently without counting would be worse.
+                continue
+            lots = abs(position.units) // position.contract.lot_size
+            if lots <= 0:
+                continue
+            intents.append(
+                TradeIntent(
+                    trading_symbol=position.contract.trading_symbol,
+                    side=Side.BUY,
+                    lots=lots,
+                    tag="exit",
+                    leg_group=group,
+                )
+            )
+        return tuple(intents)
