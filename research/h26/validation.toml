@@ -1,0 +1,30 @@
+# H26 validation configuration — the three decisions that must not be taken while looking
+# at a result, so C6 reads them from here rather than accepting them per call.
+
+# The canonical trial log for the H1/H26 FAMILY. Every count the deflated Sharpe uses is
+# read from this file and no other.
+#
+# It sits in research/h26/ rather than research/h1/ only because that is where this
+# decision's artefacts live; what makes the count correct is the amendment's parent link,
+# not the file's location. The log is seeded with H1's replayed row before H26 runs — see
+# gate.toml's trial inventory, and xman_research.h26.h1_replay for the mechanism and its
+# refusal branch.
+#
+# It is NOT committed: `*.db` is gitignored repo-wide and forcing an exception for one file
+# would change a repo convention to suit one branch. research/h26/trial_log_export.json IS
+# committed, and unlike H1's — which DECISION.md cited but which was never actually written
+# — it is produced by the decision run itself.
+trial_log_path = "h26_research.db"
+
+gate_path = "gate.toml"
+
+# THE HOLDOUT BOUNDARY, INHERITED FROM H1 UNCHANGED.
+#
+# This is not a fresh choice and must not be re-cut. H26 is an amendment of H1, so it is in
+# the same family, and 2026-05-01 is the date H1 sealed and did not read. The vendor
+# backfill of 2026-06-13..2026-08-12 was NOT used to push this boundary later; it enlarged
+# the sealed region from 29 sessions to 71. gate.toml's `holdout_disposition` gives the
+# full reasoning and states the price paid for it.
+holdout_first_date = 2026-05-01
+
+underlying = "NIFTY"
