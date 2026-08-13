@@ -617,8 +617,13 @@ class Validator:
             judged_benchmark = benchmark
             judged_series = f"the whole window, {len(judged)} sessions, no walk-forward"
         # Annotated from the judged series, which is the object every statistic describes.
-        # Containment above means this can only ever be a subset of the candidate's
-        # epochs, so the annotation is the honest one and never the weaker one.
+        # Containment above means this can only ever be a SUBSET of the candidate's
+        # epochs, and that cuts both ways: the annotation is the honest one, and the
+        # refusal is weaker than it was. A run whose window spans a break but whose
+        # out-of-sample folds all land inside one regime no longer needs a recorded
+        # cross_epoch_justification. That is correct — nothing pooled two regimes, so
+        # there is nothing to justify — but it is a relaxation, and it is stated rather
+        # than left for someone to discover.
         annotation = epochs_spanned(judged.window, justification=gate.cross_epoch_justification)
         annotation.require_justification()
 
@@ -725,6 +730,11 @@ def _logged_created_at(
     for record in session.log.family_trials(hypothesis_id):
         if record.trial_id == trial_id:
             return record.created_at
+    # A trial_id that names no row in this family falls back to the caller-typed run_at.
+    # That is a residual hole in the same check: a mistyped or foreign trial_id looks
+    # exactly like no trial_id at all. Closing it means deciding whether an unresolvable
+    # trial_id is a typo or a run from another log, which is C4's question about which
+    # database is canonical, not one this component can answer.
     return None
 
 
