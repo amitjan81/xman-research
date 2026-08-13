@@ -16,20 +16,42 @@ which costs would have to rise before the edge disappears (spec §2.1), and that
 cannot be asked of a series that has already absorbed its costs into a single net number.
 :meth:`ReturnSeries.at_cost_multiple` is the whole reason the two travel separately.
 
-**Adapting C5** — :meth:`RunEvidence.from_equity_curve` takes exactly what
-``BacktestResult`` exposes today:
+**Adapting C5.** Checked against the merged component rather than sketched from its
+branch — every name below exists on ``xman_research.backtest.engine.BacktestResult`` as
+it stands on ``main``:
 
 .. code-block:: python
 
     RunEvidence.from_equity_curve(
-        result.equity_curve(),                       # tuple[(date, equity), ...]
+        result.equity_curve(),                    # tuple[(date, equity), ...]
         label=result.strategy_name,
-        capital_base=result.peak_margin,             # or config starting_cash
-        total_cost=result.total_costs.total,         # dated costs are better; see below
+        capital_base=float(result.config_provenance["starting_cash"]),
+        total_cost=result.total_costs.total,      # dated costs are better; see below
         unverified_inputs=result.unverified_inputs,
-        feasibility=FeasibilityFacts.from_verdicts(result.feasibility_counts(), ...),
+        feasibility=FeasibilityFacts.from_verdicts(
+            result.feasibility_counts(),
+            intents_resized=len(result.resized_fills()),
+            sessions_with_stale_marks=sum(1 for day in result.daily if day.stale_marks),
+            sessions_run=result.sessions_run,
+        ),
+        peak_margin=result.peak_margin,
         trial_id=result.trial_id,
     )
+
+Three things the obvious version of that gets wrong, all of them silent:
+
+* ``capital_base`` is the **denominator of every return in this component**, so
+  ``peak_margin`` is the wrong choice even though it is the more flattering one:
+  :attr:`~xman_research.backtest.engine.BacktestResult.peak_margin` is a *derived* number
+  that C5 itself documents as approximate, and it moves with the run. Starting cash is
+  fixed and is what the equity curve is denominated in. ``peak_margin`` still travels, as
+  its own field, for the return-on-capital question C6 does not ask.
+* ``sessions_run`` and ``sessions_with_stale_marks`` must actually be passed. Their
+  defaults are zero, which makes ``stale_fraction`` zero, which reads as *no session was
+  marked stale* rather than *nobody said*. C5 counts stale marks per session precisely so
+  this component can refuse; leaving the argument off discards that.
+* the infeasible verdict set is C5's enumeration, not this component's — see
+  :meth:`FeasibilityFacts.from_verdicts`.
 
 ``total_cost`` is the weaker of the two cost inputs: it can only be spread evenly over
 the sessions, which is wrong on any day the book did not trade, and the run is stamped
@@ -233,19 +255,45 @@ class FeasibilityFacts:
         cls,
         verdicts: Mapping[str, int],
         *,
-        infeasible_verdicts: Sequence[str] = ("no_bar", "no_liquidity", "capped_to_zero"),
+        infeasible_verdicts: Sequence[str] = (
+            "no_bar",
+            "no_liquidity",
+            "capped_to_zero",
+            "group_incomplete",
+        ),
+        not_an_intent: Sequence[str] = ("settled",),
         intents_resized: int = 0,
         sessions_with_stale_marks: int = 0,
         sessions_run: int = 0,
     ) -> FeasibilityFacts:
         """Build from C5's ``BacktestResult.feasibility_counts()``.
 
-        The infeasible set is a parameter because it belongs to C5's enumeration, not to
+        Both verdict sets are parameters because they belong to C5's enumeration, not to
         this component: if a verdict is added there, this adapter should be told about it
         rather than silently treating the new verdict as a fill.
+
+        Two defaults are worth the words, because both were wrong in the direction of
+        flattering the run:
+
+        ``group_incomplete`` **is infeasible.** C5 defines it as a leg that was fillable on
+        its own and did not trade because a sibling in its ``leg_group`` was not — the
+        market did not take the structure, which is exactly what this fraction measures.
+        C5's own ``BacktestResult.metrics()`` counts it under ``fills_infeasible``; omitting
+        it here made the two components disagree about the same run, with C6 reading the
+        lower number.
+
+        ``settled`` **is not an intent.** Cash settlement at expiry is something the
+        exchange does *to* the book — C5's own docstring says no participant can fail to
+        receive it — so it can never be infeasible, and counting it in the denominator
+        dilutes ``infeasible_fraction`` towards zero in proportion to how many expiries the
+        run held through. A run whose every intent was refused reads as half-fine if it
+        settled as many positions as it attempted.
         """
-        attempted = sum(int(value) for value in verdicts.values())
-        infeasible = sum(int(verdicts.get(name, 0)) for name in infeasible_verdicts)
+        excluded = set(not_an_intent)
+        attempted = sum(int(value) for name, value in verdicts.items() if name not in excluded)
+        infeasible = sum(
+            int(verdicts.get(name, 0)) for name in infeasible_verdicts if name not in excluded
+        )
         return cls(
             intents_attempted=attempted,
             intents_infeasible=infeasible,

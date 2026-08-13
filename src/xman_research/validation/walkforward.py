@@ -168,7 +168,21 @@ def walk_forward(
     report returns for ``split.test`` only — :class:`FoldResult` refuses returns that fall
     outside the test window, which is the mistake that turns a walk-forward into an
     in-sample run wearing its name.
+
+    A ``step`` below ``test_length`` is refused **before** any fold runs. Overlapping test
+    folds are legal in :func:`walk_forward_splits` — they are a legitimate way to inspect
+    fold-to-fold parameter stability — but they cannot be chained into one series, so this
+    function would fail in :meth:`ReturnSeries.chained` after paying for every backtest.
+    Refusing up front turns a wasted run into an immediate answer.
     """
+    stride = test_length if step is None else step
+    if stride < test_length:
+        raise SeriesError(
+            f"step={stride} is smaller than test_length={test_length}, so the test folds "
+            "overlap and cannot be chained into one out-of-sample series — this call is "
+            "guaranteed to fail, and it would fail only after running every fold. Use "
+            "walk_forward_splits() directly if overlapping folds are what you want."
+        )
     splits = walk_forward_splits(
         sessions,
         train_length=train_length,

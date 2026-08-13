@@ -54,6 +54,7 @@ SHARPE_PERIODICITY_KEY = "sharpe_periods_per_year"
 
 ASSUMED_VARIANCE_STAMP = "dsr.sharpe_variance_assumed"
 UNDECLARED_PERIODICITY_STAMP = "dsr.trial_sharpes_lack_declared_periodicity"
+PARTIAL_PERIODICITY_STAMP = "dsr.some_trial_sharpes_lack_declared_periodicity"
 
 
 class UnverifiedInputsError(RuntimeError):
@@ -81,7 +82,14 @@ class SelectionUniverse:
     selection burden can only be larger than the logged one.
     """
 
-    __slots__ = ("_hypothesis_id", "_log_path", "_sharpe_variance", "_size", "_variance_basis")
+    __slots__ = (
+        "_hypothesis_id",
+        "_log_path",
+        "_sharpe_variance",
+        "_size",
+        "_undeclared_periodicity",
+        "_variance_basis",
+    )
 
     def __init__(
         self,
@@ -95,9 +103,10 @@ class SelectionUniverse:
         # The family, not the single record: 200 variants of H1 are 200 ways this result
         # could have been chosen, however many records they were written as.
         self._size = log.count_family_trials(hypothesis_id)
-        variance, basis = _observed_sharpe_variance(log.family_trials(hypothesis_id))
+        variance, basis, undeclared = _observed_sharpe_variance(log.family_trials(hypothesis_id))
         self._sharpe_variance = variance
         self._variance_basis = basis
+        self._undeclared_periodicity = undeclared
 
     @property
     def size(self) -> int:
@@ -127,6 +136,15 @@ class SelectionUniverse:
         """``observed`` when read from logged trial metrics, else why it was not."""
         return self._variance_basis
 
+    @property
+    def undeclared_periodicity_trials(self) -> int:
+        """Trials that recorded a Sharpe without saying what they annualised by.
+
+        These are excluded from :attr:`sharpe_variance`. Non-zero alongside an
+        ``observed`` basis means the variance was computed from a *minority* of the
+        family, which the verdict is told about rather than left to infer."""
+        return self._undeclared_periodicity
+
     def __repr__(self) -> str:
         return (
             f"SelectionUniverse(hypothesis_id={self._hypothesis_id!r}, size={self._size}, "
@@ -134,10 +152,17 @@ class SelectionUniverse:
         )
 
 
-def _observed_sharpe_variance(records: tuple) -> tuple[float | None, str]:
-    """Variance of the per-period Sharpes the trials themselves recorded."""
+def _observed_sharpe_variance(records: tuple) -> tuple[float | None, str, int]:
+    """Variance of the per-period Sharpes the trials themselves recorded.
+
+    Returns the variance, why it is what it is, and **how many trials were skipped** for
+    recording a Sharpe without saying what they annualised by. That third number used to
+    be invisible whenever two usable Sharpes survived: a family where 2 of 200 trials
+    declared their periodicity produced a confident-looking ``observed`` variance from
+    two draws, with the other 198 silently dropped and nothing saying so.
+    """
     observed: list[float] = []
-    undeclared = False
+    undeclared = 0
     for record in records:
         metrics = record.metrics
         value = metrics.get(SHARPE_PER_PERIOD_KEY)
@@ -153,13 +178,13 @@ def _observed_sharpe_variance(records: tuple) -> tuple[float | None, str]:
                 # A Sharpe of unknown periodicity is not a small error: annualised by 252
                 # it is 15.9x the per-period figure, and the deflation would be computed
                 # against a variance 252 times too large — which makes every result pass.
-                undeclared = True
+                undeclared += 1
     if len(observed) >= 2:
         _, stdev, _, _ = _math.moments(tuple(observed))
-        return stdev * stdev, "observed"
+        return stdev * stdev, "observed", undeclared
     if undeclared:
-        return None, UNDECLARED_PERIODICITY_STAMP
-    return None, ASSUMED_VARIANCE_STAMP
+        return None, UNDECLARED_PERIODICITY_STAMP, undeclared
+    return None, ASSUMED_VARIANCE_STAMP, undeclared
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +271,18 @@ def deflated_sharpe_ratio(
     series — and the result is stamped ``dsr.sharpe_variance_assumed``. The fallback is
     honest but weak: a real strategy family's Sharpes disperse more than the null says,
     so an assumed variance understates :math:`SR^*` and therefore *flatters* the DSR.
+
+    **The ``T`` in that fallback is the wrong ``T``, deliberately.** The quantity being
+    approximated is the dispersion of *the trials'* Sharpes, so the sampling variance
+    that belongs there is one over the length of a typical trial minus one — and the
+    trials' lengths are not something this function can see (the log records each trial's
+    window, but not every trial in a family need have run on the same amount of
+    evidence). What is used instead is the length of the series being judged, which is
+    the longest thing to hand. Since :math:`1/(T-1)` shrinks as ``T`` grows, and the
+    judged series is typically at least as long as any single trial, the substitution
+    makes the assumed variance *smaller*, :math:`SR^*` *lower*, and the DSR *higher* —
+    it errs towards passing. Stated because a stamp saying "assumed" does not say in
+    which direction, and this one is not conservative.
     """
     observed = per_period_sharpe_ratio(returns)
     _, _, skew, kurtosis = _math.moments(returns.net)
@@ -255,6 +292,8 @@ def deflated_sharpe_ratio(
     if variance is None:
         variance = 1.0 / (sample_length - 1)
         stamps.append(universe.variance_basis)
+    if universe.undeclared_periodicity_trials and universe.variance_basis == "observed":
+        stamps.append(PARTIAL_PERIODICITY_STAMP)
     benchmark = _math.expected_max_sharpe(sharpe_variance=variance, trials=universe.size)
     value = _math.probabilistic_sharpe(
         observed=observed,
@@ -323,7 +362,11 @@ def drawdown(returns: ReturnSeries) -> DrawdownFacts:
         if equity > peak:
             peak = equity
             peak_date = day
-        else:
+        elif equity < peak:
+            # Strictly below. A session that closes exactly back at the previous peak has
+            # recovered — counting it as under water overstates the recovery time, and on
+            # a series with flat sessions (a conditional strategy out of the market) it
+            # overstates it a lot.
             under_water += 1
         fall = (peak - equity) / peak
         if fall > worst:
@@ -360,7 +403,11 @@ class TailMetrics:
     def as_dict(self) -> dict[str, object]:
         return {
             "annualised_sharpe": self.annualised_sharpe,
-            "adjusted_sharpe": self.adjusted_sharpe,
+            # Named for the units. This used to be "adjusted_sharpe" while the gate read
+            # `tails.annualised_adjusted_sharpe` under the same name — one label for two
+            # numbers a factor of sqrt(252) = 15.9 apart, with the per-period one being
+            # what landed in the trial log.
+            "adjusted_sharpe_per_period": self.adjusted_sharpe,
             "annualised_adjusted_sharpe": self.annualised_adjusted_sharpe,
             "skew": self.skew,
             "kurtosis": self.kurtosis,
@@ -526,6 +573,13 @@ class RiskMatchedIncrement:
     benchmark_scale: float
     sharpe_difference: float
     candidate_exposure: float
+    """Share of sessions with a non-zero return — a *proxy* for time in the market.
+
+    It is not the same thing: a session held flat that happened to close exactly at its
+    open reads as out of the market, and a session out of the market reads the same way.
+    The two are indistinguishable from a return series alone, which is all this component
+    is given. Read it as an upper bound on idleness, not as a position record."""
+
     benchmark_exposure: float
     overlapping_periods: int
     leverage_caveat: str | None = None
@@ -569,6 +623,15 @@ def risk_matched_increment(
         )
     left = candidate.returns
     right = benchmark.returns
+    if left.periods_per_year != right.periods_per_year:
+        # Both annualised returns below use the candidate's periodicity. If the two series
+        # disagree about what a year is, the difference between them is partly a unit
+        # conversion — which is not what "what the candidate adds" means.
+        raise BenchmarkMismatchError(
+            f"the candidate annualises by {left.periods_per_year} periods a year and the "
+            f"benchmark by {right.periods_per_year}. The increment is a difference of two "
+            "annualised returns, so it is only a comparison when both are in the same units."
+        )
     days = sorted(set(left.dates) | set(right.dates))
     # A session missing from one series is a session that series was not in the market —
     # a zero return, not an absent observation. Dropping it instead would compare the

@@ -47,12 +47,23 @@ import numpy as np
 from xman_research.validation.series import ReturnSeries, SeriesError
 
 __all__ = [
+    "LOW_POWER_CONFIGURATIONS",
     "PBOResult",
     "PerformanceMatrix",
     "matrix_from_columns",
     "performance_matrix",
     "probability_of_backtest_overfitting",
 ]
+
+LOW_POWER_CONFIGURATIONS = 40
+"""At or below this many configurations, PBO is a weak diagnostic and says so.
+
+Measured, not assumed: this package's own acceptance pair — a family with a real edge
+against 200 configurations of pure noise — reads 0.13 and 0.17 at 40 configurations, a
+separation of 0.04 where the deflated Sharpe separates by 0.99. Meanwhile PBO's spread
+under independent noise at this width reaches roughly 0.7, so a 0.5 threshold on it adds
+Type II error (rejecting a genuine strategy on luck) while contributing almost no
+discrimination. It is worth reporting and it is a poor thing to gate on."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,10 +119,36 @@ class PBOResult:
     def median_logit(self) -> float:
         return float(np.median(np.asarray(self.logits)))
 
+    @property
+    def low_power(self) -> bool:
+        """True when too few configurations were compared for the number to discriminate.
+
+        See :data:`LOW_POWER_CONFIGURATIONS`."""
+        return self.configurations <= LOW_POWER_CONFIGURATIONS
+
+    @property
+    def caveat(self) -> str | None:
+        """The sentence that has to travel with a low-power PBO, or ``None``."""
+        if not self.low_power:
+            return None
+        return (
+            f"PBO {self.value:.2f} was estimated from only {self.configurations} "
+            f"configurations. At this width the statistic's spread under pure independent "
+            f"noise reaches about 0.7, so it neither confirms nor rules out overfitting: "
+            f"a genuine strategy can trip a 0.5 bar by luck, and this suite's own "
+            f"acceptance pair separates by 0.13 against 0.17 — near-zero discrimination. "
+            f"Read it as a diagnostic, not as two decimal places of precision."
+        )
+
+    def __str__(self) -> str:
+        rendered = f"PBO {self.value:.2f}"
+        return rendered if self.caveat is None else f"{rendered} — {self.caveat}"
+
     def as_dict(self) -> dict[str, object]:
         return {
             "pbo": self.value,
             "pbo_median_logit": self.median_logit,
+            "pbo_low_power": self.low_power,
             "pbo_partitions": self.partitions,
             "pbo_splits": self.splits_evaluated,
             "pbo_configurations": self.configurations,
@@ -192,13 +229,42 @@ def probability_of_backtest_overfitting(
     )
 
 
+# How much of `square_total` the centring subtraction may consume before the remainder is
+# indistinguishable from rounding noise. Double precision carries ~1e-16 relative error and
+# the sums accumulate over a few hundred terms, so 1e-12 leaves four orders of headroom
+# while still catching total cancellation. A column whose variance is genuinely below this
+# share of its own sum of squares has a per-period Sharpe in the millions, which is not a
+# number about a strategy.
+_CANCELLATION_TOLERANCE = 1e-12
+
+
 def _sharpe_of_blocks(sums: np.ndarray, square_sums: np.ndarray, length: int) -> np.ndarray:
-    """Per-column per-period Sharpe over a set of partitions, from their sums."""
+    """Per-column per-period Sharpe over a set of partitions, from their sums.
+
+    The sums-of-squares route is what turns C(16,8) x T x N arithmetic into
+    C(16,8) x S x N, and it has one failure mode that has to be handled rather than
+    hoped past: ``square_total - length * mean**2`` is a subtraction of two nearly equal
+    numbers whenever the column barely varies, so for a **constant** column it does not
+    return zero — it returns whatever double-precision rounding left behind, of either
+    sign. Positive, that is a variance around 1e-19, a standard deviation of 3e-10, and a
+    Sharpe of about 1.3e7: the flattest configuration in the matrix wins every in-sample
+    split by ten million to one, on nothing but floating-point residue.
+
+    This was found by the brute-force cross-check in
+    ``tests/test_validation_pbo_bruteforce.py``, which computes the same estimator by a
+    two-pass route that cannot cancel, and disagreed with this function by PBO 1.0
+    against 0.0 on a matrix with one constant column. The documented convention — "a
+    configuration with zero dispersion over a subset scores 0.0: it is not the winner and
+    it is not disqualified" — is now actually true.
+    """
     total = sums.sum(axis=0)
     square_total = square_sums.sum(axis=0)
     mean = total / length
-    variance = (square_total - length * mean**2) / (length - 1)
-    stdev = np.sqrt(np.maximum(variance, 0.0))
+    residual = square_total - length * mean**2
+    # Below the tolerance the subtraction has cancelled away everything it had; what is
+    # left is noise, and calling it a variance manufactures an unbeatable Sharpe.
+    settled = np.where(residual > _CANCELLATION_TOLERANCE * np.abs(square_total), residual, 0.0)
+    stdev = np.sqrt(settled / (length - 1))
     return np.divide(mean, stdev, out=np.zeros_like(mean), where=stdev > 0.0)
 
 

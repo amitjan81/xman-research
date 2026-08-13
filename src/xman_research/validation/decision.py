@@ -42,17 +42,19 @@ from xman_research.evaluation import ResearchSession, open_session
 from xman_research.hypothesis import HypothesisRecord
 from xman_research.validation.gate import (
     EPOCH_PROVENANCE_STAMP,
+    MEASURED_METRICS,
     DecisionGate,
     EpochAnnotation,
     HoldoutPolicy,
     HoldoutStatus,
     HoldoutTouchedError,
     ThresholdResult,
+    ThresholdsNotRecordedError,
     epochs_spanned,
     inspect_holdout,
 )
 from xman_research.validation.pbo import PBOResult
-from xman_research.validation.series import RunEvidence
+from xman_research.validation.series import ReturnSeries, RunEvidence
 from xman_research.validation.statistics import (
     CostBreakeven,
     DeflatedSharpe,
@@ -68,9 +70,13 @@ from xman_research.validation.statistics import (
 from xman_research.validation.walkforward import WalkForwardReport
 
 __all__ = [
+    "MEASURED_METRICS",
     "Decision",
     "GateStatus",
+    "GateVocabularyError",
     "HoldoutRequiredError",
+    "HypothesisMismatchError",
+    "JudgedSeriesMismatchError",
     "MetricNotReportedError",
     "Outcome",
     "ValidationConfig",
@@ -81,6 +87,39 @@ __all__ = [
 
 class HoldoutRequiredError(RuntimeError):
     """Raised when a decision is asked for on a passing run whose holdout has not run."""
+
+
+class HypothesisMismatchError(RuntimeError):
+    """Raised when a decision pairs verdicts on two different hypotheses."""
+
+
+class JudgedSeriesMismatchError(RuntimeError):
+    """Raised when the walk-forward report is not a report on the candidate being graded.
+
+    The walk-forward out-of-sample series *replaces* the candidate's own returns as the
+    thing every statistic is computed on, and nothing downstream re-derived its window.
+    Left unchecked that made three refusals bypassable at once by handing in a report
+    built on other sessions: :meth:`Validator.grade` checked the *candidate's* window
+    against the holdout boundary, :func:`~xman_research.validation.gate.epochs_spanned`
+    annotated the *candidate's* window, and the verdict reported the *candidate's*
+    window — while the deflated Sharpe, the breakeven, the tails, the increment and the
+    PSR all came from months the candidate never covered. A report whose sessions ran 18
+    months past the holdout boundary graded as an innocent in-sample run, and passed.
+
+    Containment closes all three at once: an out-of-sample window inside the candidate's
+    window cannot reach the holdout when the candidate's does not, and cannot cross an
+    epoch boundary the candidate's does not.
+    """
+
+
+class GateVocabularyError(RuntimeError):
+    """Raised when a gate names a metric this component does not compute.
+
+    Caught at gate load, not at grade time. A threshold on a metric nobody measures used
+    to survive until :class:`MetricNotReportedError` reported that *the run* did not
+    report it — which is the wrong accusation and sends the operator to re-run a backtest
+    that was never going to help.
+    """
 
 
 class MetricNotReportedError(RuntimeError):
@@ -139,6 +178,15 @@ class Verdict:
     hypothesis_id: str
     status: GateStatus
     window: str
+    """The window of the series that was actually judged, not the run's own window.
+
+    With a walk-forward report those differ — the first training block is never scored —
+    and reporting the run's window beside statistics computed on the folds is a mismatch
+    a reader cannot see. The run's own window is kept as :attr:`candidate_window`."""
+
+    candidate_window: str
+    """The window the run itself covered. Equal to :attr:`window` without a walk-forward."""
+
     judged_series: str
     """Which series every statistic below was computed on.
 
@@ -168,7 +216,12 @@ class Verdict:
         return tuple(result for result in self.threshold_results if not result.passed)
 
     def metrics(self) -> dict[str, Any]:
-        """Everything as scalars — the shape that goes into a trial log row."""
+        """The shape that goes into a trial log row.
+
+        Mostly scalars, and deliberately not only scalars: ``unverified_inputs`` and
+        ``epochs`` are lists because collapsing them to a count or a joined string is how
+        a caveat stops being readable. The log stores JSON, so a list costs nothing there.
+        """
         collected: dict[str, Any] = {
             "gate_status": str(self.status),
             "selection_size": self.deflated.selection_size,
@@ -190,6 +243,7 @@ class Verdict:
         """The line an operator reads. It always carries the unverified stamps."""
         lines = [
             f"{self.label} [{self.window}] — {str(self.status).upper()}",
+            f"  run window: {self.candidate_window}",
             f"  judged on: {self.judged_series}",
             f"  headline: {self.headline}",
             f"  deflated Sharpe {self.deflated.value:.3f} "
@@ -204,7 +258,7 @@ class Verdict:
             f"(benchmark scaled {self.increment.benchmark_scale:.2f}x)",
         ]
         if self.overfitting is not None:
-            lines.append(f"  PBO {self.overfitting.value:.2f}")
+            lines.append(f"  {self.overfitting}")
         for result in self.threshold_results:
             lines.append(f"  {result}")
         for reason in self.not_evaluable_reasons:
@@ -223,6 +277,7 @@ class Verdict:
             "hypothesis_id": self.hypothesis_id,
             "status": str(self.status),
             "window": self.window,
+            "candidate_window": self.candidate_window,
             "judged_series": self.judged_series,
             "graded_at": self.graded_at.isoformat(),
             "trial_id": self.trial_id,
@@ -386,18 +441,65 @@ class Validator:
         """Grade the one run against the holdout months, after checking they are untouched.
 
         The check is the discipline made answerable: :func:`inspect_holdout` asks the log
-        which evaluations already read past the boundary, and refuses if any did. This run
-        is itself the first touch, which is why the check happens before it, not after.
+        which evaluations already read past the boundary, and refuses if any did.
+
+        **The read is recorded before it happens.** Grading the holdout *is* the touch, and
+        it used to leave no trace at all: the same holdout could be graded twice and both
+        passed, so the single most consequential read in the system was both invisible and
+        repeatable. The touch row goes in first, as this method's first act after checking
+        the run is shaped like a holdout run — writing it afterwards would mean a crash
+        between the read and the write leaves the months read and the log saying otherwise.
+
+        The row is then exempted from the check it enables, along with the trial that
+        produced the evidence being graded; see :func:`inspect_holdout` for why the second
+        exemption is what makes the honest workflow possible at all.
+
+        One consequence, stated rather than hidden: the touch is a trial in the family, so
+        it enters the deflation's selection count. That makes the holdout verdict very
+        slightly *more* conservative than the in-sample one, which is the right direction
+        for the number to move if it has to move.
         """
         policy = self._config.holdout_policy
-        with self.open_log() as session:
-            status = inspect_holdout(session, hypothesis, policy=policy)
-        status.require_untouched()
+        # Before anything is written: a run that is not a holdout run must not leave a
+        # touch record for a read that never happened.
         if candidate.window.start < policy.first_date:
             raise HoldoutTouchedError(
                 f"a holdout run must lie inside the holdout: {candidate.window} starts "
                 f"before {policy.first_date}, so it mixes seen and unseen months."
             )
+        hypothesis_id = (
+            hypothesis.id if isinstance(hypothesis, HypothesisRecord) else str(hypothesis)
+        )
+        with self.open_log() as session:
+            touch = session.log.append_trial(
+                hypothesis_id=hypothesis_id,
+                params={"holdout_first_date": policy.first_date.isoformat()},
+                data_window=candidate.window,
+                # No Sharpe key: this row records a read, not a result, and a Sharpe here
+                # would enter the cross-trial variance the deflation is computed against.
+                metrics={
+                    "holdout_touch": True,
+                    "holdout_label": policy.label,
+                    "graded_run_label": candidate.label,
+                    "graded_run_trial_id": candidate.trial_id,
+                },
+                notes=(
+                    f"holdout read: {candidate.label!r} graded against the months from "
+                    f"{policy.first_date}. Written before the grading, so the read is on "
+                    "the record whether or not the grading completed."
+                ),
+            )
+            status = inspect_holdout(
+                session,
+                hypothesis,
+                policy=policy,
+                exempt_trial_ids=tuple(
+                    identifier
+                    for identifier in (touch.trial_id, candidate.trial_id)
+                    if identifier is not None
+                ),
+            )
+        status.require_untouched()
         return self._grade(
             candidate,
             benchmark=benchmark,
@@ -421,6 +523,18 @@ class Validator:
         is most tempting and most expensive.
         """
         hypothesis_id = in_sample.hypothesis_id
+        if holdout is not None and holdout.hypothesis_id != hypothesis_id:
+            raise HypothesisMismatchError(
+                f"the in-sample verdict is filed under {hypothesis_id!r} and the holdout "
+                f"verdict under {holdout.hypothesis_id!r}. A decision is a statement about "
+                "one hypothesis; pairing two would attach one idea's holdout evidence to "
+                "another idea's in-sample case, which is the strongest possible form of "
+                "the mistake this component exists to prevent."
+            )
+        # A holdout verdict alongside a FAILED or NOT_EVALUABLE in-sample verdict is kept
+        # rather than refused — it is evidence, and discarding evidence is worse than
+        # carrying it — but it did not enter the outcome below, and the record should not
+        # let a reader think it did.
         if in_sample.status is GateStatus.NOT_EVALUABLE:
             return Decision(Outcome.NOT_EVALUABLE, hypothesis_id, in_sample, holdout)
         if in_sample.status is GateStatus.FAILED:
@@ -457,8 +571,13 @@ class Validator:
                 if isinstance(hypothesis, HypothesisRecord)
                 else session.log.get_hypothesis(universe.hypothesis_id)
             )
+            logged_at = _logged_created_at(session, universe.hypothesis_id, candidate.trial_id)
         gate.check_binding(record)
-        gate.require_recorded_before(candidate.run_at, what=f"the run {candidate.label!r}")
+        # A run that came through the log has an authoritative timestamp there; run_at is
+        # a free field the caller typed. Prefer the log, and refuse a disagreement rather
+        # than silently taking either side — see _reconcile_run_timestamp.
+        run_at = _reconcile_run_timestamp(candidate, logged_at)
+        gate.require_recorded_before(run_at, what=f"the run {candidate.label!r}")
 
         # Every statistic is computed on ONE series. With a walk-forward report that is
         # the concatenated out-of-sample folds — including the cost-breakeven headline and
@@ -467,6 +586,23 @@ class Validator:
         # comparison stays like-for-like; if it cannot be, the increment refuses.
         if walk_forward is not None:
             judged = walk_forward.out_of_sample
+            # The report has to be a report *on this candidate*. Nothing below re-derives
+            # the judged window from the candidate, so without this the walk-forward
+            # series can carry the grading anywhere — including past the holdout boundary
+            # that grade() just checked the candidate's own window against. See
+            # JudgedSeriesMismatchError.
+            if not (
+                candidate.window.start <= judged.window.start
+                and judged.window.end <= candidate.window.end
+            ):
+                raise JudgedSeriesMismatchError(
+                    f"the walk-forward out-of-sample series covers {judged.window}, which is "
+                    f"not inside the run {candidate.label!r}'s own window "
+                    f"{candidate.window}. Every statistic in the verdict is computed on the "
+                    "out-of-sample series, so a report built on other sessions would be "
+                    "graded under this run's name — and would bypass the holdout and epoch "
+                    "checks, which are made against the run's window."
+                )
             judged_run = replace(candidate, returns=judged)
             judged_benchmark = replace(
                 benchmark, returns=benchmark.returns.restricted_to(judged.window)
@@ -480,16 +616,31 @@ class Validator:
             judged_run = candidate
             judged_benchmark = benchmark
             judged_series = f"the whole window, {len(judged)} sessions, no walk-forward"
-        annotation = epochs_spanned(candidate.window, justification=gate.cross_epoch_justification)
+        # Annotated from the judged series, which is the object every statistic describes.
+        # Containment above means this can only ever be a subset of the candidate's
+        # epochs, so the annotation is the honest one and never the weaker one.
+        annotation = epochs_spanned(judged.window, justification=gate.cross_epoch_justification)
         annotation.require_justification()
 
         deflated = deflated_sharpe_ratio(judged, universe=universe)
         breakeven = cost_breakeven(judged_run)
         tails = tail_metrics(judged)
         increment = risk_matched_increment(judged_run, benchmark=judged_benchmark)
+        # Spec §3 requires the benchmark under the *identical* cost model, so a caveat on
+        # the benchmark is as verdict-relevant as one on the candidate: the risk-matched
+        # increment is judged against it. Prefixed, because whose caveat it is matters.
+        benchmark_stamps = tuple(f"benchmark:{stamp}" for stamp in benchmark.unverified_inputs)
         stamps = tuple(
             dict.fromkeys(
-                (*candidate.unverified_inputs, *deflated.unverified_inputs, EPOCH_PROVENANCE_STAMP)
+                (
+                    *candidate.unverified_inputs,
+                    *_feasibility_stamps(candidate),
+                    *benchmark_stamps,
+                    *deflated.unverified_inputs,
+                    *_pbo_stamps(overfitting),
+                    *_periodicity_stamps(judged, judged_benchmark),
+                    EPOCH_PROVENANCE_STAMP,
+                )
             )
         )
         psr = probabilistic_sharpe_ratio(judged)
@@ -499,12 +650,20 @@ class Validator:
             "cost_breakeven_multiple": breakeven.multiple,
             "max_drawdown": tails.max_drawdown,
             "annualised_sharpe": tails.annualised_sharpe,
-            "adjusted_sharpe": tails.annualised_adjusted_sharpe,
+            # Named for what it is. TailMetrics carries a per-period `adjusted_sharpe`
+            # too, and the two differ by sqrt(252) — a factor of 15.9 under one name.
+            "annualised_adjusted_sharpe": tails.annualised_adjusted_sharpe,
             "expected_shortfall": tails.expected_shortfall,
             "risk_matched_increment": increment.annualised_increment,
             "sharpe_difference": increment.sharpe_difference,
             "pbo": overfitting.value if overfitting is not None else None,
         }
+        # The gate validates threshold names against MEASURED_METRICS at load; this is the
+        # other half of that promise, and it fails loudly in tests rather than at a user.
+        assert set(observed) == set(MEASURED_METRICS), (
+            "the gate's threshold vocabulary and the metrics actually computed have "
+            f"drifted: {set(observed) ^ set(MEASURED_METRICS)}"
+        )
         results = tuple(
             threshold.check(observed.get(threshold.metric))
             for threshold in gate.thresholds_in_force(holdout=holdout is not None)
@@ -532,7 +691,8 @@ class Validator:
             label=candidate.label,
             hypothesis_id=universe.hypothesis_id,
             status=status,
-            window=str(candidate.window),
+            window=str(judged.window),
+            candidate_window=str(candidate.window),
             judged_series=judged_series,
             graded_at=require_aware(self._clock.now(), "clock.now()"),
             headline=breakeven,
@@ -549,6 +709,79 @@ class Validator:
             holdout=holdout,
             trial_id=candidate.trial_id,
         )
+
+
+FEASIBILITY_NOT_REPORTED_STAMP = "feasibility.not_reported"
+LOW_POWER_PBO_STAMP = "pbo.few_configurations"
+PERIODICITY_MISMATCH_STAMP = "increment.periods_per_year_mismatch"
+
+
+def _logged_created_at(
+    session: ResearchSession, hypothesis_id: str, trial_id: str | None
+) -> dt.datetime | None:
+    """The log's own ``created_at`` for ``trial_id``, if the log holds that trial."""
+    if trial_id is None:
+        return None
+    for record in session.log.family_trials(hypothesis_id):
+        if record.trial_id == trial_id:
+            return record.created_at
+    return None
+
+
+def _reconcile_run_timestamp(
+    candidate: RunEvidence, logged_at: dt.datetime | None
+) -> dt.datetime | None:
+    """Prefer the log's timestamp over the caller-typed one, and refuse a disagreement.
+
+    ``RunEvidence.run_at`` is a free field: a caller who wants the thresholds to look like
+    they predate the run can type any moment into it. When ``trial_id`` names a row in the
+    canonical log, that row's ``created_at`` was written by the log's own clock and is the
+    thing the docstring of
+    :meth:`~xman_research.validation.gate.DecisionGate.require_recorded_before` already
+    points at. A disagreement is not resolved silently in either direction — one of the
+    two is wrong, and which one is not this component's to decide.
+    """
+    if logged_at is None:
+        return candidate.run_at
+    if candidate.run_at is not None and candidate.run_at != logged_at:
+        raise ThresholdsNotRecordedError(
+            f"the run {candidate.label!r} reports run_at {candidate.run_at.isoformat()}, but "
+            f"the trial log records trial {candidate.trial_id} as created at "
+            f"{logged_at.isoformat()}. run_at is a field the caller fills in and created_at "
+            "is written by the log's own clock; a disagreement between them means the "
+            "evidence about when this run happened is not consistent, and the "
+            "thresholds-predate-the-run check rests on exactly that."
+        )
+    return logged_at
+
+
+def _feasibility_stamps(candidate: RunEvidence) -> tuple[str, ...]:
+    """Say so when a run supplied no feasibility facts at all.
+
+    :class:`~xman_research.validation.series.FeasibilityFacts` defaults to all zeros, and
+    zero attempted intents makes ``infeasible_fraction`` and ``stale_fraction`` both 0.0 —
+    so a run that reported nothing reads as a run where nothing went wrong, and the *not
+    evaluable* rules can never fire on it. Contrast the cost input, where absence is
+    refused outright. Silence is not verification, so it is stamped.
+    """
+    facts = candidate.feasibility
+    if facts.intents_attempted == 0 and facts.sessions_run == 0:
+        return (FEASIBILITY_NOT_REPORTED_STAMP,)
+    return ()
+
+
+def _pbo_stamps(overfitting: PBOResult | None) -> tuple[str, ...]:
+    """Carry PBO's own low-power caveat into the verdict when it has one."""
+    if overfitting is not None and overfitting.low_power:
+        return (LOW_POWER_PBO_STAMP,)
+    return ()
+
+
+def _periodicity_stamps(judged: ReturnSeries, benchmark: RunEvidence) -> tuple[str, ...]:
+    """The risk-matched increment annualises both sides by the candidate's periodicity."""
+    if judged.periods_per_year != benchmark.returns.periods_per_year:
+        return (PERIODICITY_MISMATCH_STAMP,)
+    return ()
 
 
 def _not_evaluable_reasons(
