@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import datetime as dt
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -71,6 +71,7 @@ __all__ = [
     "Decision",
     "GateStatus",
     "HoldoutRequiredError",
+    "MetricNotReportedError",
     "Outcome",
     "ValidationConfig",
     "Validator",
@@ -80,6 +81,18 @@ __all__ = [
 
 class HoldoutRequiredError(RuntimeError):
     """Raised when a decision is asked for on a passing run whose holdout has not run."""
+
+
+class MetricNotReportedError(RuntimeError):
+    """Raised when the run did not measure something the pre-recorded gate requires.
+
+    A refusal, not the fourth outcome. Spec §6 defines *not evaluable* as surviving only
+    at optimistic costs or being dominated by feasibility failures — both statements about
+    the strategy and its execution. "Nobody ran the cross-validation" is neither: it is a
+    gap in the evidence, and the next step is to run it, not to go and resolve the
+    quote-data question. Filing it as ``NOT_EVALUABLE`` would attach that wrong advice to
+    it.
+    """
 
 
 class GateStatus(StrEnum):
@@ -126,6 +139,15 @@ class Verdict:
     hypothesis_id: str
     status: GateStatus
     window: str
+    judged_series: str
+    """Which series every statistic below was computed on.
+
+    Not decoration: with a walk-forward report the statistics are computed on the
+    concatenated out-of-sample folds, and without one they are computed on the whole
+    window. An out-of-sample deflated Sharpe printed beside an in-sample cost-breakeven
+    is a mismatch a reader cannot see, so the verdict names the series once and every
+    number in it comes from that series."""
+
     graded_at: dt.datetime
     headline: CostBreakeven
     deflated: DeflatedSharpe
@@ -168,6 +190,7 @@ class Verdict:
         """The line an operator reads. It always carries the unverified stamps."""
         lines = [
             f"{self.label} [{self.window}] — {str(self.status).upper()}",
+            f"  judged on: {self.judged_series}",
             f"  headline: {self.headline}",
             f"  deflated Sharpe {self.deflated.value:.3f} "
             f"(observed {self.deflated.observed_sharpe:.4f}/period, "
@@ -200,6 +223,7 @@ class Verdict:
             "hypothesis_id": self.hypothesis_id,
             "status": str(self.status),
             "window": self.window,
+            "judged_series": self.judged_series,
             "graded_at": self.graded_at.isoformat(),
             "trial_id": self.trial_id,
             "metrics": self.metrics(),
@@ -436,14 +460,33 @@ class Validator:
         gate.check_binding(record)
         gate.require_recorded_before(candidate.run_at, what=f"the run {candidate.label!r}")
 
-        judged = walk_forward.out_of_sample if walk_forward is not None else candidate.returns
+        # Every statistic is computed on ONE series. With a walk-forward report that is
+        # the concatenated out-of-sample folds — including the cost-breakeven headline and
+        # the benchmark increment, which would otherwise be in-sample numbers printed
+        # beside an out-of-sample Sharpe. The benchmark is cut to the same span so the
+        # comparison stays like-for-like; if it cannot be, the increment refuses.
+        if walk_forward is not None:
+            judged = walk_forward.out_of_sample
+            judged_run = replace(candidate, returns=judged)
+            judged_benchmark = replace(
+                benchmark, returns=benchmark.returns.restricted_to(judged.window)
+            )
+            judged_series = (
+                f"walk-forward out-of-sample, {len(walk_forward.folds)} folds, "
+                f"{len(judged)} sessions [{judged.window}]"
+            )
+        else:
+            judged = candidate.returns
+            judged_run = candidate
+            judged_benchmark = benchmark
+            judged_series = f"the whole window, {len(judged)} sessions, no walk-forward"
         annotation = epochs_spanned(candidate.window, justification=gate.cross_epoch_justification)
         annotation.require_justification()
 
         deflated = deflated_sharpe_ratio(judged, universe=universe)
-        breakeven = cost_breakeven(candidate)
+        breakeven = cost_breakeven(judged_run)
         tails = tail_metrics(judged)
-        increment = risk_matched_increment(candidate, benchmark=benchmark)
+        increment = risk_matched_increment(judged_run, benchmark=judged_benchmark)
         stamps = tuple(
             dict.fromkeys(
                 (*candidate.unverified_inputs, *deflated.unverified_inputs, EPOCH_PROVENANCE_STAMP)
@@ -466,10 +509,17 @@ class Validator:
             threshold.check(observed.get(threshold.metric))
             for threshold in gate.thresholds_in_force(holdout=holdout is not None)
         )
+        unmeasured = sorted(result.threshold.metric for result in results if result.missing)
+        if unmeasured:
+            raise MetricNotReportedError(
+                f"the gate in {gate.source} requires {', '.join(unmeasured)}, and the run "
+                f"{candidate.label!r} did not report it. Refusing to grade: an unmeasured "
+                "criterion is neither a pass nor a fail, and recording it as either would "
+                "be a statement about the strategy rather than about the evidence."
+            )
         reasons = _not_evaluable_reasons(
             candidate=candidate,
             breakeven=breakeven,
-            results=results,
             gate=gate,
         )
         if reasons:
@@ -483,6 +533,7 @@ class Validator:
             hypothesis_id=universe.hypothesis_id,
             status=status,
             window=str(candidate.window),
+            judged_series=judged_series,
             graded_at=require_aware(self._clock.now(), "clock.now()"),
             headline=breakeven,
             deflated=deflated,
@@ -504,7 +555,6 @@ def _not_evaluable_reasons(
     *,
     candidate: RunEvidence,
     breakeven: CostBreakeven,
-    results: tuple[ThresholdResult, ...],
     gate: DecisionGate,
 ) -> tuple[str, ...]:
     """Spec §6's fourth outcome, decided before pass/fail. See the module docstring."""
@@ -536,11 +586,5 @@ def _not_evaluable_reasons(
             f"{breakeven.multiple:.2f}x, at or below "
             f"{gate.rules.optimistic_costs_below:.2f}x) while the cost inputs are "
             f"unverified ({', '.join(candidate.unverified_inputs)})"
-        )
-    unmeasured = [result.threshold.metric for result in results if result.missing]
-    if unmeasured:
-        reasons.append(
-            f"the run did not report {', '.join(sorted(unmeasured))}, which the gate "
-            "requires; an unmeasured criterion is not a failed one"
         )
     return tuple(reasons)

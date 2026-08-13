@@ -33,6 +33,7 @@ from xman_research import DataWindow, HypothesisRecord, ManualClock, open_sessio
 from xman_research.validation.decision import (
     GateStatus,
     HoldoutRequiredError,
+    MetricNotReportedError,
     Outcome,
     ValidationConfig,
     Validator,
@@ -201,6 +202,65 @@ def test_a_known_overfit_strategy_is_rejected_and_a_known_genuine_one_passes(
     assert genuine_verdict.deflated.selection_size == 12
     assert overfit_verdict.deflated.selection_size == 200
     assert len(genuine_report.folds) == len(overfit_report.folds) == 19
+
+
+@pytest.mark.parametrize("seed", [11, 12, 13])
+def test_the_separation_holds_across_seeds(
+    workspace: tuple[ValidationConfig, Validator], seed: int
+) -> None:
+    """The claim rests on a random draw, so it is checked on three of them.
+
+    What is robust across all three is the *separation*: the genuine family's deflated
+    Sharpe is far above the noise family's, its cost-breakeven clears the 2x bar while the
+    noise family's does not, and the noise family is rejected on the deflation every time.
+
+    Two things are **not** robust, and both are stated as loose bounds here rather than
+    tightened until they look clean. The genuine family does not always clear the 0.95
+    deflated-Sharpe bar in absolute terms (see the next test). And a noise family's
+    cost-breakeven is not always below 1x — at seed 24 the surviving selection keeps a
+    slightly positive gross mean out-of-sample and reads 1.4x. It still fails the 2x bar,
+    which is why the bar is where it is.
+    """
+    config, validator = workspace
+    genuine, _ = grade_family(
+        validator, config, record=make_hypothesis(f"H1 seed {seed}"), seed=seed, genuine=True
+    )
+    noise, _ = grade_family(
+        validator, config, record=make_hypothesis(f"H1b seed {seed}"), seed=seed + 11, genuine=False
+    )
+    assert genuine.deflated.value - noise.deflated.value > 0.85
+    assert genuine.headline.multiple > 2.0 > noise.headline.multiple
+    assert genuine.tails.annualised_sharpe > 1.5
+    assert noise.tails.annualised_sharpe < genuine.tails.annualised_sharpe - 1.0
+    assert noise.status is GateStatus.FAILED
+    assert "deflated_sharpe" in {result.threshold.metric for result in noise.failed_thresholds}
+
+
+def test_a_real_two_sharpe_effect_can_still_miss_the_deflated_sharpe_bar(
+    workspace: tuple[ValidationConfig, Validator],
+) -> None:
+    """A finding, pinned as behaviour rather than left in prose.
+
+    Seed 13's genuine family has a *real* edge — 1.97 annualised out-of-sample over 950
+    sessions, a 4.3x cost-breakeven, a 5% drawdown — and it fails, because its deflated
+    Sharpe is 0.927 against a bar of 0.95. Deflated against only twelve logged trials.
+
+    The bar is not wrong and the effect is not fake. What this shows is how *narrow* the
+    band is: at four years of daily evidence, a 0.95 deflated-Sharpe threshold demands
+    something close to a 2.4 annualised Sharpe, and an honest strategy at 2.0 is rejected.
+    Two consequences for whoever sets thresholds on H1: the bar and the window length have
+    to be chosen together, and a rejection at this margin means *not enough evidence yet*,
+    not *no effect* — the right response is more history, not a new hypothesis.
+    """
+    config, validator = workspace
+    verdict, _ = grade_family(
+        validator, config, record=make_hypothesis("H1 near miss"), seed=13, genuine=True
+    )
+    assert verdict.status is GateStatus.FAILED
+    assert 0.90 < verdict.deflated.value < 0.95
+    assert verdict.tails.annualised_sharpe > 1.9
+    assert verdict.headline.multiple > 4.0
+    assert [result.threshold.metric for result in verdict.failed_thresholds] == ["deflated_sharpe"]
 
 
 def test_the_separation_is_wide_and_the_report_says_where_it_comes_from(
@@ -512,13 +572,19 @@ def test_the_verdict_is_a_record_worth_keeping(
     assert payload["epochs"]["cross_epoch_justification"]
     assert payload["metrics"]["selection_size"] == 12
     assert payload["walk_forward"]["folds"] == 19
+    assert payload["judged_series"].startswith("walk-forward out-of-sample, 19 folds")
     assert "epochs.dates_not_primary_sourced" in payload["metrics"]["unverified_inputs"]
 
 
-def test_a_criterion_the_run_did_not_measure_is_not_a_failed_criterion(
+def test_a_criterion_the_run_did_not_measure_is_refused_not_graded(
     workspace: tuple[ValidationConfig, Validator],
 ) -> None:
-    """An unmeasured threshold is a gap in the evidence, not a property of the strategy."""
+    """An unmeasured threshold is a gap in the evidence, not a property of the strategy.
+
+    So it raises rather than landing on the fourth outcome: "not evaluable" carries the
+    advice *resolve the quote-data question*, and the actual next step here is to run the
+    cross-validation the gate asked for.
+    """
     config, validator = workspace
     record = make_hypothesis("H1 unmeasured")
     dates = trading_sessions(IN_SAMPLE_START, 400)
@@ -526,12 +592,8 @@ def test_a_criterion_the_run_did_not_measure_is_not_a_failed_criterion(
     log_the_search(config, record, how_many=12, sharpes=[0.1])
     candidate = evidence(family.series("cfg11"), label="candidate", run_at=RUN_AT)
     naive = evidence(benchmark_series(dates, seed=14), label="naive", run_at=RUN_AT)
-    verdict = validator.grade(candidate, benchmark=naive, hypothesis=record)  # no CSCV run
-    assert verdict.status is GateStatus.NOT_EVALUABLE
-    assert verdict.not_evaluable_reasons == (
-        "the run did not report pbo, which the gate requires; an unmeasured criterion is "
-        "not a failed one",
-    )
+    with pytest.raises(MetricNotReportedError, match="requires pbo"):
+        validator.grade(candidate, benchmark=naive, hypothesis=record)  # no CSCV run
 
 
 def test_a_verdict_can_be_logged_back_into_the_trial_log(
