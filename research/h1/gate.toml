@@ -1,0 +1,196 @@
+# H1 decision gate — the thresholds, written down BEFORE the run.
+#
+# Committed in its own commit, ahead of the commit that carries any result. That is the
+# corroboration `recorded_at` cannot supply on its own: a timestamp inside a file is a
+# string the author typed, and the git history is what makes it checkable. A gate file
+# that first appears in the same commit as the numbers it grades is not a pre-registration.
+#
+# Every threshold below carries its reasoning. A threshold with no rationale is a number,
+# not a pre-registration — it cannot be defended against the accusation that it was chosen
+# to admit whatever the run happened to produce.
+#
+# ---------------------------------------------------------------------------------------
+# THE SAMPLE, WHICH SIZES EVERYTHING ELSE
+#
+# Usable corpus: 2025-12-31 .. 2026-06-12, 109 NIFTY sessions, complete, zero interior gaps.
+#   * Before 2025-12-31: refused. NIFTY traded at lot size 75 through 2025-12-30 while
+#     every refdata bundle in the corpus declares 65. C5 refuses the contradiction rather
+#     than guessing, and that refusal is correct.
+#   * After 2026-06-12: a vendor capture outage. ~42 sessions permanently absent.
+#
+# In-sample: 2025-12-31 .. 2026-04-30, 80 sessions.
+# Holdout:   2026-05-01 .. 2026-06-12, 29 sessions. See `holdout_first_date` in
+#            validation.toml for why the boundary sits there.
+#
+# Eighty sessions is about four months. That is a small sample for a statistic about the
+# mean of a fat-left-tailed return distribution, and the bars below are set knowing it.
+# ---------------------------------------------------------------------------------------
+
+hypothesis_id = "h_817b33ff6b9f68e288161f5990739744"
+recorded_at = 2026-08-13T01:25:00Z
+
+cross_epoch_justification = """
+The in-sample window crosses one epoch boundary: stt_rise_2026 (2026-04-01), the rise in
+securities transaction tax on options. It is permitted here, for one reason that is about
+this specific boundary and not a general waiver:
+
+A tax-rate change alters the COST LEVEL of the trade. It does not alter the population of
+trades, the contract specification, the expiry calendar, the margin regime or the flow that
+the hypothesis is about. C5 charges both regimes at their own date-effective rates within
+the one run, so no session is charged the wrong rate, and the metric this MVP treats as its
+headline — the cost-breakeven multiple — is precisely the number that absorbs a change in
+cost level. Pooling the two sides therefore pools two cost regimes correctly charged, not
+two different markets.
+
+The alternative was to put the holdout boundary on 2026-04-01, which would make both sides
+epoch-clean and cost nothing but sample: 60 in-sample sessions instead of 80, on the side
+where the verdict is actually decided. Against a sample already too short, that was the
+worse trade. Recorded so the choice is visible rather than inferred.
+
+This does NOT justify a window crossing weekly_expiry_cull_2024 or nse_expiry_tuesday_2025.
+Those changed the traded object; this changed a rate. The gate's own docstring notes that
+this field is per-gate and static, so it is stated narrowly on purpose: this gate grades one
+window, and the boundary named above is the only one that window crosses.
+"""
+
+# ---------------------------------------------------------------------------------------
+# IN-SAMPLE THRESHOLDS
+# ---------------------------------------------------------------------------------------
+
+[thresholds]
+
+# Calibrated, not inherited. The fixture in tests/test_overfit_vs_genuine.py uses 0.95 and
+# C6's own docstring warns against copying it: at four years of daily evidence 0.95 demands
+# something near a 2.4 annualised Sharpe, and that suite pins a REAL 1.97-Sharpe effect
+# being rejected at 0.927. At 80 sessions the same bar is harsher still.
+#
+# So the bar was calibrated on SYNTHETIC series before the run — legitimate, because nothing
+# about the real result enters it. Method: Gaussian series at 80 observations, graded
+# through this package's own deflated_sharpe_ratio against a one-trial selection universe,
+# 40 seeds per point, median DSR reported.
+#
+#   true annualised Sharpe:   0.5    1.0    1.5    2.0    2.5    3.0
+#   median DSR (n=80, N=1):  0.637  0.741  0.826  0.891  0.936  0.964
+#
+# Reproduce with: uv run python research/h1/calibrate_thresholds.py
+#
+# The trade-off, stated because it is the whole decision. With one logged trial the
+# deflation has almost nothing to deflate, so DSR is approximately the probabilistic Sharpe
+# and the bar reads directly as a false-positive rate: 0.95 buys the conventional 5%, and
+# would need a true annualised Sharpe near 2.9 for even odds of detection in 80 sessions.
+# 0.90 buys a 10% false-positive rate and even odds against a true Sharpe of about 2.0.
+#
+# 0.90 is the choice. It accepts a one-in-ten chance of being fooled by noise on this single
+# trial in exchange for a test that can actually detect an effect of the size the literature
+# claims for the index variance risk premium. Lowering it further — 0.70, 0.60 — would buy
+# power against a 1.0-1.5 Sharpe at a 30-40% false-positive rate, and a gate that admits
+# noise a third of the time is not a gate.
+#
+# Recorded in advance, because it is the honest reading of a failure here: at 80 sessions
+# this test cannot distinguish a true annualised Sharpe of 1.0-1.5 from zero at ANY bar that
+# also controls false positives. A miss at 0.90 is therefore evidence of INSUFFICIENT DATA,
+# not evidence of no effect, and the operator should read it that way and not as a refutation.
+deflated_sharpe = { at_least = 0.90 }
+
+# The headline number, per spec §2.1: there are no realised fills anywhere in this system,
+# so the cost model is a documented assumption and not a calibration. "How wrong can the
+# assumption be before the edge disappears" is the only honest question available.
+#
+# 2.0x, from the size of what is unmodelled rather than from the size of what is modelled.
+# C5 charges the full statutory stack — brokerage, exchange transaction charge, SEBI
+# turnover fee, STT on premium, STT on exercise, stamp duty, GST — at date-effective rates.
+# It does not charge: the bid-ask spread (fills are at the bar close), market impact, or
+# slippage between the decision minute and the fill. On NIFTY options those are plausibly
+# the same order as the statutory stack itself for a book crossing the spread twice per
+# expiry cycle. An edge that cannot survive its modelled costs doubling has not been shown
+# to survive contact with a real book, and this bar is unaffected by sample length — it is
+# the one criterion here that 80 sessions does not weaken.
+cost_breakeven_multiple = { at_least = 2.0 }
+
+# Ruin avoidance, not performance. Expressed as a fraction of the fixed capital base
+# (₹10,00,000), which is what C6 denominates returns in. The book runs one NIFTY lot, whose
+# simplified margin sits around 15% of that base, so a drawdown past 10% of capital is
+# roughly two-thirds of the margin actually posted — the region where a live book meets a
+# margin call and is closed out at the worst possible moment, which no backtest models.
+# A short-straddle payoff earns a little most sessions and loses a lot rarely, so this is
+# the criterion the Sharpe ratio is structurally blind to and the one most worth writing
+# down in advance.
+max_drawdown = { at_most = 0.10 }
+
+# Spec §3 C6 requires the increment over the naive always-on benchmark, risk-matched rather
+# than raw. It is gated at zero, and the honest disclosure is that THIS ROUND IT CANNOT
+# FAIL: the MVP's expression of H1 is an unconditional short ATM straddle, which is exactly
+# what strategies.py names as the naive benchmark. Candidate and benchmark are the same
+# portfolio over the same window under the same cost model, so the increment is identically
+# 0.0 and 0.0 >= 0.0 passes.
+#
+# It is recorded anyway rather than omitted, for two reasons. Omitting it would leave the
+# spec's criterion unrecorded, and adding it later — once a conditional variant exists and
+# the number can bite — would be a threshold written after seeing results. And a
+# threshold that is trivially satisfied for a stated structural reason is honest; one that
+# is trivially satisfied for an unstated one is how a gate quietly stops gating.
+risk_matched_increment = { at_least = 0.0 }
+
+# NOT GATED, deliberately:
+#
+# * pbo — probability of backtest overfitting is a statement about choosing among many
+#   configurations. Exactly one configuration is being run: no parameter search, no strike
+#   selection, no signal. Gating on it would force a grid to be fabricated purely to have
+#   something to compute CSCV over, and every cell of that grid would be another logged
+#   trial deflating the very Sharpe it was invented to validate. (C6 also refuses at load
+#   any gate that names pbo in-sample without recording separate holdout thresholds — the
+#   holdout is one run and structurally cannot report it.)
+# * annualised_sharpe — subsumed by deflated_sharpe, which is the same statistic after the
+#   selection correction. Gating both would let the same evidence fail the run twice.
+# * expected_shortfall — max_drawdown already carries the tail criterion in the units an
+#   operator sizes against. A second tail bar adds failure modes, not information.
+
+# ---------------------------------------------------------------------------------------
+# HOLDOUT THRESHOLDS — recorded now, at the same moment as the others, and for the same
+# reason: after the in-sample verdict is exactly when they may no longer be recorded.
+#
+# The holdout is 29 sessions and will be graded with three trials in the family (the
+# in-sample run, the touch row the holdout read writes, and the holdout run itself). At that
+# sample and that selection count, a 0.90 bar needs a true annualised Sharpe well past 3.0
+# for even odds — applying the in-sample bar would not make the holdout stricter, it would
+# make it auto-fail, and an auto-failing holdout tells the operator nothing at all.
+#
+# Same synthetic calibration, at n=29:
+#   true annualised Sharpe:   0.5    1.0    1.5    2.0    2.5    3.0
+#   median DSR (n=29, N=2):  0.456  0.525  0.592  0.657  0.718  0.773
+#
+# 0.50 is the minimal confirmatory statement: after deflation, the evidence in the unseen
+# months still favours a positive true Sharpe more likely than not. The holdout's job here
+# is to confirm or contradict an edge already established in-sample, not to establish one
+# from 29 sessions on its own.
+# ---------------------------------------------------------------------------------------
+
+[holdout_thresholds]
+deflated_sharpe = { at_least = 0.50 }
+cost_breakeven_multiple = { at_least = 2.0 }
+max_drawdown = { at_most = 0.10 }
+risk_matched_increment = { at_least = 0.0 }
+
+# ---------------------------------------------------------------------------------------
+# NOT-EVALUABLE RULES — spec §6's fourth outcome, checked before pass/fail.
+#
+# All three are left at C6's defaults, which is itself the decision and is recorded as one:
+# they were NOT set after looking at a run. Nothing in this repository has yet computed an
+# infeasible fraction or a stale fraction against this corpus, and setting these limits
+# after seeing those numbers would be the purest form of the move this whole gate exists to
+# prevent — the fourth outcome is the one a disappointing result is most tempting to
+# reclassify into, or out of.
+#
+#   max_infeasible_fraction = 0.10 — past a tenth of intents unfillable, the P&L describes
+#     trades the market would not have taken, and the answer is about execution.
+#   max_stale_fraction = 0.20 — past a fifth of sessions marked stale, the equity curve is
+#     substantially an estimate rather than a measurement.
+#   optimistic_costs_below = 1.0 — an edge under water at the modelled rates, saved only by
+#     assuming costs are LOWER than modelled while those costs are unverified, has not been
+#     shown to exist.
+# ---------------------------------------------------------------------------------------
+
+[not_evaluable]
+max_infeasible_fraction = 0.10
+max_stale_fraction = 0.20
+optimistic_costs_below = 1.0

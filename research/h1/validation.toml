@@ -1,0 +1,36 @@
+# H1 validation configuration — the three decisions that must not be taken while looking
+# at a result, so C6 reads them from here rather than accepting them per call.
+
+# The canonical trial log for the H1 family. Every count the deflated Sharpe uses is read
+# from this file and from no other.
+#
+# It is NOT committed: `*.db` is gitignored repo-wide, deliberately, and forcing an
+# exception for this one file would quietly change a repo convention to suit one branch.
+# The consequence is stated rather than hidden — a fresh clone starts with an empty log, so
+# `run_decision.py` re-run elsewhere would see a different trial count and could reach a
+# different deflated Sharpe. `research/h1/trial_log_export.json` is the committed,
+# human-readable record of what this log actually held when the decision was taken, and
+# `tests/test_h1_decision_reproducible.py` pins the chain end-to-end on a temporary log so
+# reproducibility is testable without shipping a binary.
+trial_log_path = "h1_research.db"
+
+gate_path = "gate.toml"
+
+# THE HOLDOUT BOUNDARY. 2026-05-01 leaves 80 in-sample sessions and 29 unseen ones — 27% of
+# the usable corpus, the conventional proportion, and enough to contain six full weekly
+# expiry cycles so the holdout tests the same object the in-sample window did rather than a
+# fragment of one.
+#
+# N was chosen against a hard constraint, not from a rule of thumb: the corpus is 109
+# sessions and every one of them is scarce. A larger holdout (2026-04-01, giving 60/49)
+# would be epoch-clean on both sides but would take a fifth of the evidence off the side
+# where the verdict is decided. A smaller one (say 2026-06-01) would leave under two weeks —
+# too few sessions to say anything, and the holdout is a one-shot resource that cannot be
+# re-cut once read. Six weeks is the smallest span that still carries several complete
+# variance cycles.
+#
+# Nothing in this repository reads a session on or after this date until the in-sample
+# verdict is settled, and C6 records the read when it finally happens.
+holdout_first_date = 2026-05-01
+
+underlying = "NIFTY"
