@@ -94,7 +94,13 @@ def epoch_breakdown(
         max_dd: float | None = None
         skew: float | None = None
         kurt: float | None = None
-        if len(rows) >= 2:
+        # Zero dispersion is not a small sample, it is an undefined statistic, and it
+        # happens for a real reason: an epoch slice in which the book never had a
+        # position prints an unbroken run of identical (zero) returns. _math.sharpe
+        # raises on it, correctly. Reporting None here is the honest answer; catching
+        # the raise further out would have discarded the whole breakdown.
+        dispersed = len({round(value, 15) for value in nets}) > 1
+        if len(rows) >= 2 and dispersed:
             sliced = ReturnSeries(
                 dates=days,
                 net=nets,
