@@ -428,6 +428,16 @@ H1_IN_SAMPLE = DataWindow(dt.date(2025, 12, 31), dt.date(2026, 4, 30))
 #: allowed 61. On the CE leg of the same straddle the volume cap would have allowed 191.
 #: Because both legs share a ``leg_group`` and take the minimum, the PE leg's OI cap sets
 #: the size for the whole straddle.
+#:
+#: **That ceiling is specific to the sessions this cadence enters, and drops if the cadence
+#: changes.** M1 holds to expiry, so it opens on a minority of the window's sessions and
+#: 2,405 units is the thinnest straddle among *those*. Scanning every session in the window
+#: instead — the position an intraday or daily-entry variant would be in — the thinnest is
+#: ``NIFTY-10Mar2026-23750`` on **2026-03-09** at **27 lots (1,755 units)**, bound by the
+#: 0.5%-of-open-interest cap on the **CE** leg. Anyone changing the entry cadence must
+#: re-derive this constant against the sessions the new cadence actually reaches: sized for
+#: a 2,405-unit floor, such a variant would trip the cap and start comparing feasibility
+#: rather than sizing, which is the failure the note above exists to prevent.
 CORPUS_TARGET_NOTIONAL = 24_000_000.0
 CORPUS_CAPITAL = 16_000_000.0
 

@@ -60,6 +60,23 @@ NIFTY = CORPUS_ROOT / "NIFTY"
 #: outage it describes is never empty by accident.
 HORIZON_DAYS = 49
 
+#: **These tests assume the corpus's tail is clean, and will redden if it stops being so.**
+#: Recorded rather than fixed, because each failure would be flagging a real defect in the
+#: data — a confusing red is the right outcome, an amber-proofed green is not. Three
+#: standing assumptions, so that whoever meets the failure recognises it:
+#:
+#: 1. ``test_the_dead_capture_window_is_reported_as_missing`` resolves from 14 days before
+#:    the last captured session and asserts the outage is *one unbroken run*. A capture
+#:    hole inside those 14 days makes it two runs and fails that assertion.
+#: 2. ``test_the_continuously_captured_tail_has_no_holiday_gaps`` derives its stretch from
+#:    the day after the last hole and requires at least 20 sessions of it. A hole landing
+#:    within the final 20 sessions shortens the tail below the floor and fails.
+#: 3. Every fixture taking ``horizon`` resolves ``HORIZON_DAYS`` past the end of capture,
+#:    and the packaged NSE holiday table ends **2026-12-25** — beyond that
+#:    :class:`CalendarCoverageError` refuses the range rather than guessing. So once
+#:    capture extends past roughly 2026-11-06 these tests need the calendar refreshed to
+#:    cover 2027, whose first NSE holiday is Republic Day on 2027-01-26.
+
 #: The one genuine hole inside the December-2025-onward capture, and why it is not one.
 #: A finding about a specific date, so it is pinned — see the module docstring on the
 #: difference between a finding and an extent.
@@ -111,6 +128,9 @@ def test_the_dead_capture_window_is_reported_as_missing(
 
     The window is anchored to where capture actually stopped, so this keeps testing the
     same behaviour as the corpus grows instead of testing last month's boundary.
+
+    **Assumption 1 above:** the "one unbroken outage" assertion holds only while no capture
+    hole falls in the 14 days before the last captured session.
     """
     last_captured = on_disk[-1]
     resolution = store.resolve("NIFTY", last_captured - dt.timedelta(days=14), horizon)
@@ -275,7 +295,9 @@ def test_the_continuously_captured_tail_has_no_holiday_gaps(
     assert resolution.is_complete
     assert resolution.expected_count == resolution.found_count > 0
     # The tail must be a meaningful stretch, or this test passes on a single session and
-    # says nothing about the calendar at all.
+    # says nothing about the calendar at all. **Assumption 2 above:** a future hole inside
+    # the last 20 sessions fails this line, and that failure is a real data defect rather
+    # than a stale fixture — do not relax the floor to make it green.
     assert resolution.found_count >= 20, "the continuously captured tail is too short to test"
 
 
