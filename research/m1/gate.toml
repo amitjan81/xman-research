@@ -1,0 +1,328 @@
+# M1 decision gate — the thresholds, written down BEFORE the run.
+#
+# Committed in its own commit, ahead of the commit carrying any result, for the reason
+# research/h1/gate.toml gives: a `recorded_at` inside a file is a string the author typed,
+# and git history is what makes a pre-registration checkable.
+#
+# THIS GATE SUPERSEDES research/h1/gate.toml. That file is NOT edited. It graded an
+# 80-session window and it stays in the repository, unchanged, saying so. Both are visible
+# in history and the difference between them is one thing: the window. Everything that
+# follows is an argument about what a 385-session window does to a bar sized for 80.
+#
+# =======================================================================================
+# THE SAMPLE, WHICH SIZES EVERYTHING ELSE
+#
+# Costable window, from M1 §13 and not from preference: 2024-10-01 .. 2026-08-03.
+#   * Before 2024-10-01 the securities transaction tax rates are UNDEFINED — the cost
+#     stack raises RateNotInForceError rather than guessing, so no session before that
+#     date can be costed at all.
+#   * After 2026-08-03 NSE settles on the Closing Auction Session price, a rule the
+#     settlement table carries with implemented=false and REFUSES to settle against. M1
+#     holds to settlement, so the refusal is reachable and the ceiling is real.
+#
+# Resolved against the corpus with SessionStore.resolve:
+#   costable window   2024-10-01..2026-08-03:  449 found / 452 expected, 3 missing
+#   IN-SAMPLE         2024-10-01..2026-04-30:  385 found / 388 expected, 3 missing
+#   HOLDOUT           2026-05-01..2026-08-03:   64 found /  64 expected, COMPLETE
+#
+# 385 sessions is 384 return observations, and 384 is the number every bar below is sized
+# against. IT IS NOT 449. 449 is the costable window, which spans the holdout; the graded
+# in-sample sample stops at the boundary H1 sealed. Conflating the two would size the bars
+# against 65 sessions nobody is allowed to look at.
+#
+# THE GAP POLICY, decided and implemented rather than discovered at run time. All three
+# missing sessions fall in-sample: 2024-11-20, 2025-04-30 and 2025-05-08. The run passes
+# `accept_gaps` a written reason naming all three. The window is NOT narrowed to avoid
+# them — narrowing either fragments the trial or discards roughly 140 sessions including
+# the regime change itself.
+#
+# 2024-11-20 IS ITSELF AN EPOCH BOUNDARY (weekly expiry cull, contract size increase,
+# expiry-day ELM), and losing it costs little for a reason worth writing down: it was a
+# Wednesday, and pre-Tuesday-change expiries fell on Thursdays, so no settlement is lost.
+# The boundary merely lacks its first day's marks, which biases neither side of it.
+# =======================================================================================
+
+hypothesis_id = "h_0b2ecbbc4bddb543599add3968e0cf88"
+recorded_at = 2026-08-19T00:00:00Z
+
+sizing_floor_check = """
+M1 §12.1, EXECUTED. The spec requires this to be run, not assumed, and it was run over the
+graded window before this file was committed.
+
+  min_t  N* / (S_t,09:20 * L_t)  >=  0.5,   N* = 1,500,000
+
+  AS SPECIFIED (L_t = LotSizeAudit.reference_lot_size, the bars-supported multiplier):
+      PASS. minimum ratio 0.7610 on 2025-12-01 (spot 26,281.15, L = 75).
+      385 sessions checked, none without a spot at the decision minute.
+
+Because floor(x + 1/2) >= 1 exactly when x >= 0.5, a passing check means no session on
+this window reaches M1 §5's n_t = 0 branch, so M1 §4's corresponding suppression never
+fires and *which sessions trade* does not depend on the contract multiplier. That is the
+whole point of the check and it is the reason the sizing floor could be dropped.
+
+A SECOND MINIMUM IS REPORTED, AND IT IS NOT REDUNDANCY. §12.1 names reference_lot_size.
+The ENGINE sizes on the DECLARED lot size — engine.py says so, citing the owner decision
+of 2026-08-13 that turned an unoverridable refusal into a stamp, and Contract.lot_size is
+read verbatim from the refdata LotSize column. The two disagree on most of the corpus, so
+the quantity the spec verifies is not the quantity the run uses:
+
+  AS EXECUTED (L_t = declared lot size):
+      PASS. minimum ratio 0.8767 on 2026-01-05 (spot 26,323.90, L = 65).
+
+Both pass, and on this window the discrepancy runs in the SAFE direction: where the two
+disagree the declared value is the smaller (65 against a bars-supported 75), so the engine
+sizes larger than the checked quantity and is further from the zero branch, not closer.
+That is a fact about this window, not a property of the spec. On a window where declared
+exceeded reference, §12.1 as written could pass while the engine still sized to zero.
+Recorded as a defect in the spec rather than silently patched, because §12.1 is
+owner-approved text and this gate is not the place to rewrite it.
+
+Re-execution rule, pre-registered: this check re-runs over the holdout window if and only
+if the holdout is spent, and not before. It reads spot prices, which is a stronger read
+than H26's gap census (date arithmetic and bar presence only), so running it over sealed
+sessions would open the envelope this apparatus exists to keep shut.
+
+Reproduce: uv run python -m xman_research.models.sizing_floor --start 2024-10-01 --end 2026-04-30
+"""
+
+cross_epoch_justification = """
+H1'S ARGUMENT DOES NOT COVER THIS WINDOW, and stretching it would be dishonest. H1's gate
+permitted one boundary — stt_rise_2026, a change in a RATE — and stated in terms that this
+"does NOT justify a window crossing weekly_expiry_cull_2024 or nse_expiry_tuesday_2025.
+Those changed the traded object." This window crosses both of those and three more:
+
+  stt_rise_2024                        2024-10-01  (the window opens on it)
+  weekly_expiry_cull_2024              2024-11-20  weekly expiries culled, contract size
+                                                   raised, expiry-day ELM added
+  calendar_spread_relief_removed_2025  2025-02-10
+  intraday_position_limits_2025        2025-04-01
+  nse_expiry_tuesday_2025              2025-09-01  expiry moved Thursday -> Tuesday
+  stt_rise_2026                        2026-04-01
+
+Two of those changed the traded object itself. A single pooled number over this window
+describes a market that never existed, and no argument makes it describe one.
+
+SO WHY POOL AT ALL. Because the alternative is worse, and because the pooled number is
+still the answer to a question worth asking. Splitting the window into six graded
+sub-windows would burn six trials against a family already carrying five, deflate every
+one of the six Sharpes accordingly, hand the researcher a post-hoc choice of which regime
+to believe, and leave the largest sub-window with fewer sessions than H1 already showed
+were too few. The pooled verdict is the honest form of "does this premium survive being
+traded through everything the regulator did to this market", which is a real question with
+a real answer, and it is the question a single unconditional model can be graded on.
+
+THE POOLED VERDICT IS THE GRADED ONE. The per-epoch breakdown below is DESCRIPTIVE and
+UNGRADED. That assignment is made here, before any number exists, precisely because it is
+the assignment a disappointing pooled result would most want to revisit.
+
+What the pooled number therefore means, stated in advance: it is a statement about the
+average of six regimes weighted by their session counts, and it is NOT a statement about
+any one of them. If the per-epoch table shows the effect living in one regime, that is the
+finding, and it is a finding this gate cannot grade.
+"""
+
+# =======================================================================================
+# IN-SAMPLE THRESHOLDS
+# =======================================================================================
+
+[thresholds]
+
+# RECALIBRATED, and the calibration contradicted the expectation that prompted it.
+#
+# Synthetic Gaussian series at 384 observations, graded through this package's own
+# deflated_sharpe_ratio, 40 seeds per point. The realised family trial count at M1's
+# grading will be SIX (inventory below), so N=6 is the row that governs.
+#
+# Reproduce: uv run python -m xman_research.h1.calibrate_thresholds \
+#              --case 384:6 --bar 0.80 --bar 0.90 --bar 0.95
+#
+#   true ann. Sharpe:   0.0    0.5    1.0    1.5    2.0    2.5    3.0
+#   median DSR:        0.246  0.472  0.707  0.876  0.960  0.990  0.998
+#   share >= 0.80:      2.5%  17.5%  30.0%  57.5%  80.0%  85.0%  95.0%
+#   share >= 0.90:      0.0%   2.5%  22.5%  40.0%  60.0%  82.5%  87.5%
+#   share >= 0.95:      0.0%   0.0%   7.5%  25.0%  52.5%  72.5%  82.5%
+#
+# THE 0.0 ROW IS NEW. It is the null, it is the only row on which a false-positive rate
+# can be read, and it was absent when H1's and H26's bars were argued — both were reasoned
+# from the power side alone. Adding it changes no number either of them published.
+#
+# WHAT THE GRID SAYS, against what was expected. The expectation going in was that more
+# observations make the deflation bite harder, so the bar must come down. It is the other
+# way round. The deflation term grows with TRIALS; the estimate sharpens with
+# OBSERVATIONS, and n moved by a factor of five while N moved by one. Compare like for
+# like at a fixed N=6: at n=79 a true annualised Sharpe of 3.0 has a median DSR of 0.704,
+# and at n=384 it has 0.998. The same bar that was unreachable on H26's sample is
+# comfortable on this one.
+#
+# SO THE BAR STAYS AT 0.90, and staying is a recalibration, not an inheritance — the grid
+# above is the argument, and it is a different argument from H1's.
+#
+#   * Not auto-failing. H1 rejected an auto-failing bar because it "tells the operator
+#     nothing at all". At N=6, 0.90 is cleared by a true Sharpe of 2.0 in 60% of draws and
+#     3.0 in 87.5%. It has real power against real effect sizes.
+#   * Not a non-gate. H1 rejected 0.60-0.70 because "a gate that admits noise a third of
+#     the time is not a gate". At 0.90 noise clears in 0.0% of 40 draws.
+#   * It is STRICTER than what H1 bought. H1's own gate says its 0.90 "buys a 10%
+#     false-positive rate" at 80 observations and one trial. At 384 observations and six
+#     trials the same number buys ~0%, with MORE power than H1 had, not less.
+#
+# WHY NOT 0.80, which the grid also supports (2.5% false positives, 57.5% power at a 1.5
+# Sharpe against 0.90's 40%). Because lowering a bar as the sample grows is the wrong
+# direction of error, and it is the direction that manufactures false positives rather
+# than costing true ones. The extra power 0.80 buys is power against a 1.0-1.5 Sharpe,
+# which is exactly the region H1 recorded this apparatus cannot resolve honestly. Between
+# an error that costs a true positive and one that manufactures a false one, this
+# repository has consistently taken the first, and does so again here.
+#
+# WHY NOT 0.95. It would be defensible on false positives — also 0%. It costs 15 points of
+# power at a 1.5 Sharpe for no measurable gain in false-positive control, and raising a bar
+# above the level a superseded gate registered, on a hypothesis already known to have
+# missed, invites exactly the suspicion that it was raised to guarantee the miss. 0.90 is
+# the number already on the record; keeping it is the move that cannot be read that way.
+#
+# Pre-written, because it is the honest reading of a miss: at 384 observations this test
+# CAN resolve a true annualised Sharpe of 2.0 or better. A miss at 0.90 here is therefore
+# a materially stronger statement than H1's miss was — it is evidence against an effect of
+# that size, not merely evidence of insufficient data. It remains uninformative about a
+# true Sharpe below roughly 1.0.
+deflated_sharpe = { at_least = 0.90 }
+
+# INHERITED FROM H1 DELIBERATELY, and inheritance is correct here for a stated reason: this
+# bar is a tolerance for UNMODELLED cost, and it is the one criterion sample length does
+# not touch. What is unmodelled is unchanged — bid-ask spread, market impact, slippage
+# between the decision minute and the fill, since fills are at the bar close with s = 0 bps
+# by M1 §7's deliberately optimistic default. The trade structure is unchanged: two
+# spread-bearing entry legs per expiry cycle, exits by cash settlement which cross no
+# spread. Nothing that determines this number moved, so this number does not move.
+cost_breakeven_multiple = { at_least = 2.0 }
+
+# KEPT AT 0.10, AND IT IS NOW A STRICTLY HARDER BAR THAN IT WAS. That is not an oversight.
+#
+# Maximum drawdown is monotone in window length: a longer window can only contain more
+# opportunities for the worst peak-to-trough to occur, so 0.10 over 385 sessions is a
+# materially stronger demand than 0.10 over 80. H1 measured 6.1% on 80 sessions; nothing
+# guarantees 385 sessions across six regimes stay under 10%.
+#
+# It is kept because it is a bound on the LOSS, not on the drawdown-to-margin ratio —
+# H26's re-derivation, which corrected H1's mistaken "one lot ties up around 15% of
+# capital" premise against a measured peak margin of 47.6%. Ten per cent of a 10,00,000
+# capital base lost by this book is the point at which the strategy has stopped being the
+# thing described, and that point does not move because the window got longer.
+#
+# Relaxing a ruin bar BECAUSE the window grew would be the clearest possible instance of
+# the move this apparatus exists to prevent: the sample changed, the bar became harder to
+# clear, and the response was to make it easier. Recorded in advance: if M1 fails on
+# max_drawdown alone, the correct reading is that a 19-month unconditional short-straddle
+# book drew down past a tenth of its capital, which is a true and useful finding and not
+# an artefact of the bar.
+max_drawdown = { at_most = 0.10 }
+
+# STRUCTURALLY CANNOT FAIL, exactly as H1 recorded. M1 is the unconditional expression of
+# H1, which is what strategies.py names as the naive benchmark, so candidate and benchmark
+# are the same portfolio over the same window under the same cost model and the increment
+# is identically 0.0. It is recorded anyway rather than omitted: omitting it would leave
+# spec §3 C6's criterion unrecorded, and adding it later — once a conditional variant
+# exists and it can bite — would be a threshold written after seeing results.
+risk_matched_increment = { at_least = 0.0 }
+
+# NOT GATED, deliberately, on H1's reasoning unchanged: `pbo` (one configuration is run, so
+# CSCV has nothing to compare, and manufacturing a grid would add trials that deflate the
+# very Sharpe the grid was invented to validate); `annualised_sharpe` (subsumed by
+# deflated_sharpe, and gating both lets the same evidence fail the run twice); and
+# `expected_shortfall` (max_drawdown already carries the tail criterion in the units an
+# operator sizes against).
+
+# =======================================================================================
+# HOLDOUT THRESHOLDS — recorded now, at the same moment as the others, because after the
+# in-sample verdict is exactly when they may no longer be recorded.
+#
+# The holdout is 2026-05-01 .. 2026-08-03: 64 sessions, 63 return observations, complete.
+# It ends at M1's costable ceiling, not at the corpus end, because M1 HOLDS TO SETTLEMENT
+# and the Closing Auction Session rule from 2026-08-03 refuses to settle.
+#
+# At holdout grading the family will hold EIGHT trials: the six below, plus the touch row
+# the holdout read itself writes, plus the holdout run.
+#
+#   true ann. Sharpe:   0.0    0.5    1.0    1.5    2.0    2.5    3.0
+#   median DSR (63,8): 0.090  0.131  0.184  0.249  0.334  0.429  0.528
+#   share >= 0.50:      7.5%  15.0%  25.0%  32.5%  35.0%  40.0%  57.5%
+#
+# 0.50 is the minimal confirmatory statement — after deflation the unseen months still
+# favour a positive true Sharpe more likely than not — and at 7.5% noise clearance it is
+# not a non-gate. It is WEAK, and that is stated rather than hidden: 63 observations
+# against eight trials cannot establish an edge, only fail to contradict one. That is the
+# holdout's job here.
+# =======================================================================================
+
+[holdout_thresholds]
+deflated_sharpe = { at_least = 0.50 }
+cost_breakeven_multiple = { at_least = 2.0 }
+max_drawdown = { at_most = 0.10 }
+risk_matched_increment = { at_least = 0.0 }
+
+# =======================================================================================
+# NOT-EVALUABLE RULES — spec §6's fourth outcome, checked before pass/fail. Left at C6's
+# defaults, which is itself the decision and is recorded as one: they were NOT set after
+# looking at a run, and nothing has computed an infeasible or stale fraction against this
+# window. FAILS_THRESHOLD and NOT_EVALUABLE are both successful deliverables here; the
+# fourth outcome is the one a disappointing result is most tempting to reclassify into,
+# or out of, which is why these are not touched.
+# =======================================================================================
+
+[not_evaluable]
+max_infeasible_fraction = 0.10
+max_stale_fraction = 0.20
+optimistic_costs_below = 1.0
+
+# =======================================================================================
+# THE PRE-REGISTERED TRIAL INVENTORY. N is read from the log at grading time and never
+# typed, but what the log is EXPECTED to hold is written here in advance so a disagreement
+# is visible rather than absorbed.
+#
+# The canonical log at /home/qa/runtime/data/research/trial_log.db already holds FIVE rows,
+# all in H1's family (verified by reading it, not by assuming):
+#   1. H1's trial, replayed from research/h1/decision.json.
+#   2. + 3. two rows with outcome=error against H26 v1 — the runs that died on the exit
+#      path. KEPT. Deleting rows from an append-only research log to reach a flattering
+#      count is the move this apparatus exists to prevent.
+#   4. + 5. H26 v2's in-sample candidate and benchmark.
+#
+# M1 adds ONE row: its in-sample run, which is presented twice under two labels
+# (candidate and benchmark) because it IS the same run, and so burns one token.
+#
+#   AT M1's IN-SAMPLE GRADING THE FAMILY SHOULD HOLD SIX ROWS. N = 6.
+#
+# M2 runs AFTER M1 against the same log and adds two more, so M2 grades at N = 8. That
+# ordering is pre-registered here because it changes both bars, and discovering it at run
+# time would mean a bar calibrated against the wrong count.
+#
+# EVERY RE-RUN OF THIS DECISION APPENDS MORE TRIALS AND MOVES N. The decision is run
+# against the canonical log EXACTLY ONCE. Smoke-testing goes to a temporary log.
+# =======================================================================================
+
+# =======================================================================================
+# THE PER-EPOCH BREAKDOWN, pre-registered so it cannot become a narrative escape hatch.
+#
+# A FAILS_THRESHOLD pooled verdict sitting beside one attractive regime reads, in prose,
+# as a pass. So its status, its form and its predicted direction are fixed here, before
+# any of it is computed.
+#
+# STATUS: DESCRIPTIVE, UNGRADED, and incapable of changing the outcome. No threshold reads
+# it. It appears in DECISION.md under a heading that says so. Grading it would require
+# six separate trials, would deflate all six Sharpes, and would hand the researcher a
+# post-hoc choice of which regime to believe — which is the whole failure mode.
+#
+# FORM: the in-sample daily net return series partitioned by the six epoch boundaries
+# above, each partition attributed to the epoch in force on the session date. Per epoch:
+# session count, net P&L, annualised Sharpe, maximum drawdown, cost-breakeven multiple.
+# The same statistics as the pooled run, computed on the same series, sliced.
+#
+# PREDICTED SIGN, committed in advance: the mechanism (intermediation rent) predicts a
+# POSITIVE mean net return in EVERY epoch, because dealer capacity constraints are not a
+# feature of any one regulatory regime. The most likely genuine exception is
+# weekly_expiry_cull_2024, which cut the supply of weekly expiries and could plausibly
+# have compressed the rent. Reported whichever way it points.
+#
+# WHAT IT CANNOT SUPPORT: the smallest partitions are short. No epoch with fewer than
+# roughly 60 sessions can carry a Sharpe worth reading, and none will be claimed for one.
+# =======================================================================================
