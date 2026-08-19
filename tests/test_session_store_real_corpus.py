@@ -12,6 +12,26 @@ out still gets a green suite — the skip is honest, not a pass.
 re-acquired: the vendor subscription behind it lapsed on 2026-06-14 and every session
 since is permanently gone. Nothing here writes, and the store has no code path that
 could.
+
+**Nothing in this module pins the corpus's extent, and that is the point.** Three
+separate times, assertions here were written against the corpus's boundaries as they
+stood on the day — 119 sessions, then 161, then 161 again with a different end — and
+three times a backfill or a recovery turned a correct test red without a line of
+production code changing. The extent of a data set is not a property of this reader, so
+asserting it measures the state of a pipeline rather than the behaviour of the code.
+
+What is asserted instead are **relationships between three artefacts that are produced
+independently**: the parquet files the producer wrote, the rows in its manifest, and the
+NSE trading calendar. Those three agreeing is a real and falsifiable claim — it breaks
+if the calendar is wrong about a holiday, if the producer writes a file for a closed
+day, or if the reader resolves a session the manifest never recorded — and it survives
+the corpus growing, because growth moves all three together.
+
+**Findings still get pinned; extents do not.** The distinction is the whole lesson. A
+measurement about specific historical sessions (December 2025's contradicted lot size,
+say, or the 2026-01-15 calendar erratum) is a claim about the world that a test should
+state and defend. "There are 161 sessions" is a claim about how much of the world has
+been downloaded so far.
 """
 
 from __future__ import annotations
@@ -30,94 +50,140 @@ CORPUS_ROOT = Path("/home/qa/runtime/data/backtest/datasets/dhan")
 MANIFEST_PATH = Path("/home/qa/runtime/data/backtest/dhan/manifest.sqlite")
 NIFTY = CORPUS_ROOT / "NIFTY"
 
-# The corpus's own boundaries, as they stand.
-FIRST_SESSION = dt.date(2025, 12, 16)
-LAST_SESSION = dt.date(2026, 8, 12)
-TODAY = dt.date(2026, 9, 30)
+#: How far past the end of capture the "dead window" tests reach, in calendar days.
+#:
+#: **Derived from the corpus, never from the wall clock or a fixed date.** The horizon is
+#: this many days after the last session actually on disk, and the injected clock is set
+#: to it, so the range being asked about is always genuinely past the end of capture no
+#: matter how far capture has got. Seven weeks because that is comfortably more than any
+#: holiday cluster in the NSE calendar, so the window always contains trading days and the
+#: outage it describes is never empty by accident.
+HORIZON_DAYS = 49
 
-# Counts, re-derived rather than remembered: 161 parquet files and 161 producer manifest
-# rows between FIRST_SESSION and LAST_SESSION, against 161 calendar sessions once
-# NSE_ERRATA removes 2026-01-15. The dead capture window from 2026-08-13 to TODAY is 34
-# further sessions, giving 195 expected across the whole span.
-#
-# **These moved once already, and that is the point of re-deriving them.** The corpus
-# previously stopped at 2026-06-12 and the numbers here were 119 and 42. A vendor backfill
-# then filled 2026-06-15..2026-08-12, and every assertion pinned to the old boundary failed
-# — correctly. The tests were measuring a real property of the corpus, and the corpus
-# changed; the outage boundary moved rather than disappeared, so the shape of each test
-# below is unchanged and only the dates and counts are restated.
-CAPTURED_SESSIONS = 161
-DEAD_WINDOW_SESSIONS = 34
+#: The one genuine hole inside the December-2025-onward capture, and why it is not one.
+#: A finding about a specific date, so it is pinned — see the module docstring on the
+#: difference between a finding and an extent.
+NSE_ELECTION_CLOSURE = dt.date(2026, 1, 15)
 
 pytestmark = pytest.mark.skipif(not NIFTY.is_dir(), reason=f"real corpus not present at {NIFTY}")
 
 
+def _sessions_on_disk() -> tuple[dt.date, ...]:
+    """Every session the producer actually wrote, read off disk at collection time."""
+    return tuple(sorted(dt.date.fromisoformat(p.name[: -len(".parquet")]) for p in NIFTY.glob("*.parquet")))
+
+
+@pytest.fixture(scope="module")
+def on_disk() -> tuple[dt.date, ...]:
+    dates = _sessions_on_disk()
+    assert dates, f"the corpus directory {NIFTY} exists but holds no parquet files"
+    return dates
+
+
+@pytest.fixture(scope="module")
+def horizon(on_disk: tuple[dt.date, ...]) -> dt.date:
+    """A date safely past the end of capture, derived from where capture actually got to."""
+    return on_disk[-1] + dt.timedelta(days=HORIZON_DAYS)
+
+
 @pytest.fixture
-def store() -> SessionStore:
-    return SessionStore(
-        CORPUS_ROOT,
-        clock=ManualClock(datetime(2026, 9, 30, 9, 15, tzinfo=UTC)),
-        manifest_path=MANIFEST_PATH,
-    )
+def store(horizon: dt.date) -> SessionStore:
+    """The store, with its clock pinned to the horizon.
+
+    The clock is injected rather than read from the machine: a store that asks "what
+    should exist by now?" against the real time of day would give a different answer every
+    run, and the sessions it expects are exactly what these tests measure.
+    """
+    clock = ManualClock(datetime(horizon.year, horizon.month, horizon.day, 9, 15, tzinfo=UTC))
+    return SessionStore(CORPUS_ROOT, clock=clock, manifest_path=MANIFEST_PATH)
 
 
-def test_the_dead_capture_window_is_reported_as_missing(store: SessionStore) -> None:
+def test_the_dead_capture_window_is_reported_as_missing(
+    store: SessionStore, on_disk: tuple[dt.date, ...], horizon: dt.date
+) -> None:
     """The headline criterion, against the live failure it was written for.
 
-    Capture stops after 2026-08-12. A range that runs from inside the corpus to today must
-    say so — loudly, with the count — rather than hand back the sessions it happens to
-    have and let a Sharpe ratio be computed over a seven-week hole.
+    Capture stops somewhere. A range that runs from inside the corpus to past that point
+    must say so — loudly, with the count — rather than hand back the sessions it happens
+    to have and let a Sharpe ratio be computed over the hole.
+
+    The window is anchored to where capture actually stopped, so this keeps testing the
+    same behaviour as the corpus grows instead of testing last month's boundary.
     """
-    resolution = store.resolve("NIFTY", dt.date(2026, 8, 1), TODAY)
+    last_captured = on_disk[-1]
+    resolution = store.resolve("NIFTY", last_captured - dt.timedelta(days=14), horizon)
 
     assert not resolution.is_complete
-    assert resolution.missing_count == DEAD_WINDOW_SESSIONS
+    assert resolution.missing_count > 0
     assert resolution.missing_runs() == (resolution.missing,), "one unbroken outage"
-    assert min(resolution.missing) == dt.date(2026, 8, 13)
-    assert max(resolution.missing) == TODAY
+    assert min(resolution.missing) > last_captured, "a captured session was reported missing"
+    assert max(resolution.missing) <= horizon
+
+    # Every missing day is a day the calendar calls open and the producer did not write.
+    # This is what stops the criterion degrading into "the calendar surprised us".
+    for day in resolution.missing:
+        assert not (NIFTY / f"{day.isoformat()}.parquet").exists()
     assert "MISSING" in resolution.summary()
 
     with pytest.raises(MissingSessionsError):
         resolution.sessions()
 
     # The sessions are reachable, but only deliberately and with a reason on the record.
-    accepted = resolution.accept_gaps("capture stops after 2026-08-12; see ops log")
-    assert all(ref.session_date <= LAST_SESSION for ref in accepted)
+    accepted = resolution.accept_gaps("capture stops at the end of the corpus; see ops log")
+    assert accepted, "the range covers captured sessions, so accepting gaps must yield some"
+    assert all(ref.session_date <= last_captured for ref in accepted)
 
 
-def test_the_outage_boundary_is_where_the_corpus_actually_stops(store: SessionStore) -> None:
-    """Pin the edge: the last captured session resolves, the next trading day does not."""
-    ending = store.resolve("NIFTY", LAST_SESSION, LAST_SESSION)
+def test_the_outage_boundary_is_where_the_corpus_actually_stops(
+    store: SessionStore, on_disk: tuple[dt.date, ...], horizon: dt.date
+) -> None:
+    """Pin the edge: the last captured session resolves, everything after it does not."""
+    last_captured = on_disk[-1]
+
+    ending = store.resolve("NIFTY", last_captured, last_captured)
     assert ending.is_complete
 
-    after = store.resolve("NIFTY", LAST_SESSION + dt.timedelta(days=1), TODAY)
+    after = store.resolve("NIFTY", last_captured + dt.timedelta(days=1), horizon)
     assert after.found_count == 0
     assert after.missing_count == after.expected_count > 0
 
 
-def test_the_reader_agrees_with_the_producer_over_the_captured_span(
-    store: SessionStore,
+def test_the_reader_agrees_with_the_producer_and_the_calendar(
+    store: SessionStore, on_disk: tuple[dt.date, ...]
 ) -> None:
-    """Reader vs producer, over the whole corpus — the cross-check a fixture cannot do.
+    """Reader vs producer vs calendar, over the whole corpus — the cross-check a fixture cannot do.
 
-    Every parquet file on disk is a day the NSE calendar calls a trading day (no file
-    exists for a day the market was shut), and the manifest has a row for every file
-    the reader resolved. A disagreement here means the calendar, the producer or this
-    reader is wrong, and it is worth failing over rather than discovering downstream.
+    Three independently produced artefacts have to tell one story: the parquet files, the
+    producer's manifest, and the NSE calendar. A disagreement means one of the three is
+    wrong, and it is worth failing over rather than discovering downstream.
+
+    **The corpus is no longer whole in its interior, and this test says so rather than
+    asserting it away.** It now carries a historical backfill reaching to 2021 alongside
+    the original December-2025-onward capture, and the historical portion has genuine
+    holes. So the claim here is the arithmetic one — every file resolves, every resolved
+    session has a manifest row, no file exists for a day the market was shut, and found
+    plus missing accounts for everything the calendar expected — not the much stronger and
+    now false claim that nothing is missing.
     """
-    resolution = store.resolve("NIFTY", FIRST_SESSION, LAST_SESSION)
+    resolution = store.resolve("NIFTY", on_disk[0], on_disk[-1])
 
-    # sessions(), not accept_gaps(): over the captured span there is now nothing to accept,
-    # and reaching for the gap door would misrepresent a complete range as a partial one.
-    sessions = resolution.sessions()
-    on_disk = {p.name[: -len(".parquet")] for p in NIFTY.glob("*.parquet")}
-    assert {ref.session_date.isoformat() for ref in sessions} == on_disk
+    # accept_gaps, not sessions(): the span has real holes and reaching for sessions()
+    # would raise. The reason is written because the store requires one, and because a
+    # scan over "whatever was captured" is exactly what this test means to do.
+    refs = resolution.accept_gaps(
+        "reader/producer/calendar cross-check: the comparison is over whatever the "
+        "producer wrote, and a hole in the calendar cannot hide a disagreement in the "
+        "sessions that do exist"
+    )
+
+    assert tuple(ref.session_date for ref in refs) == on_disk, "reader and producer disagree"
     assert resolution.unexpected == (), "a parquet file exists for a day the calendar calls closed"
-    assert len(sessions) == CAPTURED_SESSIONS
+    assert resolution.found_count + resolution.missing_count == resolution.expected_count
+    assert set(resolution.missing).isdisjoint(on_disk), "a session on disk was called missing"
 
     assert resolution.manifest_available
-    assert all(ref.sha256 is not None for ref in sessions)
-    assert all(ref.status == "published" for ref in sessions)
+    assert all(ref.sha256 is not None for ref in refs), "a resolved session has no manifest row"
+    assert all(ref.status == "published" for ref in refs)
 
 
 def test_the_apparent_gap_inside_the_captured_span_was_a_calendar_error(
@@ -136,8 +202,8 @@ def test_the_apparent_gap_inside_the_captured_span_was_a_calendar_error(
     """
     resolution = store.resolve("NIFTY", dt.date(2026, 1, 12), dt.date(2026, 1, 16))
 
-    assert not (NIFTY / "2026-01-15.parquet").exists()
-    assert dt.date(2026, 1, 15) not in resolution.expected
+    assert not (NIFTY / f"{NSE_ELECTION_CLOSURE.isoformat()}.parquet").exists()
+    assert NSE_ELECTION_CLOSURE not in resolution.expected
     assert resolution.missing == ()
     assert resolution.is_complete
     assert [ref.session_date for ref in resolution.sessions()] == [
@@ -175,10 +241,10 @@ def test_the_manifest_digest_is_over_content_not_over_the_parquet_bytes(
     """Pin the contract that the obvious implementation gets wrong.
 
     Hashing the parquet file disagrees with the manifest on **every** session in the
-    corpus — all 119 — because the producer deliberately hashes the frame's CSV
-    rendering, so that a file rewritten by a newer pyarrow with identical data still
-    verifies. This test fails if either side of that contract moves, including if a
-    pandas upgrade changes CSV float formatting under us.
+    corpus, because the producer deliberately hashes the frame's CSV rendering, so that a
+    file rewritten by a newer pyarrow with identical data still verifies. This test fails
+    if either side of that contract moves, including if a pandas upgrade changes CSV float
+    formatting under us.
     """
     ref = store.resolve("NIFTY", dt.date(2026, 5, 4), dt.date(2026, 5, 4)).sessions()[0]
     frame = store.load_session(ref)
@@ -187,36 +253,47 @@ def test_the_manifest_digest_is_over_content_not_over_the_parquet_bytes(
     assert hashlib.sha256(ref.parquet_path.read_bytes()).hexdigest() != ref.sha256
 
 
-def test_weekends_and_real_holidays_are_never_counted_as_capture_gaps(
-    store: SessionStore,
+def test_the_continuously_captured_tail_has_no_holiday_gaps(
+    store: SessionStore, on_disk: tuple[dt.date, ...]
 ) -> None:
-    """Over the whole captured span, the only reported gap is the genuine one.
+    """Over the stretch capture ran without interruption, the only gaps are real holidays.
 
-    If the calendar were wrong about NSE holidays, this range would report every
-    holiday it did not know about as a missing session — the exact way criterion 1
-    degrades into noise nobody reads.
+    If the calendar were wrong about NSE holidays, this range would report every holiday it
+    did not know about as a missing session — the exact way criterion 1 degrades into noise
+    nobody reads. That claim can only be made where capture is genuinely continuous, so the
+    stretch is *derived*: it starts the day after the last real hole and runs to the end of
+    the corpus. Backfilling a hole lengthens it; nothing makes it go stale.
     """
-    resolution = store.resolve("NIFTY", FIRST_SESSION, LAST_SESSION)
+    whole = store.resolve("NIFTY", on_disk[0], on_disk[-1])
+    tail_start = max(whole.missing) + dt.timedelta(days=1) if whole.missing else on_disk[0]
+
+    resolution = store.resolve("NIFTY", tail_start, on_disk[-1])
 
     assert resolution.missing == ()
-    assert resolution.expected_count == resolution.found_count == CAPTURED_SESSIONS
     assert resolution.is_complete
+    assert resolution.expected_count == resolution.found_count > 0
+    # The tail must be a meaningful stretch, or this test passes on a single session and
+    # says nothing about the calendar at all.
+    assert resolution.found_count >= 20, "the continuously captured tail is too short to test"
 
 
-def test_the_whole_span_reports_the_capture_outage_and_nothing_else(
-    store: SessionStore,
+def test_the_whole_span_accounts_for_every_session_it_expected(
+    store: SessionStore, on_disk: tuple[dt.date, ...], horizon: dt.date
 ) -> None:
-    """The headline numbers, in one place: 161 found of 195 expected, 34 missing in 1 run.
+    """The headline numbers, in one place — as arithmetic rather than as remembered totals.
 
-    Everything between the first captured session and today, which is the range a
-    researcher asking "what do we have?" would actually type.
+    Everything between the first captured session and the horizon, which is the range a
+    researcher asking "what do we have?" would actually type. The dead window at the end
+    is one unbroken run, and every session in it is genuinely absent from disk.
     """
-    resolution = store.resolve("NIFTY", FIRST_SESSION, TODAY)
+    resolution = store.resolve("NIFTY", on_disk[0], horizon)
 
-    assert resolution.expected_count == CAPTURED_SESSIONS + DEAD_WINDOW_SESSIONS == 195
-    assert resolution.found_count == CAPTURED_SESSIONS
-    assert resolution.missing_count == DEAD_WINDOW_SESSIONS
+    assert resolution.found_count == len(on_disk)
+    assert resolution.expected_count == resolution.found_count + resolution.missing_count
     assert resolution.unexpected == ()
-    assert resolution.missing_runs() == (resolution.missing,)
-    assert "in 1 run:" in resolution.summary()
-    assert "2026-08-13..2026-09-30 (34 days)" in resolution.summary()
+
+    dead_window = tuple(day for day in resolution.missing if day > on_disk[-1])
+    assert dead_window, "the horizon is past the end of capture, so the window cannot be empty"
+    assert resolution.missing_runs()[-1] == dead_window, "the outage at the end is one run"
+    assert f"{dead_window[0].isoformat()}..{dead_window[-1].isoformat()}" in resolution.summary()
+    assert f"({len(dead_window)} days)" in resolution.summary()

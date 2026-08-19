@@ -8,6 +8,7 @@ to be checkable by hand.
 from __future__ import annotations
 
 import datetime as dt
+from datetime import UTC, datetime
 
 import pytest
 
@@ -21,7 +22,8 @@ from xman_research.backtest import (
     TokenAlreadyUsedError,
     run_backtest,
 )
-from xman_research.session_store import MissingSessionsError
+from xman_research.clock import ManualClock
+from xman_research.session_store import MissingSessionsError, SessionStore
 
 ENTRY_DAY = dt.date(2026, 1, 5)
 EXPIRY_DAY = dt.date(2026, 1, 6)
@@ -164,6 +166,54 @@ def test_a_gap_can_be_accepted_only_against_a_written_reason(
     assert result.data_provenance["missing"] == [EXPIRY_DAY.isoformat()]
     assert result.settlements == ()
     assert result.daily[-1].open_positions == 2
+
+
+def test_a_window_entirely_past_the_end_of_the_corpus_refuses(
+    session: ResearchSession, h1: HypothesisRecord, synthetic_store
+) -> None:
+    """Asking past the end of capture refuses, and it refuses for having *nothing*.
+
+    The sibling above holds the partial case: some sessions present, one missing. This
+    holds the total one — a window in which the corpus has no session at all — because the
+    two fail at different points in the store and a reader should not have to assume the
+    second follows from the first.
+
+    **This guarantee used to be bought from the real corpus**, by
+    ``test_backtest_real_corpus.py``, which resolved a window just past the last captured
+    session and described it as "the one hole no backfill can ever fill … sessions that
+    have not happened yet". That was false within a day of being written: the sessions had
+    happened and were captured, and the window was incomplete only because its far end was
+    tomorrow. It passed on a one-day margin.
+
+    So the hole is **constructed** here rather than borrowed. The corpus holds one session;
+    the window asks about a fortnight that starts after it; the clock is injected so
+    "past the end" is a fact about the fixture and not about the day the suite runs. There
+    is no arrangement of backfills, recoveries or calendar dates that can fill this hole,
+    because the test writes the corpus that lacks it.
+    """
+    root = synthetic_store.root
+    write_synthetic_session(root, ENTRY_DAY, spot=23_000.0, contracts=_contracts())
+
+    # Injected, not ambient: with the machine's clock the store would expect a different
+    # set of sessions every day, and eventually none at all if the dates fell in the
+    # future. This is the same discipline the production code applies to engine time.
+    after_the_end = ENTRY_DAY + dt.timedelta(days=2)
+    horizon = ENTRY_DAY + dt.timedelta(days=16)
+    store = SessionStore(
+        root=root,
+        clock=ManualClock(datetime(horizon.year, horizon.month, horizon.day, 9, 15, tzinfo=UTC)),
+        manifest_path=root.parent / "no-manifest.sqlite",
+    )
+
+    resolution = store.resolve("NIFTY", after_the_end, horizon)
+    assert resolution.found_count == 0
+    assert resolution.missing_count == resolution.expected_count > 0
+    with pytest.raises(MissingSessionsError):
+        resolution.sessions()
+
+    empty = DataWindow(after_the_end, horizon)
+    with session.trial(h1, data_window=empty) as trial, pytest.raises(MissingSessionsError):
+        run_backtest(trial, store=store, strategy=ShortAtmStraddle())
 
 
 def test_the_window_comes_from_the_token_and_cannot_be_restated(
