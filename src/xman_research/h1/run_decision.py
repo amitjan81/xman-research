@@ -138,6 +138,7 @@ def _backtest(
     window: DataWindow,
     underlying: str,
     notes: str,
+    gap_reason_override: str | None = None,
 ) -> BacktestResult:
     """One backtest, through the log, over a window the store has confirmed complete.
 
@@ -147,13 +148,20 @@ def _backtest(
     not know that in advance and must not pretend to.
     """
     resolution = store.resolve(underlying, window.start, window.end)
-    gap_reason = (
+    # An override is the RESEARCH decision about a known-holey window, and it belongs to
+    # the caller: the reason must name the missing dates and say why the window was not
+    # narrowed around them, which is knowledge the runner does not have. Left None, the
+    # generic reason below applies and behaviour is exactly what it always was.
+    generic = (
         None
         if resolution.is_complete
         else (
-            "H1 decision run: the range has known holes and the decision is being taken "
-            f"anyway. {resolution.summary()}"
+            "H1 decision run: the range has known holes and the decision is being "
+            f"taken anyway. {resolution.summary()}"
         )
+    )
+    gap_reason = (
+        generic if resolution.is_complete or gap_reason_override is None else (gap_reason_override)
     )
     with session.trial(hypothesis, data_window=window, notes=notes) as trial:
         return run_backtest(
@@ -171,6 +179,7 @@ def run_h1_decision(
     in_sample_start: dt.date = IN_SAMPLE_START,
     holdout_end: dt.date = CORPUS_END,
     hypothesis: HypothesisRecord | None = None,
+    gap_reason: str | None = None,
 ) -> DecisionRun:
     """Run the loop and return the decision, with everything it rested on attached."""
     config = ValidationConfig.from_file(config_path)
@@ -188,6 +197,7 @@ def run_h1_decision(
             store=resolved_store,
             window=in_sample_window,
             underlying=config.underlying,
+            gap_reason_override=gap_reason,
             notes=(
                 "H1 in-sample decision run. Unconditional short ATM straddle, one lot, held "
                 "to cash settlement. Thresholds pre-registered in research/h1/gate.toml."
@@ -229,6 +239,7 @@ def run_h1_decision(
             record,
             store=resolved_store,
             window=holdout_window,
+            gap_reason=gap_reason,
         )
 
     decision = validator.decide(in_sample_verdict, holdout=holdout_verdict)
@@ -263,6 +274,7 @@ def _spend_the_holdout(
     *,
     store: SessionStore,
     window: DataWindow,
+    gap_reason: str | None = None,
 ) -> tuple[BacktestResult, Verdict]:
     """Read the unseen months. Reached only from a PASSED in-sample verdict — see module doc."""
     with open_session(config.trial_log_path) as session:
@@ -272,6 +284,7 @@ def _spend_the_holdout(
             store=store,
             window=window,
             underlying=config.underlying,
+            gap_reason_override=gap_reason,
             notes=(
                 "H1 holdout run. The months nothing read until the in-sample verdict was "
                 "settled. Graded once, against the holdout thresholds recorded in "
