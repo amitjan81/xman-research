@@ -31,7 +31,64 @@ from xman_research.backtest.costs import Side
 from xman_research.backtest.engine import BookView, TradeIntent
 from xman_research.backtest.market import Contract, OptionType, SessionView
 
-__all__ = ["ClockSide", "ClockSplitShortStraddle", "ShortAtmStraddle"]
+__all__ = ["ClockSide", "ClockSplitShortStraddle", "ShortAtmStraddle", "lots_for_notional"]
+
+
+def lots_for_notional(*, target_notional: float, spot: float, lot_size: int) -> int:
+    """Whole contracts closest to ``target_notional`` of underlying exposure at ``spot``.
+
+    **This is M1 §5, and it lives at module scope because M2 §3 says "M1 §5 unchanged".**
+    Two strategies implementing the same sizing rule from the same spec is exactly the
+    arrangement in which one of them quietly stops matching it, and for H26 the difference
+    would present as a premium in the very comparison the model exists to make.
+
+    **The rounding is the entire residual of the lot-size invariance, so it is worth being
+    precise about.** The target is a real number of index units, ``target_notional / spot``;
+    the exchange trades whole contracts. Rounding to nearest leaves a size error of at most
+    half a lot, so the realised exposure differs from the target by at most
+    ``lot_size / (2 * target_units)`` — 3% at 15 contracts, 0.5% at 100, and **50% at one**.
+    Two runs at different multipliers therefore agree on every scale-free statistic to about
+    twice that bound, and no better.
+
+    There is no way around it and pretending otherwise would be the error: a book that can
+    only trade one contract *is* sized by the lot, and its drawdown genuinely does move when
+    the lot moves. The property this rule provides is that sizing no longer *introduces* the
+    dependence — it survives only where the market's own granularity puts it, and it shrinks
+    as the book grows.
+
+    Nearest, not floor: floor is biased small by half a lot on average, which would make the
+    realised exposure depend on the multiplier in the *mean* as well as in the residual.
+    ``floor(x + 0.5)`` rather than :func:`round`, because :func:`round` is banker's rounding
+    and would break the tie by parity — a rule nobody reading a position size expects, and
+    one that makes the residual depend on the parity of a quotient.
+
+    Returns ``0`` when the target is under half a contract, and the caller trades nothing
+    rather than rounding up to one: one lot would be a position **larger than the exposure
+    that was asked for**. M1 §4 lists this as an entry suppression and M1 §12.1
+    pre-registers a check — ``min_t N*/(S_t·L_t) >= 0.5`` — that must be run and pass before
+    a validation run, so that *which* sessions trade is not itself a function of the lot
+    size.
+
+    Raises rather than returning ``0`` on a non-positive ``spot`` or ``lot_size``. Those are
+    not small positions, they are impossible ones: a lot size is refdata-owned and always
+    positive, and a non-positive spot means the session's underlying series is broken.
+    Folding them into the same ``0`` that means "correctly too small to trade" would let a
+    corrupt session masquerade as a deliberate no-trade for a whole run.
+    """
+    if spot <= 0:
+        raise ValueError(
+            f"spot must be positive to size a position, got {spot}. A non-positive spot is "
+            "a broken underlying series, not a small one; the caller decides whether to "
+            "skip the session, and must do so explicitly."
+        )
+    if lot_size <= 0:
+        raise ValueError(
+            f"lot_size must be positive, got {lot_size}. Lot size is refdata-owned and "
+            "cannot be non-positive; this is a corrupt or missing instrument row."
+        )
+    if target_notional <= 0:
+        raise ValueError(f"target_notional must be positive, got {target_notional}")
+    return math.floor((target_notional / spot) / lot_size + 0.5)
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,36 +156,15 @@ class ShortAtmStraddle:
         }
 
     def lots_for(self, *, spot: float, lot_size: int) -> int:
-        """Whole contracts closest to :attr:`target_notional` of exposure at ``spot``.
+        """This strategy's size at ``spot``: M1 §5, delegated to :func:`lots_for_notional`.
 
-        **This rounding is the entire residual of the invariance, so it is worth being
-        precise about.** The target is a real number of index units,
-        ``target_notional / spot``; the exchange trades whole contracts. Rounding to
-        nearest leaves a size error of at most half a lot, so the realised exposure differs
-        from the target by at most ``lot_size / (2 * target_units)`` — 3% at 15 contracts,
-        0.5% at 100, and **50% at one**. Two runs at different multipliers therefore agree
-        on every scale-free statistic to about twice that bound, and no better.
-
-        There is no way around it and pretending otherwise would be the error: a book that
-        can only trade one contract *is* sized by the lot, and its drawdown genuinely does
-        move when the lot moves. The property this class provides is that the sizing rule
-        no longer *introduces* the dependence — it survives only where the market's own
-        granularity puts it, and it shrinks as the book grows.
-
-        Nearest, not floor: floor is biased small by half a lot on average, which would
-        make the realised exposure depend on the multiplier in the *mean* as well as in the
-        residual. ``floor(x + 0.5)`` rather than :func:`round`, because :func:`round` is
-        banker's rounding and would break the tie by parity — a rule nobody reading a
-        position size expects, and one that makes the residual depend on the parity of a
-        quotient.
-
-        Returns ``0`` when the target is under half a contract. The caller trades nothing
-        rather than rounding up to one, which would silently take a position larger than
-        the exposure that was asked for.
+        Kept as a method because it is part of this class's readable surface, but it holds
+        no rule of its own — M2's arms size by the same function, and a second copy of the
+        arithmetic here is how the two models would drift apart.
         """
-        if spot <= 0 or lot_size <= 0:
-            return 0
-        return math.floor((self.target_notional / spot) / lot_size + 0.5)
+        return lots_for_notional(
+            target_notional=self.target_notional, spot=spot, lot_size=lot_size
+        )
 
     def decide(
         self, *, session: SessionView, minute: dt.datetime, book: BookView
@@ -143,17 +179,23 @@ class ShortAtmStraddle:
             if expiry is None:
                 return ()
         spot = session.spot_at(minute)
-        if spot is None:
+        if spot is None or spot <= 0:
+            # A non-positive spot is a broken underlying series. The session is skipped
+            # here, explicitly, rather than inside the sizing rule: lots_for_notional
+            # raises on it, so that a corrupt session can never be mistaken for one that
+            # was correctly too small to trade.
             return ()
         strike = session.universe.atm_strike(spot, expiry)
         if strike is None:
             return ()
 
-        # Both legs share one group, so the engine fills them together or not at all. The
-        # legs also share one size, taken from the CALL's lot size and applied to both:
-        # a straddle whose two legs were sized independently would not be a straddle if
-        # the chain ever listed them at different multipliers.
-        # listing guard below is necessary and not sufficient: it establishes that both
+        # Both legs share one group, so the engine fills them together or not at all, and
+        # both take one size computed once from the CALL's lot size. Sizing them
+        # independently would be equivalent here — a straddle's legs are the same
+        # underlying at the same strike and expiry, so the chain lists them at one
+        # multiplier — but computing it once says so, and keeps the two legs from drifting
+        # if the sizing rule ever grows a term.
+        # The listing guard below is necessary and not sufficient: it establishes that both
         # legs *exist*, while the group establishes that both legs *traded*. A straddle
         # whose PE came back NO_LIQUIDITY used to leave a naked short call.
         group = f"straddle:{expiry.isoformat()}:{strike:g}"
@@ -246,14 +288,30 @@ class ClockSplitShortStraddle:
     """
 
     hold: ClockSide = ClockSide.GAP
-    lots: int = 1
+    target_notional: float = 1_500_000.0
+    """Rupees of underlying index exposure each arm aims at, per open — M1 §5, which M2 §3
+    inherits unchanged.
+
+    **This was ``lots: int = 1`` and had to move.** M2 §3 says "M1 §5 unchanged", so the
+    moment M1's sizing became a notional target this class was out of compliance with its
+    own spec: it still made every headline statistic a function of the exchange's contract
+    multiplier, which is the one thing about a research verdict that must not be true.
+
+    It matters more here than for M1, not less. H26's claim is a *difference* between two
+    holding windows. Both arms would have been sized by the same wrong multiplier, so the
+    difference survives — but the drawdown, the margin and the cost-breakeven ratio each
+    arm is judged against do not, and the gate reads those. The two arms share this one
+    number for the same reason they share everything else: an asymmetry in size is an
+    asymmetry in the comparison.
+    """
+
     open_time: dt.time = dt.time(9, 20)
     close_time: dt.time = dt.time(15, 29)
     min_calendar_days_to_expiry: int = 2
 
     def __post_init__(self) -> None:
-        if self.lots <= 0:
-            raise ValueError(f"lots must be positive, got {self.lots}")
+        if self.target_notional <= 0:
+            raise ValueError(f"target_notional must be positive, got {self.target_notional}")
         if self.min_calendar_days_to_expiry < 1:
             raise ValueError(
                 "min_calendar_days_to_expiry must be at least 1: a contract expiring on "
@@ -278,7 +336,7 @@ class ClockSplitShortStraddle:
     def parameters(self) -> Mapping[str, Any]:
         return {
             "hold": self.hold.value,
-            "lots": self.lots,
+            "target_notional": self.target_notional,
             "min_calendar_days_to_expiry": self.min_calendar_days_to_expiry,
             "open_time": self.open_time.isoformat(),
             "close_time": self.close_time.isoformat(),
@@ -313,27 +371,40 @@ class ClockSplitShortStraddle:
             # market fact, and `research/h26/DECISION.md` counts it explicitly.
             return ()
         spot = session.spot_at(minute)
-        if spot is None:
+        if spot is None or spot <= 0:
+            # See ShortAtmStraddle.decide: a non-positive spot is a broken series, skipped
+            # here explicitly so it cannot be confused with a legitimate zero size.
             return ()
         strike = session.universe.atm_strike(spot, expiry)
         if strike is None:
             return ()
         group = f"clocksplit:{self.hold.value}:{expiry.isoformat()}:{strike:g}"
-        intents: list[TradeIntent] = []
+        legs: list[Contract] = []
         for option_type in (OptionType.CALL, OptionType.PUT):
             contract = session.universe.get(expiry, strike, option_type)
             if contract is None:
                 return ()
-            intents.append(
-                TradeIntent(
-                    trading_symbol=contract.trading_symbol,
-                    side=Side.SELL,
-                    lots=self.lots,
-                    tag="entry",
-                    leg_group=group,
-                )
+            legs.append(contract)
+
+        # One size for both legs, from the CALL's lot size — identical to M1, because M2
+        # §3 inherits M1 §5 rather than restating it.
+        lots = lots_for_notional(
+            target_notional=self.target_notional, spot=spot, lot_size=legs[0].lot_size
+        )
+        if lots <= 0:
+            # Targeted exposure under half a contract: no entry, per M1 §4. Both arms
+            # suppress on the same condition, so the comparison stays balanced.
+            return ()
+        return tuple(
+            TradeIntent(
+                trading_symbol=contract.trading_symbol,
+                side=Side.SELL,
+                lots=lots,
+                tag="entry",
+                leg_group=group,
             )
-        return tuple(intents)
+            for contract in legs
+        )
 
     def _exit(self, book: BookView, session_date: dt.date) -> Sequence[TradeIntent]:
         """Buy back everything, as one group.
