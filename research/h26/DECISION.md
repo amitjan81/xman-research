@@ -269,6 +269,14 @@ one.
 
 ## 8. Reproducing this
 
+> **The run fingerprints above are frozen to a parameterisation the code no longer has.**
+> Both arms were sized as `{"lots": 1}`; M2 §3 inherits M1 §5, so both now size by a
+> notional target. Re-running this window against current code reproduces the verdict and
+> the scale-free metrics, but hashes to different values — and, unlike H1, the arms' *unit*
+> counts genuinely change, so feasibility counts and the flat per-order brokerage move with
+> them. The fingerprints record the retired parameterisation; they are not a check that can
+> still be run, and nothing automated reads them.
+
 > **Do not run the decision against the canonical log.** It appends two more trials, moving
 > the family count past the 5 this verdict was computed against. Read `decision.json`, or
 > point `trial_log_path` at a throwaway file first.

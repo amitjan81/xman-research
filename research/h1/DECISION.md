@@ -255,6 +255,13 @@ and it cannot be re-cut.
 
 ## 6. Reproducing this
 
+> **The run fingerprint above is frozen to a parameterisation the code no longer has.** It
+> was computed over `{"lots": 1}`; sizing is now a notional target, so re-running this
+> window against current code reproduces every statistic in this document unchanged — the
+> verdict, the metrics and the holdout are all scale-free — but hashes to a different
+> value. The statistics are reproducible; the *hash* is a record of the retired
+> parameterisation rather than a check that can still be run. Nothing automated reads it.
+
 > **Do not run the second command against the existing canonical log.** It appends a trial,
 > moving the family count from 1 to 2 — the very selection count the deflated Sharpe above
 > was computed against — and the reproduction would then disagree with the record it was
