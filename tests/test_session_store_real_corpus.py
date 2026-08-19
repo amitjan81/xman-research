@@ -70,7 +70,9 @@ pytestmark = pytest.mark.skipif(not NIFTY.is_dir(), reason=f"real corpus not pre
 
 def _sessions_on_disk() -> tuple[dt.date, ...]:
     """Every session the producer actually wrote, read off disk at collection time."""
-    return tuple(sorted(dt.date.fromisoformat(p.name[: -len(".parquet")]) for p in NIFTY.glob("*.parquet")))
+    return tuple(
+        sorted(dt.date.fromisoformat(p.name[: -len(".parquet")]) for p in NIFTY.glob("*.parquet"))
+    )
 
 
 @pytest.fixture(scope="module")

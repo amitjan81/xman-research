@@ -40,7 +40,7 @@ from xman_research.backtest import (
     epoch_for,
     run_backtest,
 )
-from xman_research.session_store import DEFAULT_CORPUS_ROOT, MissingSessionsError, SessionStore
+from xman_research.session_store import DEFAULT_CORPUS_ROOT, SessionStore
 
 CORPUS_ROOT = Path(os.environ.get("XMAN_RESEARCH_CORPUS_ROOT") or DEFAULT_CORPUS_ROOT)
 UNDERLYING = "NIFTY"
@@ -147,37 +147,33 @@ def test_the_range_resolves_and_the_gap_decision_is_recorded(
         assert recorded is None, "a complete range recorded a gap reason it did not need"
 
 
-def test_the_backfilled_window_is_whole_and_the_end_of_capture_still_refuses(
-    store: SessionStore,
-) -> None:
-    """Both halves of the corpus's current shape, in the one place that can see it.
+def test_the_backfilled_window_is_whole(store: SessionStore) -> None:
+    """The one fact here that only the real corpus can state: that window is now whole.
 
     Was ``test_a_holey_window_refuses_without_a_reason``. Its window — June into July 2026
     — was chosen because it certainly had holes, the vendor subscription having lapsed on
     2026-06-14. The 2026-08-13 backfill landed those 42 sessions, so the window resolves
     complete and the old assertion is simply false about the world.
 
-    The *general* refusal guarantee it was buying now lives on a synthetic corpus, where a
-    hole is constructed rather than borrowed (see the module docstring). What is kept here
-    is deliberately narrower and is the one hole no backfill can ever fill: the range past
-    the end of capture, whose sessions have not happened yet. That one is safe to depend
-    on, where hunting for whatever hole happened to remain inside the corpus would have
-    been asserting the state of a data pipeline rather than the behaviour of the code.
+    **A second, subtler version of the same mistake has also been removed.** The
+    replacement kept a refusal assertion here, resolving ``CAPTURE_END + 1 .. +8`` and
+    describing it as "the one hole no backfill can ever fill ... sessions that have not
+    happened yet". Seven of those eight sessions had happened and were captured; the window
+    was incomplete only because its far end was tomorrow, and it passed on a one-day
+    margin. A guarantee that depends on the real corpus's shape is not a guarantee, even
+    when the shape it depends on is "the future has not arrived".
 
-    So this pins the two facts that are genuinely about this corpus: the window that used
-    to be holey is whole, and asking past the end still refuses.
+    So the refusal now lives entirely on the synthetic corpus, where the hole is
+    constructed —
+    ``test_backtest_engine.py::test_a_gap_can_be_accepted_only_against_a_written_reason``
+    for the partial case and
+    ``::test_a_window_entirely_past_the_end_of_the_corpus_refuses`` for the total one.
+    What is left here is only what a synthetic fixture cannot say.
     """
     filled = store.resolve(UNDERLYING, dt.date(2026, 6, 1), dt.date(2026, 7, 31))
     assert filled.is_complete
     assert filled.missing == ()
     assert len(filled.sessions()) == filled.expected_count > 0
-
-    beyond = store.resolve(
-        UNDERLYING, CAPTURE_END + dt.timedelta(days=1), CAPTURE_END + dt.timedelta(days=8)
-    )
-    assert not beyond.is_complete
-    with pytest.raises(MissingSessionsError):
-        beyond.sessions()
 
 
 def test_the_backtest_traded_settled_and_priced_against_real_data(result) -> None:
@@ -248,22 +244,30 @@ DECEMBER_LOT_75_SESSIONS = (
     dt.date(2025, 12, 30),
 )
 
-CAPTURE_START = dt.date(2025, 12, 16)
 
-#: Moved from 2026-06-12 by the 2026-08-13 backfill, which is what puts the 42 new
-#: sessions under the audit scan below rather than leaving them unexamined behind a
-#: constant nobody thought to change. The producer reported them clean; a scan that
-#: stopped short of them would have taken that on trust.
-CAPTURE_END = dt.date(2026, 8, 12)
-
-#: Sessions in ``CAPTURE_START..CAPTURE_END``. 119 before the backfill, 161 after.
-CORPUS_SESSIONS = 161
+#: The scan's range is **the whole corpus, read off disk**, not a pinned window.
+#:
+#: It was ``2025-12-16..2026-08-12``, 161 sessions, and before that 119 — a constant that
+#: had to be edited by hand every time the corpus grew, and that silently excluded whatever
+#: had arrived since. What it was excluding by the time anyone looked was the entire
+#: 2021-2025 historical backfill: 1,072 sessions carrying the lot-25 and lot-50 epochs this
+#: module exists to describe, unexamined behind a number nobody thought to change.
+#:
+#: Deriving it costs about 3.5 minutes of scan on the current corpus and removes the
+#: failure mode permanently. Growth widens the scan instead of hiding from it.
+def _corpus_sessions() -> tuple[dt.date, ...]:
+    """Every session the producer wrote, newest corpus included."""
+    root = CORPUS_ROOT / UNDERLYING
+    return tuple(
+        sorted(dt.date.fromisoformat(p.name[: -len(".parquet")]) for p in root.glob("*.parquet"))
+    )
 
 
 @pytest.fixture(scope="module")
 def corpus_audits(store: SessionStore) -> tuple[LotSizeAudit, ...]:
     """Every session in the corpus, audited once. The scan the old test did not do."""
-    resolution = store.resolve(UNDERLYING, CAPTURE_START, CAPTURE_END)
+    on_disk = _corpus_sessions()
+    resolution = store.resolve(UNDERLYING, on_disk[0], on_disk[-1])
     refs = resolution.accept_gaps(
         "lot-size audit: the scan is over whatever was captured, and a hole in the "
         "calendar cannot hide a lot-size contradiction in the sessions that exist"
@@ -291,7 +295,7 @@ def test_volume_is_in_units_not_contracts_on_every_session(
     it is the stronger claim, that the lot size is the one the refdata *declares*, that
     fails, and it fails on ten sessions the old test never looked at.
     """
-    assert len(corpus_audits) == CORPUS_SESSIONS
+    assert len(corpus_audits) == len(_corpus_sessions()) > 1_000
     for audit in corpus_audits:
         supported = max(audit.declared_volume_share, audit.best_alternative_share)
         assert supported >= 0.99, (
@@ -310,9 +314,18 @@ def test_the_december_2025_sessions_contradict_their_own_declared_lot_size(
     refdata. At that point the epoch record in ``lot_size.py`` becomes history rather than
     a live defect, and this assertion is the thing that says so.
     """
-    contradicted = tuple(a.session_date for a in corpus_audits if a.contradicts_declared)
+    contradicted = {a.session_date for a in corpus_audits if a.contradicts_declared}
 
-    assert contradicted == DECEMBER_LOT_75_SESSIONS
+    # **A subset assertion, where this used to be an equality.** Over the old 161-session
+    # window these ten WERE every contradicted session. Over the whole corpus 1,077 of
+    # 1,233 sessions contradict their declared lot size, because the publish-time
+    # dependence reaches the entire historical backfill and not just December. The ten stay
+    # pinned because they are the finding this module was built on; the count around them
+    # is an extent and is derived.
+    assert set(DECEMBER_LOT_75_SESSIONS) <= contradicted
+    assert len(contradicted) > len(DECEMBER_LOT_75_SESSIONS), (
+        "the corpus-wide contradiction is the headline finding of the full scan"
+    )
     for audit in corpus_audits:
         if audit.session_date in DECEMBER_LOT_75_SESSIONS:
             assert audit.declared_lot_sizes == (65,)
@@ -327,9 +340,11 @@ def test_no_refdata_bundle_anywhere_in_the_corpus_declares_lot_size_75(
 ) -> None:
     """The producer-side evidence: the bundles are publish-time-stamped, not date-stamped.
 
-    Every one of the 119 sessions declares 65, including the ten where 65 was not the lot
-    size. That is what publish-time dependence looks like from the reader's side, and it is
-    why the December regime is recorded from measurement rather than read from a file.
+    Every session in the corpus declares 65 — all 1,233 of them, including the 1,077 where
+    65 was not the lot size the bars support. That is what publish-time dependence looks
+    like from the reader's side, and it is why the December regime is recorded from
+    measurement rather than read from a file. Over the full corpus this is a considerably
+    stronger statement than it was over 161 sessions.
     """
     declared = {lot for audit in corpus_audits for lot in audit.declared_lot_sizes}
 

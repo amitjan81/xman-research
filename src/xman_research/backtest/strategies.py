@@ -162,9 +162,7 @@ class ShortAtmStraddle:
         no rule of its own — M2's arms size by the same function, and a second copy of the
         arithmetic here is how the two models would drift apart.
         """
-        return lots_for_notional(
-            target_notional=self.target_notional, spot=spot, lot_size=lot_size
-        )
+        return lots_for_notional(target_notional=self.target_notional, spot=spot, lot_size=lot_size)
 
     def decide(
         self, *, session: SessionView, minute: dt.datetime, book: BookView

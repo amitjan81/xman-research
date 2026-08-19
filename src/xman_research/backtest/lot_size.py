@@ -7,19 +7,57 @@ the claim is false for the first ten sessions of the corpus. A tripwire that fir
 cherry-picked day is not a weaker tripwire; it is an assurance that the property holds
 when nobody has looked.
 
-**What the corpus actually says.** Every ``.refdata`` bundle in the corpus, on all 119
-sessions, declares NIFTY's lot size as **65**. On the ten sessions from 2025-12-16 to
-2025-12-30 the bars disagree: 100% of positive volume divides by **75** and around 7%
-divides by 65 — 7% being the rate you get by chance, since a multiple of 75 is a
-multiple of 65 exactly when it is a multiple of 13, and 1/13 ≈ 7.7%. From 2025-12-31
-onward the relationship inverts exactly: 100% by 65, around 6% by 75.
+**What the corpus actually says.** Every ``.refdata`` bundle in the corpus — all **1,233**
+sessions of it — declares NIFTY's lot size as **65**. On the ten sessions from 2025-12-16
+to 2025-12-30 the bars disagree: 100% of positive volume divides by **75** and around 7%
+divides by 65 — 7% being the rate you get by chance, since a multiple of 75 is a multiple
+of 65 exactly when it is a multiple of 13, and 1/13 ≈ 7.7%. From 2025-12-31 onward the
+relationship inverts exactly: 100% by 65, around 6% by 75.
+
+**What a full-corpus scan found, and why almost none of it is encoded below.** The corpus
+now carries a historical backfill reaching to 2021-06-01. Scanning all 1,233 sessions, the
+multiplier the bars support moves through seven runs::
+
+    75   2021-06-01 .. 2021-07-22   (36 sessions)
+    50   2021-07-23 .. 2024-04-25   (637)
+    25   2024-04-29 .. 2024-12-26   (157)
+    75   2024-12-27 .. 2025-01-23   (20)
+    25   2025-01-24 .. 2025-01-30   (5)
+    75   2025-01-31 .. 2025-12-30   (222)
+    65   2025-12-31 .. 2026-08-19   (156)
+
+**1,077 of the 1,233 sessions contradict their own declared lot size**, so the
+publish-time-dependence defect is corpus-wide rather than a December curiosity.
+
+That much is measured. What is *not* established is what those regimes mean, and the
+reason is structural: :class:`LotSizeEpoch` is keyed on contract **expiry**, and these
+boundaries are not expiry boundaries. Two of them fall in the middle of a single contract:
+the front expiry is 2021-08-05 on both 2021-07-22 (reading 75) and 2021-07-23 (reading
+50), and it is 2025-02-06 across the whole 2025-01-24..30 run of 25 *and* the 75 sessions
+on either side of it. **The same contract therefore reads as two different multipliers on
+adjacent sessions**, which an expiry-keyed table cannot represent — and a five-session
+excursion to 25 inside a 75 stretch, on one unchanged contract, looks far more like a
+vendor scaling artefact than an exchange revision.
+
+So no entry is added for them. Divisibility only ever establishes a *lower* bound, the
+refdata is contaminated on every session, and no NSE circular has been read; writing seven
+epochs from this would encode a guess in the shape of a finding, which is precisely what
+the confidence field exists to prevent. The runs are recorded here as evidence for whoever
+does read the circulars.
+
+**A related defect, reported and not fixed here.** :func:`epoch_for` takes a parameter
+named ``expiry``, but its only production caller — :meth:`LotSizeAudit.contradiction_message`
+— passes ``self.session_date``. The two coincide for the December window (its sessions and
+its expiries share the 2025-12-16..12-30 range), which is why nothing has noticed. Deciding
+whether the epoch is session-keyed or expiry-keyed is a semantic change to a frozen
+dataclass and belongs in its own change, with the owner's call.
 
 The cause is publish-time dependence, the same class already fixed for symbols on the
-producer side: all 119 sessions were published in one batch on 2026-06-17 against the
-*then-current* scrip master, so December's bundles carry a lot size that was not in force
-on those dates. **Nothing in the corpus ever declares 75.** The evidence for the December
-regime is entirely in the bars, which is why it is recorded here as an epoch rather than
-read from a file.
+producer side: the sessions were published against the *then-current* scrip master rather
+than the one in force on each date, so older bundles carry a lot size that did not apply.
+**Nothing in the corpus ever declares 75.** The evidence for the December regime is
+entirely in the bars, which is why it is recorded here as an epoch rather than read from a
+file.
 
 **The stamp.** A backtest whose window touches such a session runs, on the **declared**
 lot size, and says so: the result carries ``corpus.declared_lot_size_contradicted`` in its
@@ -130,11 +168,19 @@ class LotSizeEpoch:
 #: measurement over 10 sessions and ~150,000 rows, not a citation. The producer repo
 #: (``xman``) owns the refdata and is where the fix belongs; this package must not, and
 #: does not, rewrite the corpus.
+#: **The table is deliberately incomplete** — see "What a full-corpus scan found" in the
+#: module docstring. It covers only the window its evidence covers; outside that,
+#: :func:`epoch_for` returns ``None``, meaning "not established". That is the honest
+#: answer, and :meth:`LotSizeAudit.contradiction_message` already handles it.
 NIFTY_LOT_SIZE_EPOCHS: tuple[LotSizeEpoch, ...] = (
     LotSizeEpoch(
         underlying="NIFTY",
         lot_size=75,
-        expiries_from=None,
+        # **Closed, where this used to be open-started.** ``None`` claimed 75 for every
+        # expiry in history, on evidence covering ten sessions in December 2025. A
+        # full-corpus scan has since measured 50 and 25 regimes across 2021-2025, so the
+        # open start was not merely unsupported — it was wrong.
+        expiries_from=dt.date(2025, 12, 16),
         expiries_through=dt.date(2025, 12, 30),
         confidence=Confidence.CORROBORATED,
         evidence=(
@@ -154,7 +200,7 @@ NIFTY_LOT_SIZE_EPOCHS: tuple[LotSizeEpoch, ...] = (
         expiries_through=None,
         confidence=Confidence.CORROBORATED,
         evidence=(
-            "Measured over the 109 corpus sessions from 2025-12-31 onward, whose front "
+            "Measured over the 156 corpus sessions from 2025-12-31 onward, whose front "
             "expiry is 06/01/2026 or later: 100% of positive volume rows divide by 65, "
             "against ~6% by 75. Here the refdata's declared 65 and the bars agree, which "
             "is why the whole corpus looks consistent to a check that samples one late "

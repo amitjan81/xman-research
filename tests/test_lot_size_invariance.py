@@ -348,8 +348,12 @@ def test_the_verdict_survives_a_change_of_contract_multiplier(synthetic_pair) ->
     assert runs[LOT_A]["settled_share"] > 0.5
     assert runs[LOT_B]["settled_share"] > 0.5
 
+    # `bound_ceiling` already asserts `bound <= 0.01`, so restating it added nothing. What
+    # is worth stating is the value: this synthetic pair is where the property is actually
+    # pinned, and its bound is an order of magnitude tighter than the real-corpus window
+    # below can manage.
     bound = assert_invariant(runs[LOT_A], runs[LOT_B], bound_ceiling=0.01)
-    assert bound < 0.01
+    assert bound < 0.0075, "the synthetic pair must stay the tight end of the evidence"
 
     # The runs are genuinely different books, not the same one twice: the multiplier
     # changed, so the traded unit counts must differ. Without this the assertions above
@@ -411,8 +415,19 @@ CORPUS_ROOT = Path(os.environ.get("XMAN_RESEARCH_CORPUS_ROOT") or DEFAULT_CORPUS
 H1_IN_SAMPLE = DataWindow(dt.date(2025, 12, 31), dt.date(2026, 4, 30))
 
 #: ~1,000 index units per straddle at the corpus's spot. The ceiling is liquidity, not
-#: preference: the thinnest session in this window admits 1,770 units at the 1%-of-volume
-#: cap, and a size that trips the cap would be comparing feasibility, not sizing.
+#: preference: a size that trips a participation cap would be comparing feasibility rather
+#: than sizing.
+#:
+#: **The ceiling, measured rather than estimated.** Requesting an absurd notional over this
+#: window and reading back what the engine granted, the thinnest straddle is
+#: ``NIFTY-24Mar2026-23750`` on **2026-03-18**, which admits **2,405 units** (37 lots of
+#: 65). An earlier note here said 1,770 units at the 1%-of-volume cap and was wrong twice:
+#: the number was ~35% low, and the binding constraint is not the volume cap at all. It is
+#: the **0.5%-of-open-interest cap on the PE leg** — that leg shows 493,285 open units
+#: against 402,740 traded, so open interest allows 37 whole lots where volume would have
+#: allowed 61. On the CE leg of the same straddle the volume cap would have allowed 191.
+#: Because both legs share a ``leg_group`` and take the minimum, the PE leg's OI cap sets
+#: the size for the whole straddle.
 CORPUS_TARGET_NOTIONAL = 24_000_000.0
 CORPUS_CAPITAL = 16_000_000.0
 
@@ -455,11 +470,25 @@ class RelotStore(SessionStore):
 def test_the_h1_window_gives_the_same_answer_at_either_multiplier() -> None:
     """The property on the data a verdict is actually taken from.
 
-    The bound is looser here than on the synthetic corpus and cannot be tightened: the
+    The bound is looser here than on the synthetic corpus and cannot be tightened much: the
     thinnest session's participation cap puts a ceiling on the position, and the position
     is the denominator of the rounding residual. So this window supports the property to a
-    few percent, not to a fraction of one — which is a fact about NIFTY's liquidity at
-    09:20 rather than about the sizing rule, and is worth having on the record as such.
+    few percent, not to a fraction of one — a fact about NIFTY's liquidity at 09:20 rather
+    than about the sizing rule.
+
+    **So this test is a smoke check, and calling it anything stronger would be
+    overselling it.** At a bound of ~7.8% and ``slack`` of 3, the tolerance it actually
+    enforces is ~23%. A genuine 10% invariance leak would pass here unnoticed. The
+    property is *pinned* by the synthetic pair above, at a bound of ~0.55% and a tolerance
+    of ~1.7%; what this test adds is that the machinery survives contact with real bars,
+    real holidays, real cost regimes and a real cap — not that it survives to any
+    particular precision.
+
+    Tightening it would mean sizing closer to the 2,405-unit ceiling measured at
+    ``CORPUS_TARGET_NOTIONAL``, which buys a bound of ~5.8% at best (tolerance ~17%) and
+    risks tripping the cap on the thinnest session, at which point the two runs would be
+    comparing feasibility rather than sizing and the test would prove less, not more. The
+    honest resolution is to state where the property is really held, which is above.
     """
     runs = {
         LOT_A: statistics_for(
