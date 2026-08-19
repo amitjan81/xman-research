@@ -245,18 +245,19 @@ DECEMBER_LOT_75_SESSIONS = (
 )
 
 
-#: The scan's range is **the whole corpus, read off disk**, not a pinned window.
-#:
-#: It was ``2025-12-16..2026-08-12``, 161 sessions, and before that 119 — a constant that
-#: had to be edited by hand every time the corpus grew, and that silently excluded whatever
-#: had arrived since. What it was excluding by the time anyone looked was the entire
-#: 2021-2025 historical backfill: 1,072 sessions carrying the lot-25 and lot-50 epochs this
-#: module exists to describe, unexamined behind a number nobody thought to change.
-#:
-#: Deriving it costs about 3.5 minutes of scan on the current corpus and removes the
-#: failure mode permanently. Growth widens the scan instead of hiding from it.
 def _corpus_sessions() -> tuple[dt.date, ...]:
-    """Every session the producer wrote, newest corpus included."""
+    """Every session the producer wrote — **the whole corpus, read off disk**.
+
+    The scan's range used to be the constants ``CAPTURE_START``/``CAPTURE_END``, covering
+    ``2025-12-16..2026-08-12``, 161 sessions, and before that 119. They had to be edited by
+    hand every time the corpus grew, and they silently excluded whatever had arrived since.
+    What they were excluding by the time anyone looked was the entire 2021-2025 historical
+    backfill: 1,072 sessions carrying the lot-25 and lot-50 regimes this module exists to
+    describe, unexamined behind a number nobody thought to change.
+
+    Deriving the range costs about 3.5 minutes of scan on the current corpus and removes
+    the failure mode permanently. Growth widens the scan instead of hiding from it.
+    """
     root = CORPUS_ROOT / UNDERLYING
     return tuple(
         sorted(dt.date.fromisoformat(p.name[: -len(".parquet")]) for p in root.glob("*.parquet"))

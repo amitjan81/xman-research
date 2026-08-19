@@ -27,6 +27,7 @@ from xman_research.backtest.settlement import (
     settlement_rule_for,
     settlement_value,
 )
+from xman_research.backtest.strategies import lots_for_notional
 from xman_research.session_store import RefData
 
 LOT = 65
@@ -373,3 +374,46 @@ def test_the_decision_minute_resolves_to_the_first_bar_at_or_after_it() -> None:
     assert minute is not None
     assert minute.hour == 9 and minute.minute == 20
     assert session.minute_at_or_after(dt.time(23, 0)) is None
+
+
+# --------------------------------------------------------------------------------------
+# Sizing: M1 §5, shared by both strategies
+# --------------------------------------------------------------------------------------
+
+
+def test_the_sizing_rule_rounds_to_nearest_and_can_legitimately_return_zero() -> None:
+    """M1 §5 as amended 2026-08-19: round to nearest, no floor at one lot.
+
+    Zero is a *legitimate* answer — M1 §4 lists it as an entry suppression — because
+    rounding up to one lot would take a position larger than the target notional asked for.
+    """
+    # 1,500,000 / (20,000 * 50) = 1.5 exactly -> floor(1.5 + 0.5) = 2, not banker's 2.
+    assert lots_for_notional(target_notional=1_500_000.0, spot=20_000.0, lot_size=50) == 2
+    # 0.5 exactly is the tie at the bottom: it rounds up to one lot, it does not suppress.
+    assert lots_for_notional(target_notional=500_000.0, spot=20_000.0, lot_size=50) == 1
+    # Just under half a contract: no position at all, rather than one that is too big.
+    assert lots_for_notional(target_notional=490_000.0, spot=20_000.0, lot_size=50) == 0
+
+
+@pytest.mark.parametrize(
+    "kwargs,match",
+    [
+        ({"spot": 0.0, "lot_size": 65}, "spot must be positive"),
+        ({"spot": -1.0, "lot_size": 65}, "spot must be positive"),
+        ({"spot": 20_000.0, "lot_size": 0}, "lot_size must be positive"),
+        ({"spot": 20_000.0, "lot_size": -65}, "lot_size must be positive"),
+    ],
+)
+def test_an_impossible_input_is_refused_loudly_and_not_folded_into_zero(
+    kwargs: dict[str, float], match: str
+) -> None:
+    """The distinction the amended §5 depends on: 0 means "too small", not "broken".
+
+    A non-positive spot is a broken underlying series and a non-positive lot size is a
+    corrupt refdata row. Both used to return ``0`` — the same value that now legitimately
+    means "correctly too small to trade" — which would let a corrupt session masquerade as
+    a deliberate no-trade for an entire run. Each caller guards ``spot <= 0`` explicitly
+    and skips; only a genuine invariant breach reaches here.
+    """
+    with pytest.raises(ValueError, match=match):
+        lots_for_notional(target_notional=1_500_000.0, **kwargs)
