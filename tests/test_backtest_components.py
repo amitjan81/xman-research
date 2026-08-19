@@ -13,6 +13,7 @@ import pytest
 
 from conftest import IST, SESSION_MINUTES, SESSION_OPEN
 from xman_research.backtest.costs import Side
+from xman_research.backtest.engine import BookView
 from xman_research.backtest.execution import (
     BarCloseFillModel,
     Feasibility,
@@ -27,7 +28,12 @@ from xman_research.backtest.settlement import (
     settlement_rule_for,
     settlement_value,
 )
-from xman_research.backtest.strategies import lots_for_notional
+from xman_research.backtest.strategies import (
+    ClockSide,
+    ClockSplitShortStraddle,
+    ShortAtmStraddle,
+    lots_for_notional,
+)
 from xman_research.session_store import RefData
 
 LOT = 65
@@ -417,3 +423,102 @@ def test_an_impossible_input_is_refused_loudly_and_not_folded_into_zero(
     """
     with pytest.raises(ValueError, match=match):
         lots_for_notional(target_notional=1_500_000.0, **kwargs)
+
+
+# ------------------------------------------------------- the n_t = 0 entry suppression
+
+#: A session whose front contract is a week out, so neither strategy's
+#: days-to-expiry guard fires and the size branch is the only thing left to reach.
+STRADDLE_SESSION = dt.date(2026, 6, 2)
+STRADDLE_STRIKES = (22_900.0, 23_000.0, 23_100.0)
+
+
+def _straddle_refdata(session_date: dt.date) -> RefData:
+    """Both sides of three strikes — a chain a straddle can actually be built from.
+
+    ``_refdata`` above lists the CALL alone, which is enough for the settlement and cap
+    tests but makes ``decide`` return ``()`` at the missing-leg guard. A fixture that
+    stopped there would pass this test for entirely the wrong reason.
+    """
+    return RefData(
+        session_date=session_date,
+        nfo_instruments=tuple(
+            {
+                "TradingSymbol": f"NIFTY-09Jun2026-{strike:.0f}-{option_type}",
+                "LookupName": "NIFTY",
+                "OptionType": option_type,
+                "StrikePrice": strike,
+                "ExpiryDate": EXPIRY.strftime("%d/%m/%Y"),
+                "LotSize": LOT,
+                "TickSize": 5.0,
+            }
+            for strike in STRADDLE_STRIKES
+            for option_type in (OptionType.CALL, OptionType.PUT)
+        ),
+        underlier_instruments=(),
+    )
+
+
+def _straddle_session() -> SessionView:
+    return SessionView.from_frame(
+        STRADDLE_SESSION,
+        "NIFTY",
+        _frame(STRADDLE_SESSION, {}, STRIKE),
+        _straddle_refdata(STRADDLE_SESSION),
+    )
+
+
+def _minute(index: int) -> dt.datetime:
+    return dt.datetime.combine(STRADDLE_SESSION, SESSION_OPEN, tzinfo=IST) + dt.timedelta(
+        minutes=index
+    )
+
+
+def test_a_target_under_half_a_contract_suppresses_the_entry_in_both_strategies() -> None:
+    """M1 §4: ``n_t = 0`` means the session does not trade — asserted on ``decide``.
+
+    ``lots_for_notional`` returning 0 is covered above, but that is the arithmetic; this
+    is the *behaviour* §4's 2026-08-19 amendment specifies, and until now nothing asserted
+    the two were connected. The amendment removed a floor at one lot, so the failure this
+    guards against is a strategy that quietly rounds a sub-lot target *up* and takes a
+    position larger than the research question asked for.
+
+    Both strategies are checked because M2 §3 inherits M1 §5 rather than restating it: an
+    arm that kept the old floor would break the comparison H26 rests on while every
+    per-strategy test still passed.
+
+    A target of ₹1 against ~₹1.5m of contract is unambiguously under half a lot. The
+    realistic control in the same session is what proves the empty result comes from the
+    size branch and not from a chain, spot or expiry guard upstream of it.
+    """
+    session = _straddle_session()
+    flat = BookView({}, 1_000_000.0)
+
+    assert lots_for_notional(target_notional=1.0, spot=STRIKE, lot_size=LOT) == 0
+
+    m1_minute = _minute(5)  # 09:20, M1 §4's decision minute
+    assert (
+        ShortAtmStraddle(target_notional=1.0).decide(session=session, minute=m1_minute, book=flat)
+        == ()
+    )
+    # The control: the same session, the same guards, a size that survives rounding.
+    assert (
+        len(
+            ShortAtmStraddle(target_notional=1_500_000.0).decide(
+                session=session, minute=m1_minute, book=flat
+            )
+        )
+        == 2
+    )
+
+    gap = ClockSplitShortStraddle(hold=ClockSide.GAP, target_notional=1.0)
+    m2_minute = _minute(SESSION_MINUTES - 1)  # 15:29, the GAP arm's open
+    assert gap.decide(session=session, minute=m2_minute, book=flat) == ()
+    assert (
+        len(
+            ClockSplitShortStraddle(hold=ClockSide.GAP, target_notional=1_500_000.0).decide(
+                session=session, minute=m2_minute, book=flat
+            )
+        )
+        == 2
+    )
