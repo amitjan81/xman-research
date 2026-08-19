@@ -4,7 +4,7 @@
 |---|---|
 | Hypothesis | H1 — index variance risk premium |
 | Record | `h_817b33ff6b9f68e288161f5990739744` |
-| Status | **Awaiting owner approval.** No re-validation until approved. |
+| Status | **Awaiting owner approval** as a whole; no re-validation until approved. The §5 sizing amendment and its §12.1 gate are **owner-approved 2026-08-19**. |
 | Prior result | FAILS_THRESHOLD, n=79, DSR 0.6043 vs 0.90 |
 
 ---
@@ -148,7 +148,9 @@ $$\min_t \frac{N^*}{S_{t,\tau} \cdot L_t} \;\geq\; 0.5$$
 
 **This must actually be run and pass. It is not an assumption.** If it fails, $N^*$ is too small for the window — that is a finding about the *parameter*, not about the model, and the remedy is to raise $N^*$ at pre-registration, never to floor $n_t$ after the fact.
 
-$L_t$ here is the **epoch-corrected** lot size (`lot_size.epoch_for`), not the value the session's refdata declares. The two disagree on the December 2025 sessions, and $L_t$ being wrong there is the reason this model's sizing rule was rewritten at all; running the check on the declared value would verify the wrong quantity on precisely the sessions that motivated it.
+$L_t$ here is the **bars-supported** lot size — `LotSizeAudit.reference_lot_size`, the multiplier the session's own bars divide by, which falls back to the declared value where the bars do not convict it. It is not the declared value alone: the two disagree on 1,077 of the corpus's 1,233 sessions, and $L_t$ being wrong there is the reason this model's sizing rule was rewritten at all; running the check on the declared value would verify the wrong quantity on precisely the sessions that motivated it.
+
+**Not `lot_size.epoch_for`, which an earlier wording of this clause named.** That function answers a narrower question — which lot-size regime has been *recorded* with written evidence — and its table deliberately covers only expiries from 2025-12-16 onward, returning `None` everywhere else: on **1,071 of the corpus's 1,233 sessions (87%)**, and so on every session of this model's own costable window (§13) before 2025-12-16. Naming it made this gate incomputable on the bulk of the window it is mandatory over, which matters because §12.1 requires re-execution whenever $N^*$ or the window changes. `reference_lot_size` is defined on every session and is the quantity the check was in fact executed against.
 
 **What the check buys, stated exactly.** $\lfloor x + 1/2 \rfloor \geq 1 \iff x \geq 0.5$, so a passing check means no session reaches §5's $n_t = 0$ branch and §4's corresponding suppression never fires on this window. That makes the two clauses belt-and-braces rather than contradictory: the suppression is the honest behaviour *if* the branch is ever reached, and the check is the evidence that it is not. Without the check, which sessions trade would be a function of $L_t$ — the one dependence the notional rule exists to remove — and the invariance would hold for the statistics while quietly failing for the population.
 
