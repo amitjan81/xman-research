@@ -29,21 +29,47 @@ multiplier the bars support moves through seven runs::
 **1,077 of the 1,233 sessions contradict their own declared lot size**, so the
 publish-time-dependence defect is corpus-wide rather than a December curiosity.
 
-That much is measured. What is *not* established is what those regimes mean, and the
-reason is structural: :class:`LotSizeEpoch` is keyed on contract **expiry**, and these
-boundaries are not expiry boundaries. Two of them fall in the middle of a single contract:
-the front expiry is 2021-08-05 on both 2021-07-22 (reading 75) and 2021-07-23 (reading
-50), and it is 2025-02-06 across the whole 2025-01-24..30 run of 25 *and* the 75 sessions
-on either side of it. **The same contract therefore reads as two different multipliers on
-adjacent sessions**, which an expiry-keyed table cannot represent — and a five-session
-excursion to 25 inside a 75 stretch, on one unchanged contract, looks far more like a
-vendor scaling artefact than an exchange revision.
+**Where the boundaries fall — measured, after an earlier version of this docstring got it
+wrong.** That version argued the runs could not be encoded because :class:`LotSizeEpoch`
+is keyed on contract **expiry** while "these boundaries are not expiry boundaries", citing
+a front expiry of 2021-08-05 on both 2021-07-22 and 2021-07-23, and of 2025-02-06 across
+the whole 2025-01-24..30 excursion. **Both citations are false and the opposite is true.**
+Re-measuring every session against the contract its bars actually belong to:
 
-So no entry is added for them. Divisibility only ever establishes a *lower* bound, the
-refdata is contaminated on every session, and no NSE circular has been read; writing seven
-epochs from this would encode a guess in the shape of a finding, which is precisely what
-the confidence field exists to prevent. The runs are recorded here as evidence for whoever
-does read the circulars.
+* **Capture is front-expiry-only, so one session is one contract.** On all 1,233 sessions
+  the positive-volume bars carry **exactly one** expiry — zero exceptions — the same data
+  fact :func:`~xman_research.backtest.strategies._next_expiry_after` records. The sessions
+  named above carry 2021-07-22, 2021-07-29, 2025-01-30 and 2025-02-06 respectively, not
+  the expiries claimed, and each bundle's own front expiry agrees with its bars. The old
+  claim was not a refdata-contamination artefact; it was simply wrong.
+* **No contract is ever observed under two multipliers.** Over the 269 distinct expiries
+  in the corpus, the number whose bars support more than one lot size is **zero**.
+* **Every one of the six boundaries is an expiry handover**, not a mid-contract flip:
+  2021-07-22(75)->2021-07-29(50), 2024-04-25(50)->2024-05-02(25),
+  2024-12-26(25)->2025-01-02(75), 2025-01-23(75)->2025-01-30(25),
+  2025-01-30(25)->2025-02-06(75), 2025-12-30(75)->2026-01-06(65).
+
+An expiry-keyed table therefore represents this corpus exactly — the 25 excursion is the
+one-expiry range ``[2025-01-30, 2025-01-30]`` among 75 neighbours. And it is not "one
+unchanged contract" reading two ways: 2025-01-30 is a distinct contract, a month-end
+expiry sitting between two weeklies. **So the live hypothesis is grandfathering, not a
+vendor scaling artefact** — precisely the model :class:`LotSizeEpoch`'s own class
+docstring already states, in which a revision binds newly-introduced contracts while
+existing ones run to expiry at the old size. Two details support it: the 25->75 boundary
+lands on the first session whose front contract is the 2025-01-02 weekly rather than on
+any calendar date, and the *next* month-end expiry, 2025-02-27, already reads 75.
+
+**Why the refusal stands anyway.** Grandfathering is a hypothesis this corpus cannot
+close, because it turns on contract *listing* dates and each bundle's chain carries only
+the three nearest expiries — on 2024-11-19 neither 2025-01-30 nor 2025-02-27 is listed
+yet, so nothing here dates either contract's introduction. The revision the pattern is
+consistent with is un-cited: no NSE or SEBI circular has been read for this module.
+Divisibility only ever establishes a *lower* bound on a lot size, and the refdata is
+contaminated on every session. So no entry is added for these runs. Writing seven epochs
+from a hypothesis that merely fits would encode a guess in the shape of a finding, which
+is precisely what the confidence field exists to prevent; writing nothing is the
+reversible choice, and the runs are recorded here as evidence for whoever does read the
+circulars.
 
 **A related defect, reported and not fixed here.** :func:`epoch_for` takes a parameter
 named ``expiry``, but its only production caller — :meth:`LotSizeAudit.contradiction_message`
