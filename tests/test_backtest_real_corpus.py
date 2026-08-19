@@ -7,12 +7,18 @@ package opens a file for writing.
 
 **The gap path is exercised on purpose, not incidentally** — but not by this window.
 Measured against the calendar, every window inside the captured range resolves complete,
-including the one this file runs; the corpus has no hole in its interior, only an end
-(the vendor subscription lapsed on 2026-06-14). So the fixture asks the store first and
-passes a written reason only if the range is incomplete, and the assertion pins whichever
-answer it got — ``None`` here — rather than assuming the interesting one. The refusal path
-is covered directly by ``test_a_holey_window_refuses_without_a_reason``, which runs past
-the end of capture, which is the real hole.
+including the one this file runs; the corpus has no hole in its interior, only an end. So
+the fixture asks the store first and passes a written reason only if the range is
+incomplete, and the assertion pins whichever answer it got — ``None`` here — rather than
+assuming the interesting one.
+
+The wrapper's refusal path is held on the synthetic corpus, by
+``test_backtest_engine.py::test_a_gap_can_be_accepted_only_against_a_written_reason``,
+which builds a hole rather than borrowing one. It used to be held here instead, by a
+window running into the 2026-06-15..2026-08-12 vendor outage — and the 2026-08-13 backfill
+filled that outage in, which is exactly why a refusal test must not depend on the real
+corpus staying broken. What is left here is the fact only the real corpus can state:
+that the window is now whole, and that asking past its end still refuses.
 """
 
 from __future__ import annotations
@@ -29,18 +35,17 @@ from xman_research.backtest import (
     BacktestConfig,
     Feasibility,
     LotSizeAudit,
-    LotSizeContradictionError,
     ShortAtmStraddle,
     audit_lot_size,
     epoch_for,
     run_backtest,
 )
-from xman_research.session_store import DEFAULT_CORPUS_ROOT, MissingSessionsError, SessionStore
+from xman_research.session_store import DEFAULT_CORPUS_ROOT, SessionStore
 
 CORPUS_ROOT = Path(os.environ.get("XMAN_RESEARCH_CORPUS_ROOT") or DEFAULT_CORPUS_ROOT)
 UNDERLYING = "NIFTY"
 
-#: A span inside the captured range (2025-12-16 .. 2026-06-12) that covers several weekly
+#: A span inside the captured range (2025-12-16 .. 2026-08-12) that covers several weekly
 #: expiry cycles, so entries, settlements and rollovers all appear.
 #:
 #: **It deliberately crosses 1 April 2026**, the date the STT rates rise from 0.1% to
@@ -50,9 +55,10 @@ UNDERLYING = "NIFTY"
 #: the boundary is crossed by real sessions carrying real turnover, so both regimes are
 #: charged in the same run and the E2E numbers below reflect the change.
 #:
-#: It also starts after 2025-12-30, and must: the December sessions carry a lot size their
-#: own refdata contradicts, and a backtest touching them is refused outright. See
-#: :mod:`xman_research.backtest.lot_size`.
+#: It also starts after 2025-12-30, and still should: the December sessions carry a lot
+#: size their own refdata contradicts. That no longer refuses the run — it stamps it — so
+#: the reason is now about keeping this window's numbers clean rather than about being
+#: allowed to compute them at all. See :mod:`xman_research.backtest.lot_size`.
 START = dt.date(2026, 2, 2)
 END = dt.date(2026, 4, 30)
 
@@ -141,24 +147,33 @@ def test_the_range_resolves_and_the_gap_decision_is_recorded(
         assert recorded is None, "a complete range recorded a gap reason it did not need"
 
 
-def test_a_holey_window_refuses_without_a_reason(store: SessionStore) -> None:
-    """The store's asymmetry survives being wrapped: no reason, no run over a gap.
+def test_the_backfilled_window_is_whole(store: SessionStore) -> None:
+    """The one fact here that only the real corpus can state: that window is now whole.
 
-    Renamed from ``test_a_clean_window_...``: the window is deliberately holey, which is
-    the entire premise, and the old name said the opposite of what the test sets up.
+    Was ``test_a_holey_window_refuses_without_a_reason``. Its window — June into July 2026
+    — was chosen because it certainly had holes, the vendor subscription having lapsed on
+    2026-06-14. The 2026-08-13 backfill landed those 42 sessions, so the window resolves
+    complete and the old assertion is simply false about the world.
 
-    Uses a window that certainly has holes — it runs past the end of capture, which is the
-    live case: every session after 2026-08-12 is absent. The window moved once already,
-    when a vendor backfill filled 2026-06-15..2026-08-12 and made the previous choice
-    (2026-06-01..2026-07-31) complete, which turned this test green for the wrong reason
-    and then red for the right one.
+    **A second, subtler version of the same mistake has also been removed.** The
+    replacement kept a refusal assertion here, resolving ``CAPTURE_END + 1 .. +8`` and
+    describing it as "the one hole no backfill can ever fill ... sessions that have not
+    happened yet". Seven of those eight sessions had happened and were captured; the window
+    was incomplete only because its far end was tomorrow, and it passed on a one-day
+    margin. A guarantee that depends on the real corpus's shape is not a guarantee, even
+    when the shape it depends on is "the future has not arrived".
+
+    So the refusal now lives entirely on the synthetic corpus, where the hole is
+    constructed —
+    ``test_backtest_engine.py::test_a_gap_can_be_accepted_only_against_a_written_reason``
+    for the partial case and
+    ``::test_a_window_entirely_past_the_end_of_the_corpus_refuses`` for the total one.
+    What is left here is only what a synthetic fixture cannot say.
     """
-    log_window = DataWindow(dt.date(2026, 8, 1), dt.date(2026, 9, 30))
-    resolution = store.resolve(UNDERLYING, log_window.start, log_window.end)
-
-    assert not resolution.is_complete
-    with pytest.raises(MissingSessionsError):
-        resolution.sessions()
+    filled = store.resolve(UNDERLYING, dt.date(2026, 6, 1), dt.date(2026, 7, 31))
+    assert filled.is_complete
+    assert filled.missing == ()
+    assert len(filled.sessions()) == filled.expected_count > 0
 
 
 def test_the_backtest_traded_settled_and_priced_against_real_data(result) -> None:
@@ -187,7 +202,7 @@ def test_every_intent_carries_a_verdict_and_the_counts_add_up(result) -> None:
 def test_the_run_is_reproducible_against_the_real_corpus(
     result, store: SessionStore, gap_reason: str | None
 ) -> None:
-    """Re-running the same inputs over 119 real sessions must give the identical hash."""
+    """Re-running the same inputs over the same real sessions must give the identical hash."""
     produced, session, hypothesis = result
 
     with session.trial(hypothesis, data_window=DataWindow(START, END)) as trial:
@@ -229,14 +244,31 @@ DECEMBER_LOT_75_SESSIONS = (
     dt.date(2025, 12, 30),
 )
 
-CAPTURE_START = dt.date(2025, 12, 16)
-CAPTURE_END = dt.date(2026, 8, 12)
+
+def _corpus_sessions() -> tuple[dt.date, ...]:
+    """Every session the producer wrote — **the whole corpus, read off disk**.
+
+    The scan's range used to be the constants ``CAPTURE_START``/``CAPTURE_END``, covering
+    ``2025-12-16..2026-08-12``, 161 sessions, and before that 119. They had to be edited by
+    hand every time the corpus grew, and they silently excluded whatever had arrived since.
+    What they were excluding by the time anyone looked was the entire 2021-2025 historical
+    backfill: 1,072 sessions carrying the lot-25 and lot-50 regimes this module exists to
+    describe, unexamined behind a number nobody thought to change.
+
+    Deriving the range costs about 3.5 minutes of scan on the current corpus and removes
+    the failure mode permanently. Growth widens the scan instead of hiding from it.
+    """
+    root = CORPUS_ROOT / UNDERLYING
+    return tuple(
+        sorted(dt.date.fromisoformat(p.name[: -len(".parquet")]) for p in root.glob("*.parquet"))
+    )
 
 
 @pytest.fixture(scope="module")
 def corpus_audits(store: SessionStore) -> tuple[LotSizeAudit, ...]:
     """Every session in the corpus, audited once. The scan the old test did not do."""
-    resolution = store.resolve(UNDERLYING, CAPTURE_START, CAPTURE_END)
+    on_disk = _corpus_sessions()
+    resolution = store.resolve(UNDERLYING, on_disk[0], on_disk[-1])
     refs = resolution.accept_gaps(
         "lot-size audit: the scan is over whatever was captured, and a hole in the "
         "calendar cannot hide a lot-size contradiction in the sessions that exist"
@@ -264,7 +296,7 @@ def test_volume_is_in_units_not_contracts_on_every_session(
     it is the stronger claim, that the lot size is the one the refdata *declares*, that
     fails, and it fails on ten sessions the old test never looked at.
     """
-    assert len(corpus_audits) == 161
+    assert len(corpus_audits) == len(_corpus_sessions()) > 1_000
     for audit in corpus_audits:
         supported = max(audit.declared_volume_share, audit.best_alternative_share)
         assert supported >= 0.99, (
@@ -283,9 +315,18 @@ def test_the_december_2025_sessions_contradict_their_own_declared_lot_size(
     refdata. At that point the epoch record in ``lot_size.py`` becomes history rather than
     a live defect, and this assertion is the thing that says so.
     """
-    contradicted = tuple(a.session_date for a in corpus_audits if a.contradicts_declared)
+    contradicted = {a.session_date for a in corpus_audits if a.contradicts_declared}
 
-    assert contradicted == DECEMBER_LOT_75_SESSIONS
+    # **A subset assertion, where this used to be an equality.** Over the old 161-session
+    # window these ten WERE every contradicted session. Over the whole corpus 1,077 of
+    # 1,233 sessions contradict their declared lot size, because the publish-time
+    # dependence reaches the entire historical backfill and not just December. The ten stay
+    # pinned because they are the finding this module was built on; the count around them
+    # is an extent and is derived.
+    assert set(DECEMBER_LOT_75_SESSIONS) <= contradicted
+    assert len(contradicted) > len(DECEMBER_LOT_75_SESSIONS), (
+        "the corpus-wide contradiction is the headline finding of the full scan"
+    )
     for audit in corpus_audits:
         if audit.session_date in DECEMBER_LOT_75_SESSIONS:
             assert audit.declared_lot_sizes == (65,)
@@ -300,9 +341,11 @@ def test_no_refdata_bundle_anywhere_in_the_corpus_declares_lot_size_75(
 ) -> None:
     """The producer-side evidence: the bundles are publish-time-stamped, not date-stamped.
 
-    Every one of the 119 sessions declares 65, including the ten where 65 was not the lot
-    size. That is what publish-time dependence looks like from the reader's side, and it is
-    why the December regime is recorded from measurement rather than read from a file.
+    Every session in the corpus declares 65 — all 1,233 of them, including the 1,077 where
+    65 was not the lot size the bars support. That is what publish-time dependence looks
+    like from the reader's side, and it is why the December regime is recorded from
+    measurement rather than read from a file. Over the full corpus this is a considerably
+    stronger statement than it was over 161 sessions.
     """
     declared = {lot for audit in corpus_audits for lot in audit.declared_lot_sizes}
 
@@ -318,10 +361,26 @@ def test_the_recorded_epoch_agrees_with_what_the_bars_measured() -> None:
     assert all(epoch.evidence for epoch in NIFTY_LOT_SIZE_EPOCHS)
 
 
-def test_a_backtest_touching_december_2025_is_refused_not_computed(
+def test_a_backtest_touching_december_2025_computes_and_carries_the_stamp(
     store: SessionStore,
 ) -> None:
-    """The whole point of the finding: the run does not happen on a wrong lot size."""
+    """The contract that replaced the refusal, pinned as a contract rather than deleted.
+
+    Was ``test_a_backtest_touching_december_2025_is_refused_not_computed``, and the
+    behaviour it asserted is gone by decision, not by accident: as of 2026-08-13 the
+    declared lot size is used for every calculation even where the session's own bars
+    contradict it, and the run is stamped rather than blocked.
+
+    That makes the *stamp reaching the verdict* the thing worth pinning, and it is a
+    stronger property than the refusal was. A refusal is self-announcing — nobody can
+    fail to notice a run that did not happen. A stamp can be dropped anywhere along a
+    chain of four components and the result still looks like a perfectly ordinary number,
+    which is the failure this asserts against: the flag has to be in
+    ``unverified_inputs`` (what C6 reads to decide whether a result is evaluable) *and*
+    the contradicted dates have to be in the provenance (what a human reads to find out
+    which sessions), because those are two different readers and either one alone would
+    leave the other blind.
+    """
     import tempfile
 
     from xman_research import StaticCodeVersion, TrialLog
@@ -335,33 +394,60 @@ def test_a_backtest_touching_december_2025_is_refused_not_computed(
     session = ResearchSession(log)
     hypothesis = HypothesisRecord(
         name="H1 — a window reaching into the December lot-75 regime",
-        mechanism="Irrelevant: the run is refused before any decision is taken.",
+        mechanism="Irrelevant: what is under test is the stamp, not the P&L.",
         null_hypothesis="Irrelevant.",
         thresholds={"deflated_sharpe": 0.0},
         predictors=["iv_30d"],
     )
     window = DataWindow(dt.date(2025, 12, 16), dt.date(2026, 1, 9))
     try:
-        with (
-            session.trial(hypothesis, data_window=window) as trial,
-            pytest.raises(LotSizeContradictionError) as raised,
-        ):
-            run_backtest(
+        with session.trial(hypothesis, data_window=window) as trial:
+            produced = run_backtest(
                 trial,
                 store=store,
                 strategy=ShortAtmStraddle(),
                 config=BacktestConfig(
                     underlying=UNDERLYING,
-                    gap_reason="lot-size refusal test: gaps are not what is under test",
+                    gap_reason="lot-size stamp test: gaps are not what is under test",
                 ),
             )
     finally:
         session.close()
 
-    assert raised.value.audit.session_date == dt.date(2025, 12, 16)
-    assert raised.value.audit.best_alternative == 75
-    assert "declares lot size 65" in str(raised.value)
-    assert "refused rather than run" in str(raised.value)
+    # It computed. A run that quietly produced nothing would satisfy every assertion
+    # about stamps below while testing none of them.
+    assert produced.sessions_run > 0
+    assert produced.fills
+
+    assert "corpus.declared_lot_size_contradicted:unverified" in produced.unverified_inputs
+    contradicted = produced.data_provenance["lot_size_audit"][
+        "sessions_contradicting_declared_lot_size"
+    ]
+    assert contradicted == [day.isoformat() for day in DECEMBER_LOT_75_SESSIONS]
+
+    # And the stamp says what it means. The text is what a reader of the flag gets, so it
+    # has to name the measurement and what survives it, not merely that something is off.
+    december = next(a for a in corpus_audits_for(store) if a.session_date == dt.date(2025, 12, 16))
+    message = december.contradiction_message()
+    assert "declares lot size 65" in message
+    assert "computed on the declared value anyway and stamped" in message
+
+
+def corpus_audits_for(store: SessionStore) -> tuple[LotSizeAudit, ...]:
+    """Audit the December sessions alone — the module fixture scans all 161, which this
+    test does not need and should not wait for."""
+    resolution = store.resolve(
+        UNDERLYING, DECEMBER_LOT_75_SESSIONS[0], DECEMBER_LOT_75_SESSIONS[-1]
+    )
+    return tuple(
+        audit_lot_size(
+            session_date=ref.session_date,
+            underlying=UNDERLYING,
+            frame=store.load_session(ref),
+            refdata=store.load_refdata(ref),
+        )
+        for ref in resolution.sessions()
+    )
 
 
 def test_the_open_interest_outliers_are_reported_without_being_diagnosed(

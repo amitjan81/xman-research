@@ -4,7 +4,7 @@
 |---|---|
 | Hypothesis | H1 — index variance risk premium |
 | Record | `h_817b33ff6b9f68e288161f5990739744` |
-| Status | **Awaiting owner approval.** No re-validation until approved. |
+| Status | **Awaiting owner approval** as a whole; no re-validation until approved. The §5 sizing amendment and its §12.1 gate are **owner-approved 2026-08-19**. |
 | Prior result | FAILS_THRESHOLD, n=79, DSR 0.6043 vs 0.90 |
 
 ---
@@ -41,17 +41,23 @@ where $S_{t,\tau}$ is spot and $\mathcal{K}_t$ the listed strike grid. Enter
 
 $$\text{position}_t = \{ -n_t \text{ CE}(K_t, T_t),\; -n_t \text{ PE}(K_t, T_t) \}$$
 
-**Entry is suppressed when** $(T_t - t) < 1$ trading day, or either leg is unlisted, or either leg fails feasibility (§7).
+**Entry is suppressed when** $(T_t - t) < 1$ trading day, or either leg is unlisted, or either leg fails feasibility (§7), or $n_t = 0$ (§5).
 
 **Atomicity:** both legs share a `leg_group`. If either is infeasible, neither trades. If caps grant different sizes, both take $\min$.
 
 ## 5. Sizing
 
-$$n_t = \left\lfloor \frac{N^*}{S_{t,\tau} \cdot L_t} \right\rceil, \qquad n_t \geq 1$$
+$$n_t = \left\lfloor \frac{N^*}{S_{t,\tau} \cdot L_t} \right\rceil$$
 
-$N^*$ = target notional (parameter), $L_t$ = contract lot size on $t$, $\lfloor\cdot\rceil$ = round to nearest.
+$N^*$ = target notional (parameter), $L_t$ = contract lot size on $t$, $\lfloor\cdot\rceil$ = round to nearest (implemented as $\lfloor x + 1/2 \rfloor$, not banker's rounding, so the tie does not break on the parity of a quotient).
+
+**There is no floor at one lot.** When the target is under half a contract $n_t = 0$ and the session simply does not trade (§4). Rounding *up* to one lot would take a position **larger than $N^*$ asks for** — it would substitute the exchange's minimum for the exposure the research question specified, and do it silently on exactly the sessions where the two differ most.
+
+*Amended 2026-08-19 (owner-approved) from an earlier form carrying $n_t \geq 1$.* The floor was a spec/code mismatch: the implementation has always returned 0 below half a contract. The floor is the wrong side of the mismatch to keep, and §12's pre-registration check is what makes removing it safe.
 
 Sizing is by **notional, not lots**, so that $\text{Sharpe}$, $\text{MDD}$ and the cost-breakeven ratio are invariant to $L_t$. Residual from integer rounding is bounded by $\Delta L / (2 n_t L)$; the invariance test asserts both agreement and that this bound is under a stated ceiling.
+
+**The $n_t = 0$ branch is the one place sizing could re-introduce a dependence on $L_t$** — *which* sessions trade would become a function of the contract multiplier. §12's check is what removes it, by verifying no session reaches the branch, rather than assuming so.
 
 ## 6. Exit
 
@@ -126,13 +132,27 @@ $$\text{breakeven} = \sup\{ m : \bar r_{\text{gross}} - m\,\bar c > 0 \}$$
 | Symbol | Value | Basis |
 |---|---|---|
 | $\tau$ | 09:20 IST | post-open, pre-drift |
-| $N^*$ | to be set at pre-registration | must round to $\geq 1$ lot every session |
+| $N^*$ | to be set at pre-registration | must satisfy the sizing-floor check below |
 | $\alpha$ | 0.01 | 1% of bar volume |
 | $\beta$ | 0.005 | 0.5% of OI |
 | $s$ | 0 bps | optimistic case, deliberate |
 | $\mu$ | 1.0 | sweep separately, counted |
 
 **One parameterisation, one trial.** Any sweep is a separate, explicitly counted exercise. This is where ATR-style models die and this one must not.
+
+### 12.1 Sizing-floor check — pre-registration gate
+
+Before the validation run, over every session $t$ in the run's window:
+
+$$\min_t \frac{N^*}{S_{t,\tau} \cdot L_t} \;\geq\; 0.5$$
+
+**This must actually be run and pass. It is not an assumption.** If it fails, $N^*$ is too small for the window — that is a finding about the *parameter*, not about the model, and the remedy is to raise $N^*$ at pre-registration, never to floor $n_t$ after the fact.
+
+$L_t$ here is the **bars-supported** lot size — `LotSizeAudit.reference_lot_size`, the multiplier the session's own bars divide by, which falls back to the declared value where the bars do not convict it. It is not the declared value alone: the two disagree on 1,077 of the corpus's 1,233 sessions, and $L_t$ being wrong there is the reason this model's sizing rule was rewritten at all; running the check on the declared value would verify the wrong quantity on precisely the sessions that motivated it.
+
+**Not `lot_size.epoch_for`, which an earlier wording of this clause named.** That function answers a narrower question — which lot-size regime has been *recorded* with written evidence — and its table deliberately covers only expiries from 2025-12-16 onward, returning `None` everywhere else: on **1,071 of the corpus's 1,233 sessions (87%)**, and so on every session of this model's own costable window (§13) before 2025-12-16. Naming it made this gate incomputable on the bulk of the window it is mandatory over, which matters because §12.1 requires re-execution whenever $N^*$ or the window changes. `reference_lot_size` is defined on every session and is the quantity the check was in fact executed against.
+
+**What the check buys, stated exactly.** $\lfloor x + 1/2 \rfloor \geq 1 \iff x \geq 0.5$, so a passing check means no session reaches §5's $n_t = 0$ branch and §4's corresponding suppression never fires on this window. That makes the two clauses belt-and-braces rather than contradictory: the suppression is the honest behaviour *if* the branch is ever reached, and the check is the evidence that it is not. Without the check, which sessions trade would be a function of $L_t$ — the one dependence the notional rule exists to remove — and the invariance would hold for the statistics while quietly failing for the population.
 
 ## 13. Window and epochs
 

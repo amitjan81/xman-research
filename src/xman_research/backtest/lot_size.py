@@ -7,31 +7,101 @@ the claim is false for the first ten sessions of the corpus. A tripwire that fir
 cherry-picked day is not a weaker tripwire; it is an assurance that the property holds
 when nobody has looked.
 
-**What the corpus actually says.** Every ``.refdata`` bundle in the corpus, on all 119
-sessions, declares NIFTY's lot size as **65**. On the ten sessions from 2025-12-16 to
-2025-12-30 the bars disagree: 100% of positive volume divides by **75** and around 7%
-divides by 65 — 7% being the rate you get by chance, since a multiple of 75 is a
-multiple of 65 exactly when it is a multiple of 13, and 1/13 ≈ 7.7%. From 2025-12-31
-onward the relationship inverts exactly: 100% by 65, around 6% by 75.
+**What the corpus actually says.** Every ``.refdata`` bundle in the corpus — all **1,233**
+sessions of it — declares NIFTY's lot size as **65**. On the ten sessions from 2025-12-16
+to 2025-12-30 the bars disagree: 100% of positive volume divides by **75** and around 7%
+divides by 65 — 7% being the rate you get by chance, since a multiple of 75 is a multiple
+of 65 exactly when it is a multiple of 13, and 1/13 ≈ 7.7%. From 2025-12-31 onward the
+relationship inverts exactly: 100% by 65, around 6% by 75.
+
+**What a full-corpus scan found, and why almost none of it is encoded below.** The corpus
+now carries a historical backfill reaching to 2021-06-01. Scanning all 1,233 sessions, the
+multiplier the bars support moves through seven runs::
+
+    75   2021-06-01 .. 2021-07-22   (36 sessions)
+    50   2021-07-23 .. 2024-04-25   (637)
+    25   2024-04-29 .. 2024-12-26   (157)
+    75   2024-12-27 .. 2025-01-23   (20)
+    25   2025-01-24 .. 2025-01-30   (5)
+    75   2025-01-31 .. 2025-12-30   (222)
+    65   2025-12-31 .. 2026-08-19   (156)
+
+**1,077 of the 1,233 sessions contradict their own declared lot size**, so the
+publish-time-dependence defect is corpus-wide rather than a December curiosity.
+
+**Where the boundaries fall — measured, after an earlier version of this docstring got it
+wrong.** That version argued the runs could not be encoded because :class:`LotSizeEpoch`
+is keyed on contract **expiry** while "these boundaries are not expiry boundaries", citing
+a front expiry of 2021-08-05 on both 2021-07-22 and 2021-07-23, and of 2025-02-06 across
+the whole 2025-01-24..30 excursion. **Both citations are false and the opposite is true.**
+Re-measuring every session against the contract its bars actually belong to:
+
+* **Capture is front-expiry-only, so one session is one contract.** On all 1,233 sessions
+  the positive-volume bars carry **exactly one** expiry — zero exceptions — the same data
+  fact :func:`~xman_research.backtest.strategies._next_expiry_after` records. The sessions
+  named above carry 2021-07-22, 2021-07-29, 2025-01-30 and 2025-02-06 respectively, not
+  the expiries claimed, and each bundle's own front expiry agrees with its bars. The old
+  claim was not a refdata-contamination artefact; it was simply wrong.
+* **No contract is ever observed under two multipliers.** Over the 269 distinct expiries
+  in the corpus, the number whose bars support more than one lot size is **zero**.
+* **Every one of the six boundaries is an expiry handover**, not a mid-contract flip:
+  2021-07-22(75)->2021-07-29(50), 2024-04-25(50)->2024-05-02(25),
+  2024-12-26(25)->2025-01-02(75), 2025-01-23(75)->2025-01-30(25),
+  2025-01-30(25)->2025-02-06(75), 2025-12-30(75)->2026-01-06(65).
+
+An expiry-keyed table therefore represents this corpus exactly — the 25 excursion is the
+one-expiry range ``[2025-01-30, 2025-01-30]`` among 75 neighbours. And it is not "one
+unchanged contract" reading two ways: 2025-01-30 is a distinct contract, a month-end
+expiry sitting between two weeklies. **So the live hypothesis is grandfathering, not a
+vendor scaling artefact** — precisely the model :class:`LotSizeEpoch`'s own class
+docstring already states, in which a revision binds newly-introduced contracts while
+existing ones run to expiry at the old size. Two details support it: the 25->75 boundary
+lands on the first session whose front contract is the 2025-01-02 weekly rather than on
+any calendar date, and the *next* month-end expiry, 2025-02-27, already reads 75.
+
+**Why the refusal stands anyway.** Grandfathering is a hypothesis this corpus cannot
+close, because it turns on contract *listing* dates and each bundle's chain carries only
+the three nearest expiries — on 2024-11-19 neither 2025-01-30 nor 2025-02-27 is listed
+yet, so nothing here dates either contract's introduction. The revision the pattern is
+consistent with is un-cited: no NSE or SEBI circular has been read for this module.
+Divisibility only ever establishes a *lower* bound on a lot size, and the refdata is
+contaminated on every session. So no entry is added for these runs. Writing seven epochs
+from a hypothesis that merely fits would encode a guess in the shape of a finding, which
+is precisely what the confidence field exists to prevent; writing nothing is the
+reversible choice, and the runs are recorded here as evidence for whoever does read the
+circulars.
+
+**A related defect, reported and not fixed here.** :func:`epoch_for` takes a parameter
+named ``expiry``, but its only production caller — :meth:`LotSizeAudit.contradiction_message`
+— passes ``self.session_date``. The two coincide for the December window (its sessions and
+its expiries share the 2025-12-16..12-30 range), which is why nothing has noticed. Deciding
+whether the epoch is session-keyed or expiry-keyed is a semantic change to a frozen
+dataclass and belongs in its own change, with the owner's call.
 
 The cause is publish-time dependence, the same class already fixed for symbols on the
-producer side: all 119 sessions were published in one batch on 2026-06-17 against the
-*then-current* scrip master, so December's bundles carry a lot size that was not in force
-on those dates. **Nothing in the corpus ever declares 75.** The evidence for the December
-regime is entirely in the bars, which is why it is recorded here as an epoch rather than
-read from a file.
+producer side: the sessions were published against the *then-current* scrip master rather
+than the one in force on each date, so older bundles carry a lot size that did not apply.
+**Nothing in the corpus ever declares 75.** The evidence for the December regime is
+entirely in the bars, which is why it is recorded here as an epoch rather than read from a
+file.
 
-**The refusal.** A backtest whose window touches a session whose declared lot size is
-contradicted by that session's own bars does not run. Participation caps, order
-quantities and cost bases would all be computed on a lot size that never applied —
-trades of 65 units on a day when 65 units could not be traded — and none of it would
-show up in the result as anything other than plausible numbers. This module's own
-neighbours already argue the principle: :class:`~xman_research.backtest.costs.
-RateNotInForceError` refuses rather than charge a rate it cannot date, and the session
-store refuses a range with holes rather than quietly skip them. This is the same refusal
-about a different fact, and it is deliberately **not** overridable — a gap can be
-honestly disclosed and reasoned around, but there is no honest way to disclose "every
-quantity below is a multiple of the wrong number".
+**The stamp.** A backtest whose window touches such a session runs, on the **declared**
+lot size, and says so: the result carries ``corpus.declared_lot_size_contradicted`` in its
+``unverified_inputs`` and the contradicted dates in
+``data_provenance["lot_size_audit"]``. This was an unoverridable refusal until 2026-08-13;
+the owner's decision reversed it, and :func:`~xman_research.backtest.engine.run_backtest`
+carries the argument on both sides at the point where the stamp is applied.
+
+What makes the stamp defensible rather than a shrug is that the damage is **bounded and
+uneven, not diffuse**. Since sizing became an exposure target rather than a contract count
+(:class:`~xman_research.backtest.strategies.ShortAtmStraddle`), the lot size no longer
+scales the position: the strategy buys the same rupees of index either way and the
+multiplier only decides the rounding. So the scale-free statistics a verdict rests on —
+Sharpe, deflated Sharpe, return on peak margin, drawdown, the cost-breakeven ratio — are
+invariant to it up to that rounding. What genuinely does move is the *feasibility* verdict,
+because participation caps floor to whole lots against a lot size that never applied, and
+the flat per-order brokerage, which scales with nothing. Those are exactly the questions
+the stamp tells a reader to distrust.
 
 **Volume is the inference series, open interest is only reported.** Every trade at the
 exchange is struck in lots, so traded volume in units is a multiple of the lot size by
@@ -60,7 +130,6 @@ __all__ = [
     "CANDIDATE_LOT_SIZES",
     "NIFTY_LOT_SIZE_EPOCHS",
     "LotSizeAudit",
-    "LotSizeContradictionError",
     "LotSizeEpoch",
     "audit_lot_size",
     "epoch_for",
@@ -88,18 +157,6 @@ _ALTERNATIVE_CEILING = 0.99
 #: symbols this finds sit at 88-100% non-conforming, and the ones it correctly ignores
 #: sit at ~0%.
 _SYMBOL_FLOOR = 0.5
-
-
-class LotSizeContradictionError(Exception):
-    """A session's declared lot size is contradicted by that session's own bars.
-
-    Raised in place of running the backtest. Carries the :class:`LotSizeAudit` so the
-    caller can report *what* the data said rather than only that something was wrong.
-    """
-
-    def __init__(self, message: str, audit: LotSizeAudit) -> None:
-        super().__init__(message)
-        self.audit = audit
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,11 +194,19 @@ class LotSizeEpoch:
 #: measurement over 10 sessions and ~150,000 rows, not a citation. The producer repo
 #: (``xman``) owns the refdata and is where the fix belongs; this package must not, and
 #: does not, rewrite the corpus.
+#: **The table is deliberately incomplete** — see "What a full-corpus scan found" in the
+#: module docstring. It covers only the window its evidence covers; outside that,
+#: :func:`epoch_for` returns ``None``, meaning "not established". That is the honest
+#: answer, and :meth:`LotSizeAudit.contradiction_message` already handles it.
 NIFTY_LOT_SIZE_EPOCHS: tuple[LotSizeEpoch, ...] = (
     LotSizeEpoch(
         underlying="NIFTY",
         lot_size=75,
-        expiries_from=None,
+        # **Closed, where this used to be open-started.** ``None`` claimed 75 for every
+        # expiry in history, on evidence covering ten sessions in December 2025. A
+        # full-corpus scan has since measured 50 and 25 regimes across 2021-2025, so the
+        # open start was not merely unsupported — it was wrong.
+        expiries_from=dt.date(2025, 12, 16),
         expiries_through=dt.date(2025, 12, 30),
         confidence=Confidence.CORROBORATED,
         evidence=(
@@ -161,7 +226,7 @@ NIFTY_LOT_SIZE_EPOCHS: tuple[LotSizeEpoch, ...] = (
         expiries_through=None,
         confidence=Confidence.CORROBORATED,
         evidence=(
-            "Measured over the 109 corpus sessions from 2025-12-31 onward, whose front "
+            "Measured over the 156 corpus sessions from 2025-12-31 onward, whose front "
             "expiry is 06/01/2026 or later: 100% of positive volume rows divide by 65, "
             "against ~6% by 75. Here the refdata's declared 65 and the bars agree, which "
             "is why the whole corpus looks consistent to a check that samples one late "
@@ -255,8 +320,14 @@ class LotSizeAudit:
             "contradicts_declared": self.contradicts_declared,
         }
 
-    def failure_message(self) -> str:
-        """Why the run is being refused, in terms of what was measured."""
+    def contradiction_message(self) -> str:
+        """What the stamp on this session means, in terms of what was measured.
+
+        Renamed from ``failure_message``: nothing fails any more. The text is the
+        explanation a reader of ``corpus.declared_lot_size_contradicted`` needs, and it
+        must state what is and is not damaged — a stamp that only said "something is wrong
+        here" would be read as either fatal or ignorable, and it is neither.
+        """
         declared = ", ".join(str(lot) for lot in self.declared_lot_sizes) or "nothing"
         epoch = epoch_for(self.session_date, underlying=self.underlying)
         known = ""
@@ -271,12 +342,14 @@ class LotSizeAudit:
             f"size {declared}, but only {self.declared_volume_share:.1%} of "
             f"{self.volume_rows} positive volume rows divide by it, while "
             f"{self.best_alternative_share:.1%} divide by {self.best_alternative}. The "
-            "declared lot size did not apply on this date, so every participation cap, "
-            "order quantity and cost base computed from it would be a multiple of the "
-            "wrong number — and would look entirely ordinary in the result. This backtest "
-            "is refused rather than run on it." + known + " The refdata belongs to the "
-            "producer repository (xman) and must be regenerated there; nothing in this "
-            "package may rewrite the corpus."
+            "declared lot size did not apply on this date. The run is computed on the "
+            "declared value anyway and stamped, per the owner's decision of 2026-08-13: "
+            "position sizing targets a notional rather than a contract count, so the "
+            "scale-free statistics survive the wrong multiplier, while the participation "
+            "caps and the flat per-order brokerage on this session do not and should not "
+            "be relied on." + known + " The refdata belongs to the producer repository "
+            "(xman) and must be regenerated there; nothing in this package may rewrite "
+            "the corpus."
         )
 
     @staticmethod

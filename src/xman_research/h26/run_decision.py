@@ -53,7 +53,18 @@ IN_SAMPLE_START = dt.date(2025, 12, 31)
 
 #: 2026-08-12, the last captured session after the vendor backfill. Used only as the
 #: holdout's end; the in-sample end is derived from ``holdout_first_date``.
+#:
+#: **This is pinned to the corpus's extent as it stood, and is deliberately left that
+#: way.** Sessions after it exist now — capture reached 2026-08-19, and a historical
+#: backfill reaches back to 2021-06-01. Widening it would change which sessions H26 is
+#: graded over, and that is a research decision and a new trial, not a maintenance edit.
+#: So it stays a boundary the owner sets rather than one that follows the data.
 CORPUS_END = dt.date(2026, 8, 12)
+
+#: N* for both arms, in rupees of index exposure — M1 §5 via M2 §3, and the same default
+#: M1's own runner uses, so the two models are sized alike unless someone says otherwise.
+#: M1 §12.1's pre-registration check applies to this value before any validation run.
+DEFAULT_TARGET_NOTIONAL = 1_500_000.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,8 +164,15 @@ def _backtest(
         )
 
 
-def _arms(lots: int = 1) -> tuple[ClockSplitShortStraddle, ClockSplitShortStraddle]:
-    """The candidate and its control: one class, one flag, so they cannot drift apart."""
+def _arms(
+    target_notional: float = DEFAULT_TARGET_NOTIONAL,
+) -> tuple[ClockSplitShortStraddle, ClockSplitShortStraddle]:
+    """The candidate and its control: one class, one flag, so they cannot drift apart.
+
+    Sized by notional rather than by lots since M2 §3 was brought back into line with
+    M1 §5. Both arms take the same number, which is the point: an asymmetry in size
+    would be an asymmetry in the comparison H26 exists to make.
+    """
     # The minutes come from the RECORD, not from the strategy's defaults. They are
     # id-bearing there, so a change mints a new hypothesis id and breaks the gate binding;
     # taking them from anywhere else would let the graded clock drift from the registered
@@ -162,14 +180,14 @@ def _arms(lots: int = 1) -> tuple[ClockSplitShortStraddle, ClockSplitShortStradd
     return (
         ClockSplitShortStraddle(
             hold=ClockSide.GAP,
-            lots=lots,
+            target_notional=target_notional,
             open_time=OPEN_DECISION,
             close_time=CLOSE_DECISION,
             min_calendar_days_to_expiry=MIN_CALENDAR_DAYS_TO_EXPIRY,
         ),
         ClockSplitShortStraddle(
             hold=ClockSide.SESSION,
-            lots=lots,
+            target_notional=target_notional,
             open_time=OPEN_DECISION,
             close_time=CLOSE_DECISION,
             min_calendar_days_to_expiry=MIN_CALENDAR_DAYS_TO_EXPIRY,

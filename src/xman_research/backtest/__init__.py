@@ -69,7 +69,6 @@ from xman_research.backtest.execution import (
 from xman_research.backtest.lot_size import (
     NIFTY_LOT_SIZE_EPOCHS,
     LotSizeAudit,
-    LotSizeContradictionError,
     LotSizeEpoch,
     audit_lot_size,
     epoch_for,
@@ -116,7 +115,6 @@ __all__ = [
     "FillRecord",
     "FlatPerOrderBrokerage",
     "LotSizeAudit",
-    "LotSizeContradictionError",
     "LotSizeEpoch",
     "MarginRequirement",
     "OptionType",
