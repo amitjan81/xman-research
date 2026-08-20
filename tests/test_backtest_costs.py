@@ -14,6 +14,7 @@ import datetime as dt
 import pytest
 
 from xman_research.backtest.costs import (
+    EXCHANGE_TRANSACTION_CHARGE,
     EXERCISE_STT_RULE,
     STT_ON_SELL_PREMIUM,
     ChargeableTrade,
@@ -357,11 +358,31 @@ def test_extrapolation_reaches_for_the_latest_entry_not_the_nearest_one() -> Non
 
 def test_the_extrapolation_message_states_both_directions_of_the_error() -> None:
     """The stamp points at this text, and half of it would be misleading on its own."""
-    message = extrapolation_message("stt.sell_option_premium")
+    message = extrapolation_message(STT_ON_SELL_PREMIUM)
 
     assert "OVERSTATES" in message
     assert "conservative" in message
     assert "SUPPRESS" in message
+
+
+def test_the_extrapolation_message_does_not_claim_every_schedule_overcharges() -> None:
+    """The NSE transaction charge FELL in 2024, so extrapolating it UNDERcharges.
+
+    An earlier draft of ``extrapolation_message`` asserted module-wide that these charges
+    "have only ever been revised upward". That is false for this schedule — 0.05% became
+    0.03503% on 1 Oct 2024 — and a stamp telling a reader they were overcharged when they
+    were undercharged is worse than no stamp, because it invites exactly the wrong
+    correction. The direction must be derived from the schedule, never asserted globally.
+    """
+    assert (
+        EXCHANGE_TRANSACTION_CHARGE.entries[-1].rate < EXCHANGE_TRANSACTION_CHARGE.entries[0].rate
+    )
+    message = extrapolation_message(EXCHANGE_TRANSACTION_CHARGE)
+
+    assert "DOWNWARD" in message
+    assert "NOT conservative" in message
+    assert "OVERSTATES" not in message
+    assert "flatters" in message
 
 
 def test_unverified_rates_are_reported_on_every_breakdown(stack: StatutoryCostStack) -> None:

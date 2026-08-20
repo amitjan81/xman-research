@@ -22,10 +22,13 @@ that schedule's *latest* rate and stamped ``costs.rate_extrapolated:<schedule>``
 the same channel — owner decision of 2026-08-20, generalising the declared-lot-size
 decision of 2026-08-13. The rule it replaced refused, and was thereby discarding 772 of
 1,233 captured sessions. Extrapolation fills the unknown ends **only**; every dated change
-that is actually recorded still applies on its own date. Because these charges have only
-ever been revised upward, an extrapolated session is overcharged rather than undercharged
-— conservative, and therefore capable of hiding a real effect rather than inventing one.
-:func:`extrapolation_message` states both halves and is what the stamp points a reader to.
+that is actually recorded still applies on its own date. The direction of the resulting
+error is **per schedule, not uniform**: STT has only been revised upward, so extrapolating
+it overcharges — conservative, and therefore capable of hiding a real effect rather than
+inventing one — while the NSE transaction charge was revised *downward* in 2024, so
+extrapolating that one would undercharge and flatter a result.
+:func:`extrapolation_message` derives the direction from the schedule it is given and
+states both halves; it is what the stamp points a reader to.
 
 **Two traps this module exists to avoid.**
 
@@ -126,28 +129,58 @@ class TradeKind(StrEnum):
 RATE_EXTRAPOLATION_STAMP_PREFIX = "costs.rate_extrapolated"
 
 
-def extrapolation_message(schedule_name: str) -> str:
+def extrapolation_message(schedule: RateSchedule) -> str:
     """What an extrapolated-rate stamp means, including the direction of the error.
 
     Mirrors :meth:`~xman_research.backtest.lot_size.LotSizeAudit.contradiction_message`:
     a stamp that only said "something is approximate here" would be read as either fatal
     or ignorable, and it is neither. Both halves of the argument belong in the text.
+
+    **The direction is derived from the schedule, never asserted globally.** An earlier
+    draft of this function claimed these charges "have only ever been revised upward",
+    which is false: ``nse.transaction_charge.options`` fell from 0.05% to 0.03503% on
+    1 Oct 2024. Extrapolating that schedule would *understate* the charge, and a stamp
+    that told the reader they were overcharged would be worse than no stamp at all.
     """
-    return (
-        f"{schedule_name}: the trade date precedes the earliest entry in this schedule, so "
-        "the LATEST entry's rate was charged instead of refusing the session (owner "
-        "decision of 2026-08-20, generalising the declared-lot-size decision of "
-        "2026-08-13). DIRECTION OF ERROR: the latest rate is the highest rate in every "
-        "schedule here, because these charges have only ever been revised upward — so an "
-        "extrapolated session is charged MORE than it truly bore, never less. For "
-        "stt.sell_option_premium the 2021-2024 rate was most likely 0.05%, against the "
-        "0.15% charged, which OVERSTATES that component by roughly 3x. That direction is "
-        "conservative: it makes a hypothesis harder to pass and cannot manufacture a "
-        "positive result out of a negative one. THE COST OF THAT SAFETY: an overstated "
-        "cost floor can SUPPRESS a real effect — a strategy whose true edge cleared its "
-        "true costs may be recorded here as failing to clear inflated ones. A negative "
-        "result on an extrapolated window is therefore not evidence of no edge, and this "
-        "stamp is what tells a reader which way to distrust the number."
+    latest, earliest = schedule.entries[-1], schedule.entries[0]
+    head = (
+        f"{schedule.name}: the trade date precedes the earliest entry in this schedule "
+        f"({earliest.effective_from.isoformat()}), so the LATEST entry's rate "
+        f"({latest.rate!r}, effective {latest.effective_from.isoformat()}) was charged "
+        "instead of refusing the session — owner decision of 2026-08-20, generalising the "
+        "declared-lot-size decision of 2026-08-13. "
+    )
+    if latest.rate > earliest.rate:
+        return head + (
+            "DIRECTION OF ERROR: this schedule has been revised UPWARD, so the rate "
+            f"charged ({latest.rate!r}) is higher than the earliest recorded rate "
+            f"({earliest.rate!r}) and almost certainly higher than the true historical "
+            "one — the session is charged MORE than it truly bore. For "
+            "stt.sell_option_premium the 2021-2024 rate was most likely 0.05% against the "
+            "0.15% charged, which OVERSTATES that component by roughly 3x. That direction "
+            "is conservative: it makes a hypothesis harder to pass and cannot manufacture "
+            "a positive result out of a negative one. THE COST OF THAT SAFETY: an "
+            "overstated cost floor can SUPPRESS a real effect — a strategy whose true edge "
+            "cleared its true costs may be recorded here as failing to clear inflated "
+            "ones. A negative result on an extrapolated window is therefore not evidence "
+            "of no edge, and this stamp is what tells a reader which way to distrust it."
+        )
+    if latest.rate < earliest.rate:
+        return head + (
+            "DIRECTION OF ERROR: this schedule has been revised DOWNWARD, so the rate "
+            f"charged ({latest.rate!r}) is LOWER than the earliest recorded rate "
+            f"({earliest.rate!r}). The session is therefore charged LESS than it likely "
+            "bore, and this extrapolation is NOT conservative: it flatters the result and "
+            "could help a hypothesis pass on costs it would not really have survived. "
+            "Treat a positive result on a window carrying this stamp as unproven until "
+            "the historical entry is sourced and added."
+        )
+    return head + (
+        "DIRECTION OF ERROR: this schedule records no rate change, so there is no "
+        "observed trend to extrapolate along and the single known rate is simply carried "
+        "back. The error is whatever undocumented change preceded the earliest entry; its "
+        "size and its sign are both unknown, which is weaker than the upward-revision "
+        "case and should not be read as 'probably fine'."
     )
 
 
