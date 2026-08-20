@@ -253,10 +253,16 @@ class RateSchedule:
 
         For a date *before* the earliest entry the **latest** entry is charged and the
         lookup is flagged. Latest, not nearest: the owner's instruction is to use the
-        latest value for data of this kind, and it is also the conservative choice, since
-        every schedule here has only ever been revised upward. See
-        :func:`extrapolation_message` for the direction of the resulting error and for what
-        that direction costs. A nearest-entry clamp would charge 0.1% rather than 0.15% on
+        latest value for data of this kind.
+
+        **It is NOT uniformly the conservative choice, and an earlier draft of this
+        docstring said it was.** The direction depends on the individual schedule:
+        ``stt.sell_option_premium`` has only been revised upward, so extrapolating it
+        overcharges — conservative, and therefore able to hide a real effect rather than
+        invent one. ``nse.transaction_charge.options`` was revised *downward* (0.05% ->
+        0.03503% on 2024-10-01), so extrapolating that one **undercharges and flatters**
+        the result. :func:`extrapolation_message` derives the direction from each
+        schedule's own entries; consult it rather than assuming. A nearest-entry clamp would charge 0.1% rather than 0.15% on
         a 2021 session and roughly halve the overstatement, at the price of no longer being
         the latest value; that is an owner call, not a code call.
         """
