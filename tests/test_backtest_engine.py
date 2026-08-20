@@ -140,9 +140,20 @@ def test_a_gap_can_be_accepted_only_against_a_written_reason(
     """The store's asymmetry is not softened by being wrapped.
 
     Only the entry session is written, so the expiry session is missing. Without a reason
-    the run refuses; with one it proceeds, the reason is recorded on the result, and the
-    straddle is still open at the end because the session that would have settled it does
-    not exist — a partial window is visible in the output, not just in the config.
+    the run refuses; with one it proceeds and the reason is recorded on the result.
+
+    **This test used to assert the bug.** Its previous form ended ``assert
+    result.daily[-1].open_positions == 2`` and its docstring called that "a partial window
+    is visible in the output" — a straddle opened into an expiry the run would never
+    visit, left parked on the book. Issue #26 is what that costs at scale: on the 385-
+    session M1 window one such position suppressed every subsequent entry for 248
+    sessions, and the run reported a Sharpe over a book that was not trading.
+
+    Accepting a gap means accepting a missing *observation*. It never meant accepting an
+    unclosable position, and the two are now separated: the gap is still accepted, the run
+    still proceeds over the sessions that exist, and the trade whose outcome the corpus
+    cannot show is refused at entry with a counted verdict instead of opened and
+    abandoned.
     """
     root = synthetic_store.root
     write_synthetic_session(root, ENTRY_DAY, spot=23_000.0, contracts=_contracts())
@@ -165,7 +176,12 @@ def test_a_gap_can_be_accepted_only_against_a_written_reason(
     assert result.config_provenance["gap_reason"] == reason
     assert result.data_provenance["missing"] == [EXPIRY_DAY.isoformat()]
     assert result.settlements == ()
-    assert result.daily[-1].open_positions == 2
+    assert result.daily[-1].open_positions == 0
+    assert result.open_at_end == ()
+    counts = result.feasibility_counts()
+    assert counts[str(Feasibility.UNSETTLEABLE)] == 2
+    assert result.metrics()["fills_unsettleable"] == 2
+    assert "corpus.expiry_session_absent:unverified" in result.unverified_inputs
 
 
 def test_a_window_entirely_past_the_end_of_the_corpus_refuses(
@@ -640,3 +656,120 @@ def test_the_settlement_methodology_reaches_the_unverified_inputs(
     # Carries its tier, so an UNVERIFIED input is distinguishable from a CORROBORATED one.
     assert all(":" in name for name in settlement_inputs)
     assert any(name.endswith(":corroborated") for name in settlement_inputs)
+
+
+# ------------------------------------------------- the book cannot outlive an expiry
+
+
+def test_an_expiry_the_run_never_visits_is_refused_at_entry_not_parked(
+    session: ResearchSession, h1: HypothesisRecord, synthetic_store
+) -> None:
+    """Issue #26, in the shape it actually occurred: a mid-window hole on an expiry date.
+
+    Three sessions exist and a fourth — the expiry — does not, exactly as the M1 corpus
+    lacks 2025-04-30 and 2025-05-08, both of them listed weekly expiries. Before the fix
+    the straddle opened on the first session, never settled, and because the strategy
+    enters only when flat it never traded again: the remaining sessions produced a flat
+    equity curve marked off a contract that had stopped printing.
+
+    What is asserted is the whole behaviour, not just the refusal: nothing opens, the run
+    keeps going, the refusal is counted as infeasible rather than absorbed, and the
+    verdict carries a stamp naming the corpus as the cause.
+    """
+    root = synthetic_store.root
+    expiry = dt.date(2026, 1, 8)
+    contracts = [SyntheticContract(STRIKE, kind, expiry, PREMIUM) for kind in ("CE", "PE")]
+    for day in (dt.date(2026, 1, 5), dt.date(2026, 1, 6), dt.date(2026, 1, 7)):
+        write_synthetic_session(root, day, spot=23_000.0, contracts=contracts)
+    store = synthetic_store()
+
+    reason = "the expiry session is missing from capture, as 2025-04-30 is in the real corpus"
+    with session.trial(h1, data_window=DataWindow(dt.date(2026, 1, 5), expiry)) as trial:
+        result = run_backtest(
+            trial,
+            store=store,
+            strategy=ShortAtmStraddle(),
+            config=BacktestConfig(gap_reason=reason),
+        )
+
+    assert result.sessions_run == 3
+    assert [record.open_positions for record in result.daily] == [0, 0, 0]
+    assert result.open_at_end == ()
+    assert all(fill.filled_lots == 0 for fill in result.fills)
+    assert result.feasibility_counts()[str(Feasibility.UNSETTLEABLE)] == 6
+    assert result.metrics()["fills_infeasible"] == 6
+    assert "corpus.expiry_session_absent:unverified" in result.unverified_inputs
+    assert "not a session this run visits" in result.fills[0].feasibility.reason
+
+
+def test_a_position_past_its_own_expiry_stops_the_run(
+    session: ResearchSession, h1: HypothesisRecord, store, window: DataWindow
+) -> None:
+    """The invariant behind the entry refusal: the contradiction is never carried.
+
+    The engine's entry screening is what should make this unreachable, so the state is
+    constructed directly — a book handed a contract that expired before the session
+    opens. A strategy that returns no intents cannot clear it, which is the point: the
+    run must not proceed to mark, margin and report a position that has already expired.
+    """
+    from xman_research.backtest.engine import (
+        Position,
+        PositionOutlivedItsExpiryError,
+        _refuse_expired_positions,
+        _SettlementCalendar,
+    )
+    from xman_research.backtest.market import Contract
+
+    contract = Contract(
+        trading_symbol="NIFTY-30Apr2025-24250-CE",
+        underlying="NIFTY",
+        expiry=dt.date(2025, 4, 30),
+        strike=24_250.0,
+        option_type="CE",
+        lot_size=65,
+        tick_size=0.05,
+    )
+    positions = {contract.trading_symbol: Position(contract=contract, units=-65, last_mark=100.0)}
+    calendar = _SettlementCalendar(
+        session_dates=frozenset({dt.date(2025, 4, 29), dt.date(2025, 5, 2)}),
+        run_end=dt.date(2026, 4, 30),
+    )
+
+    with pytest.raises(PositionOutlivedItsExpiryError) as raised:
+        _refuse_expired_positions(dt.date(2025, 5, 2), positions, calendar)
+
+    message = str(raised.value)
+    assert "NIFTY-30Apr2025-24250-CE" in message
+    assert "no session in this run" in message
+    assert "suppresses every entry rule conditioned on being flat" in message
+
+    # And it is silent when the book is clean, including on a position expiring today —
+    # that one is settled later in the same session, not refused at the start of it.
+    _refuse_expired_positions(dt.date(2025, 4, 29), {}, calendar)
+
+
+def test_a_position_expiring_after_the_window_is_kept_and_named(
+    session: ResearchSession, h1: HypothesisRecord, synthetic_store
+) -> None:
+    """A window that ends before an expiry has not lost the settlement, it stopped early.
+
+    That case must NOT be refused at entry — the right-hand edge of a window would then
+    silently decide which trades a strategy takes — but it must not be silent either. The
+    position is opened, held, and reported in ``open_at_end`` with a stamp, so a final
+    equity carrying unrealised value says so.
+    """
+    root = synthetic_store.root
+    expiry = dt.date(2026, 1, 20)
+    contracts = [SyntheticContract(STRIKE, kind, expiry, PREMIUM) for kind in ("CE", "PE")]
+    for day in (dt.date(2026, 1, 5), dt.date(2026, 1, 6)):
+        write_synthetic_session(root, day, spot=23_000.0, contracts=contracts)
+    store = synthetic_store()
+
+    with session.trial(h1, data_window=DataWindow(dt.date(2026, 1, 5), dt.date(2026, 1, 6))) as t:
+        result = run_backtest(t, store=store, strategy=ShortAtmStraddle())
+
+    assert result.metrics()["fills_filled"] == 2
+    assert result.feasibility_counts()[str(Feasibility.UNSETTLEABLE)] == 0
+    assert len(result.open_at_end) == 2
+    assert result.metrics()["positions_open_at_end"] == 2
+    assert "book.open_at_run_end:unverified" in result.unverified_inputs

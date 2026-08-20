@@ -66,7 +66,13 @@ class Feasibility(StrEnum):
     which no participant can fail to receive. ``GROUP_INCOMPLETE`` — this leg was
     fillable on its own and did not trade because a sibling leg in its
     :attr:`~xman_research.backtest.engine.TradeIntent.leg_group` was not; see that field
-    for why a multi-leg intent is all-or-none.
+    for why a multi-leg intent is all-or-none. ``UNSETTLEABLE`` — the contract's expiry
+    date is not a session this run will ever reach, so the position could be opened and
+    never closed; the engine refuses to open it. That verdict is a statement about the
+    CORPUS, not about the market, and it is the only one here that is: the other refusals
+    say the market would not have taken the trade, while this one says the run cannot
+    observe how the trade ended. It is recorded as a refusal anyway, and counted as
+    infeasible, because both readings agree that no measurement was made.
     """
 
     FILLABLE = "fillable"
@@ -75,6 +81,7 @@ class Feasibility(StrEnum):
     NO_LIQUIDITY = "no_liquidity"
     CAPPED_TO_ZERO = "capped_to_zero"
     GROUP_INCOMPLETE = "group_incomplete"
+    UNSETTLEABLE = "unsettleable"
     SETTLED = "settled"
 
 
