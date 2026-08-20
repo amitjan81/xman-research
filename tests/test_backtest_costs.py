@@ -18,13 +18,14 @@ from xman_research.backtest.costs import (
     STT_ON_SELL_PREMIUM,
     ChargeableTrade,
     Confidence,
+    CostBreakdown,
     FlatPerOrderBrokerage,
-    RateNotInForceError,
     RateSchedule,
     Side,
     StatutoryCostStack,
     StatutoryRate,
     TradeKind,
+    extrapolation_message,
 )
 
 LOT = 65
@@ -38,6 +39,15 @@ def stack() -> StatutoryCostStack:
     return StatutoryCostStack(brokerage=FlatPerOrderBrokerage(rupees_per_order=20.0))
 
 
+EXTRAPOLATED_STT = "costs.rate_extrapolated:stt.sell_option_premium"
+
+
+def _extrapolated(costs: CostBreakdown) -> list[str]:
+    return sorted(
+        name for name in costs.unverified_components if name.startswith("costs.rate_extrapolated:")
+    )
+
+
 def _sell(trade_date: dt.date) -> ChargeableTrade:
     return ChargeableTrade(
         trade_date=trade_date,
@@ -48,22 +58,63 @@ def _sell(trade_date: dt.date) -> ChargeableTrade:
     )
 
 
-def test_a_sell_before_1_oct_2024_is_refused_rather_than_charged_a_guessed_rate(
+def test_a_sell_before_1_oct_2024_is_charged_the_latest_rate_and_stamped(
     stack: StatutoryCostStack,
 ) -> None:
-    """The pre-2024 premium-side history was deleted, so this date now refuses.
+    """This date used to refuse, and the refusal was dropping 772 of 1,233 sessions.
 
-    **This test used to assert 0.0625% on 2024-09-30 and it was asserting a guess.** That
-    entry was UNVERIFIED and is very likely wrong on both its rate date and its attribution
-    — the premium-side rise to 0.0625% appears to be Finance Act 2023 effective 1 Apr 2023,
-    with 0.05% holding 2016-2023, while Finance (No. 2) Act 2019 changed the *exercise*
-    base instead. The entries were carried so a backfill would not hit RateNotInForceError
-    "with no warning", which inverts this module's own principle: that error exists
-    precisely because a plausible wrong answer is worse than a refusal. One attempt to
-    reach the primary text returned HTTP 403, and no dates were invented to replace it.
+    Owner decision of 2026-08-20: use the data. The rate charged is the schedule's
+    **latest** entry (0.15%), not its earliest (0.1%) and not a guessed historical value —
+    and the session is stamped so the verdict says which way to distrust it.
     """
-    with pytest.raises(RateNotInForceError, match=r"stt\.sell_option_premium"):
-        stack.charge(_sell(dt.date(2024, 9, 30)))
+    costs = stack.charge(_sell(dt.date(2024, 9, 30)))
+
+    assert costs.stt == pytest.approx(0.0015 * UNITS * PREMIUM)
+    assert EXTRAPOLATED_STT in costs.unverified_components
+    # Only that one schedule. 2024-09-30 sits inside every other schedule's coverage, so
+    # nothing else may claim to have been extrapolated — a stamp that over-reports is as
+    # useless as one that under-reports.
+    assert _extrapolated(costs) == [EXTRAPOLATED_STT]
+    # The exchange charge is the genuine PRE-2024 rate. Filling an unknown end must never
+    # overwrite a known middle; this is the assertion that catches a flattened schedule.
+    assert costs.exchange_transaction_charge == pytest.approx(0.0005 * UNITS * PREMIUM)
+
+
+@pytest.mark.parametrize(
+    ("on", "expected_stt_rate"),
+    [
+        (dt.date(2024, 10, 1), 0.001),
+        (dt.date(2026, 3, 31), 0.001),
+        (dt.date(2026, 4, 1), 0.0015),
+    ],
+)
+def test_extrapolation_does_not_flatten_the_dated_history_we_do_have(
+    stack: StatutoryCostStack, on: dt.date, expected_stt_rate: float
+) -> None:
+    """Both sides of the 1 Apr 2026 STT change still apply on their own dates, unstamped."""
+    costs = stack.charge(_sell(on))
+
+    assert costs.stt == pytest.approx(expected_stt_rate * UNITS * PREMIUM)
+    assert _extrapolated(costs) == []
+
+
+def test_every_date_across_the_five_year_corpus_window_prices_without_refusing(
+    stack: StatutoryCostStack,
+) -> None:
+    """The owner's actual requirement: five years of data, all of it costable.
+
+    Walks every calendar date from the first captured session to past the last one, rather
+    than sampling — a schedule boundary is exactly the kind of thing a sample steps over.
+    """
+    on, end = dt.date(2021, 6, 1), dt.date(2026, 12, 31)
+    priced = 0
+    while on <= end:
+        costs = stack.charge(_sell(on))
+        assert costs.total > 0.0
+        priced += 1
+        on += dt.timedelta(days=1)
+
+    assert priced == 2040
 
 
 def test_sell_on_the_day_the_1_oct_2024_change_takes_effect(stack: StatutoryCostStack) -> None:
@@ -241,7 +292,7 @@ def test_an_out_of_the_money_settlement_costs_nothing_but_the_notional_fee(
 # ------------------------------------------------------------------- schedule mechanics
 
 
-def test_a_date_before_the_schedule_starts_is_refused_not_extrapolated() -> None:
+def test_a_date_before_the_schedule_starts_takes_the_latest_entry() -> None:
     schedule = RateSchedule(
         name="test.schedule",
         entries=(
@@ -258,8 +309,59 @@ def test_a_date_before_the_schedule_starts_is_refused_not_extrapolated() -> None
     )
 
     assert schedule.rate_at(dt.date(2020, 1, 1)) == 0.01
-    with pytest.raises(RateNotInForceError, match="2019-12-31"):
-        schedule.at(dt.date(2019, 12, 31))
+    assert schedule.lookup(dt.date(2020, 1, 1)).extrapolated is False
+    assert schedule.lookup(dt.date(2020, 1, 1)).stamp is None
+
+    before = schedule.lookup(dt.date(2019, 12, 31))
+    assert before.rate == 0.01
+    assert before.extrapolated is True
+    assert before.stamp == "costs.rate_extrapolated:test.schedule"
+
+
+def test_extrapolation_reaches_for_the_latest_entry_not_the_nearest_one() -> None:
+    """The distinguishing test: with two entries, a pre-schedule date takes the LATER one.
+
+    A nearest-entry clamp would return 0.01 here and every other assertion in this file
+    would still pass, so this is the only test that pins the owner's "latest value" rule.
+    """
+    schedule = RateSchedule(
+        name="test.two_entry",
+        entries=(
+            StatutoryRate(
+                effective_from=dt.date(2020, 1, 1),
+                rate=0.01,
+                base="turnover",
+                side="both",
+                source="fixture",
+                source_url="",
+                confidence=Confidence.CONFIRMED,
+            ),
+            StatutoryRate(
+                effective_from=dt.date(2022, 1, 1),
+                rate=0.03,
+                base="turnover",
+                side="both",
+                source="fixture",
+                source_url="",
+                confidence=Confidence.CONFIRMED,
+            ),
+        ),
+    )
+
+    assert schedule.lookup(dt.date(2019, 12, 31)).rate == 0.03
+    assert schedule.rate_at(dt.date(2021, 6, 1)) == 0.01
+    assert schedule.rate_at(dt.date(2030, 1, 1)) == 0.03
+    # A date past the last entry is NOT extrapolation: a rate is in force until amended.
+    assert schedule.lookup(dt.date(2030, 1, 1)).extrapolated is False
+
+
+def test_the_extrapolation_message_states_both_directions_of_the_error() -> None:
+    """The stamp points at this text, and half of it would be misleading on its own."""
+    message = extrapolation_message("stt.sell_option_premium")
+
+    assert "OVERSTATES" in message
+    assert "conservative" in message
+    assert "SUPPRESS" in message
 
 
 def test_unverified_rates_are_reported_on_every_breakdown(stack: StatutoryCostStack) -> None:
