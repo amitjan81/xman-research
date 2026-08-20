@@ -262,9 +262,11 @@ class RateSchedule:
         invent one. ``nse.transaction_charge.options`` was revised *downward* (0.05% ->
         0.03503% on 2024-10-01), so extrapolating that one **undercharges and flatters**
         the result. :func:`extrapolation_message` derives the direction from each
-        schedule's own entries; consult it rather than assuming. A nearest-entry clamp would charge 0.1% rather than 0.15% on
-        a 2021 session and roughly halve the overstatement, at the price of no longer being
-        the latest value; that is an owner call, not a code call.
+        schedule's own entries; consult it rather than assuming.
+
+        A nearest-entry clamp would charge 0.1% rather than 0.15% on a 2021 session and
+        roughly halve the overstatement, at the price of no longer being the latest
+        value; that is an owner call, not a code call.
         """
         found: StatutoryRate | None = None
         for entry in self.entries:
