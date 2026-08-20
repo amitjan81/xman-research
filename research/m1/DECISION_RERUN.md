@@ -13,7 +13,11 @@
 
 **This record does not replace `research/m1/DECISION.md`, and that file is not edited.**
 The wedged run happened; its record stays exactly as written, on the branch that produced
-it. This is the posture `gate.toml` takes toward `research/h1/gate.toml` — a superseded
+it — **commit `bcb8bd9` on `feat/validate-m1-m2`, open as PR #27.** It is deliberately not
+cherry-picked here: this branch carries only the pre-registration commit `1921a5b`, so that
+what is present is the gate, not the result it graded. If this branch merges first, `main`
+will hold this record and not the one it supersedes until PR #27 lands; the SHA above is
+what makes the wedged record findable in the meantime. This is the posture `gate.toml` takes toward `research/h1/gate.toml` — a superseded
 record that stays in the repository saying what it said is worth more than a corrected one
 that hides that the correction was needed.
 
@@ -148,6 +152,14 @@ walked, including the 7 it declined to trade.
 |---|---:|---:|
 | stale-mark fraction | **1.82%** (7 / 385) | 20% |
 | infeasible fraction | **7.87%** (14 / 178) | 10% |
+
+**The infeasible fraction cleared by four legs, and that is worth stating rather than
+enjoying.** Two missing expiry weeks cost 14 legs; a third would have put this run over the
+10% limit and returned NOT_EVALUABLE instead of a verdict. The margin is thin because the
+corpus gap happened to be two weeks and not three — nothing about the fix or the strategy
+earned it. The census that would actually bound this risk — *how many listed expiries
+across the whole corpus have no session file* — has not been run over anything but this
+window, and 2025-05-08 is the reason to suspect the answer is not obviously small.
 
 Supporting statistics, none of them gated:
 
@@ -294,8 +306,13 @@ correction that every future member of this family will be deflated by. Nothing 
 
 Concretely, at n=384 the SR\* bar rose from 0.074552/period (N=8) to 0.077708 (N=9): every
 future hypothesis in H1's family now needs a slightly larger true Sharpe to clear the same
-bar, because an engine bug was fixed. **Issue #14 is the standing question about exactly
-this** — whether a re-run forced by an apparatus defect should count against the researcher's
+bar, because an engine bug was fixed. **It has already invalidated a pre-registration that has not yet been used.**
+`research/m2/gate.toml`, cherry-picked in the same commit as M1's, states in terms that
+*"AT M2's IN-SAMPLE GRADING THE FAMILY SHOULD HOLD EIGHT ROWS. N = 8"*, and calibrates its
+thresholds against that row of the grid. The log now holds 9, so M2 will grade at 10 and its
+inventory is stale before M2 has run — through no act of M2's. That is a concrete, checkable
+consequence of an engine bug, not a general worry. **Issue #14 is the standing question
+about exactly this** — whether a re-run forced by an apparatus defect should count against the researcher's
 trial budget. This run is a clean instance of the cost: the re-run tested the same
 pre-registered configuration over the same window, and the only thing that changed between
 trial 8 and trial 9 was that trial 8 was measuring a book that was not trading.
@@ -305,9 +322,14 @@ trial 8 and trial 9 was that trial 8 was measuring a book that was not trading.
 **The holdout was not read, and could not have been.** The runner spends the holdout
 automatically on a PASSED in-sample verdict, so the run was smoke-tested first against a
 **temporary** log with `_spend_the_holdout` replaced by a raise. That smoke returned
-FAILS_THRESHOLD at N=2 — and since a temp log holds fewer trials, a smaller N gives a
-*higher* DSR, so a non-PASSED verdict there guarantees a non-PASSED verdict against the
-canonical log's N=9. The canonical run then confirmed it: `holdout_spent: false`. The
+FAILS_THRESHOLD at N=2.
+
+**PASSED was in fact impossible at any trial count**, which is the stronger argument and
+does not depend on the smoke run at all: `max_drawdown` is 12.03% against a 10% bar, and
+drawdown does not depend on N. The monotonicity argument is the secondary one — a temp log
+holds fewer trials, a smaller N gives a *higher* DSR, so a non-PASSED verdict at N=2
+guarantees a non-PASSED verdict at N=9. Both point the same way and the canonical run
+confirmed it: `holdout_spent: false`. The
 smoke run's fingerprint is identical to the canonical run's, which is what makes it evidence
 about this run rather than about a similar one.
 
