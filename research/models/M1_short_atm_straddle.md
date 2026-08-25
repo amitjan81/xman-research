@@ -5,7 +5,7 @@
 | Hypothesis | H1 — index variance risk premium |
 | Record | `h_817b33ff6b9f68e288161f5990739744` |
 | **Role** | **BENCHMARK.** Not a candidate. Every conditional model is graded against this series (§3). |
-| Status | **Awaiting owner approval** as a whole; no re-validation until approved. The §5 sizing amendment and its §12.1 gate are **owner-approved 2026-08-19**. The §3/§10 reframing is **awaiting approval**. |
+| Status | **Awaiting owner approval** as a whole; no re-validation until approved. The §5 sizing *amendment* and its §12.1 gate are **owner-approved 2026-08-19**. **Awaiting approval:** the §3/§10 alpha reframing, §11.1's demotion of cost-breakeven, §5's new realised-scale note, and the §4/§6/§7/§9/§13/§14 facts imported from the M1 re-run and PR #27/#29. |
 | Prior results | H1: FAILS_THRESHOLD, n=79, DSR 0.6043 vs 0.90. M1 re-run (`h_0b2ecbbc…`, post-wedge-fix): FAILS_THRESHOLD on two bars, n=384, DSR 0.3423 vs 0.90, MDD 12.03% vs 10%. |
 
 ---
