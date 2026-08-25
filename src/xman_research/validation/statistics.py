@@ -87,6 +87,7 @@ class SelectionUniverse:
         "_log_path",
         "_sharpe_variance",
         "_size",
+        "_size_excluding_no_result",
         "_undeclared_periodicity",
         "_variance_basis",
     )
@@ -103,7 +104,15 @@ class SelectionUniverse:
         # The family, not the single record: 200 variants of H1 are 200 ways this result
         # could have been chosen, however many records they were written as.
         self._size = log.count_family_trials(hypothesis_id)
-        variance, basis, undeclared = _observed_sharpe_variance(log.family_trials(hypothesis_id))
+        records = log.family_trials(hypothesis_id)
+        # Both numbers come from the log. The second is not a smaller count of trials —
+        # every row is still there and still undeletable — it is the same family read
+        # with the rows that produced no number to judge set aside, so the operator can
+        # see how much of the deflation those rows are responsible for.
+        self._size_excluding_no_result = sum(
+            1 for record in records if not record.recorded_no_result
+        )
+        variance, basis, undeclared = _observed_sharpe_variance(records)
         self._sharpe_variance = variance
         self._variance_basis = basis
         self._undeclared_periodicity = undeclared
@@ -112,6 +121,23 @@ class SelectionUniverse:
     def size(self) -> int:
         """Logged trials in this hypothesis's family. Read from the log; a lower bound."""
         return self._size
+
+    @property
+    def size_excluding_no_result(self) -> int:
+        """The same family, counting only rows that recorded a result.
+
+        A row is set aside when it raised *and* carries no metrics — two facts already
+        in the row, with no judgement about *why* the run died. See
+        :attr:`~xman_research.trial_log.TrialRecord.recorded_no_result`.
+
+        **This is the optimistic number and it does not govern anything.** Requiring
+        empty metrics makes the exclusion narrow, so it under-excludes rather than over-
+        excludes; and because a researcher controls both whether a run throws and
+        whether it records metrics, it is a channel that can be driven deliberately.
+        That is survivable only because :attr:`size` is still what the verdict is graded
+        on. Reported beside it, never instead of it.
+        """
+        return self._size_excluding_no_result
 
     @property
     def hypothesis_id(self) -> str:
@@ -164,13 +190,17 @@ def _observed_sharpe_variance(records: tuple) -> tuple[float | None, str, int]:
     observed: list[float] = []
     undeclared = 0
     for record in records:
-        metrics = record.metrics
-        value = metrics.get(SHARPE_PER_PERIOD_KEY)
+        # `record.metric`, not `record.metrics[...]`: this is the only reader in the
+        # package that consumes metrics off a logged row, so it is the one place where a
+        # row written before a rename has to still answer. Reading the mapping directly
+        # is what left the adjusted_sharpe split unhandled — the alias table existed
+        # nowhere the reader could reach it.
+        value = record.metric(SHARPE_PER_PERIOD_KEY)
         if isinstance(value, int | float) and math.isfinite(value):
             observed.append(float(value))
             continue
-        annualised = metrics.get(SHARPE_KEY)
-        periodicity = metrics.get(SHARPE_PERIODICITY_KEY)
+        annualised = record.metric(SHARPE_KEY)
+        periodicity = record.metric(SHARPE_PERIODICITY_KEY)
         if isinstance(annualised, int | float) and math.isfinite(annualised):
             if isinstance(periodicity, int | float) and periodicity > 0:
                 observed.append(float(annualised) / math.sqrt(float(periodicity)))
@@ -200,11 +230,19 @@ class DeflatedSharpe:
     sample_length: int
     skew: float
     kurtosis: float
+    value_excluding_no_result: float
+    selection_size_excluding_no_result: int
     unverified_inputs: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, object]:
         return {
             "deflated_sharpe": self.value,
+            # Reported, not graded. The pair is the point: the spread between them is the
+            # share of the deflation carried by rows that recorded no result, which was
+            # previously invisible. No threshold reads the second one — it is absent from
+            # the gate's vocabulary on purpose.
+            "deflated_sharpe_excluding_no_result": self.value_excluding_no_result,
+            "selection_size_excluding_no_result": self.selection_size_excluding_no_result,
             "observed_sharpe_per_period": self.observed_sharpe,
             "expected_max_sharpe": self.expected_max_sharpe,
             "selection_size": self.selection_size,
@@ -302,8 +340,35 @@ def deflated_sharpe_ratio(
         skew=skew,
         kurtosis=kurtosis,
     )
+    # The same computation over the same family with the no-result rows set aside. It is
+    # computed unconditionally rather than only when the two differ, so that a family
+    # with nothing set aside reports two equal numbers rather than a missing one — an
+    # absent field would have to be told apart from a zero spread by whoever read it.
+    setting_aside = universe.size_excluding_no_result
+    if setting_aside == universe.size:
+        value_excluding = value
+    else:
+        # A family every one of whose rows recorded no result leaves setting_aside == 0,
+        # and it is reachable: H26 v1 is two rows and both of them raised with no metrics.
+        # The expected maximum of zero draws does not exist, and `expected_max_sharpe`
+        # rightly refuses it. One draw is the nearest thing that does exist and it is the
+        # correct reading of the limit — SR* = 0, no selection burden, so the number
+        # reported is the undeflated probabilistic Sharpe. The *size* beside it is still
+        # the true 0, because that is what was counted; only the deflation is evaluated at
+        # the no-selection case, and reporting 1 there would misstate the log.
+        value_excluding = _math.probabilistic_sharpe(
+            observed=observed,
+            benchmark=_math.expected_max_sharpe(
+                sharpe_variance=variance, trials=max(setting_aside, 1)
+            ),
+            sample_length=sample_length,
+            skew=skew,
+            kurtosis=kurtosis,
+        )
     return DeflatedSharpe(
         value=value,
+        value_excluding_no_result=value_excluding,
+        selection_size_excluding_no_result=setting_aside,
         observed_sharpe=observed,
         expected_max_sharpe=benchmark,
         selection_size=universe.size,

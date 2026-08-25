@@ -84,6 +84,7 @@ __all__ = [
     "TrialOutcome",
     "TrialRecord",
     "UnknownHypothesisError",
+    "UnknownTrialError",
     "new_trial_id",
 ]
 
@@ -95,6 +96,17 @@ AppendOnlyViolation = sqlite3.IntegrityError
 
 class UnknownHypothesisError(LookupError):
     """Raised when a trial or a query names a hypothesis that was never registered."""
+
+
+class UnknownTrialError(LookupError):
+    """Raised when a ``trial_id`` names no row the log can resolve.
+
+    The alternative — returning ``None`` — made a mistyped or foreign id
+    indistinguishable from *no* id, and every check that resolves a ``trial_id`` in
+    order to stop trusting a caller-typed value then silently went back to trusting it.
+    An identity that does not resolve is bad evidence, not absent evidence, and the
+    difference is the whole reason the resolution exists.
+    """
 
 
 class LogIntegrityError(RuntimeError):
@@ -142,6 +154,20 @@ class DataWindow:
         return f"{self.start.isoformat()}..{self.end.isoformat()}"
 
 
+# Metric names this package has renamed, mapped to the older names that meant the *same
+# quantity*. Read-side only: the rows themselves are append-only and are never rewritten.
+#
+# The single entry is deliberately one-directional and it is the whole point of the
+# table. ``adjusted_sharpe`` was the per-period Pézier-White figure, and it was renamed
+# because the gate was reading `tails.annualised_adjusted_sharpe` under the same label —
+# two numbers a factor of sqrt(252) = 15.9 apart sharing one name. So the legacy key
+# resolves to the *per-period* name and must never resolve to the annualised one; an
+# alias table that pointed both ways would restore the exact defect the rename fixed.
+_LEGACY_METRIC_NAMES: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {"adjusted_sharpe_per_period": ("adjusted_sharpe",)}
+)
+
+
 @dataclass(frozen=True, slots=True)
 class TrialRecord:
     """One row of the trial log, as read back."""
@@ -156,6 +182,38 @@ class TrialRecord:
     outcome: TrialOutcome
     error: str | None
     notes: str | None
+
+    @property
+    def recorded_no_result(self) -> bool:
+        """Whether this row raised *and* carries no metrics at all.
+
+        Two facts already stored in the row, and nothing else. It is not a claim that
+        the infrastructure broke rather than the idea failing — that judgement is
+        exactly the discretion the append-only log exists to remove, and nothing here
+        makes it. The row is still a trial, still counted, and still undeletable; this
+        only marks it as a trial that produced no number to judge.
+
+        ``NOT_EVALUABLE`` is deliberately excluded even though it can also carry empty
+        metrics: a run that was judged un-gradeable is a run that happened and reached a
+        verdict, which is a research trial in every sense that matters to the deflation.
+        """
+        return self.outcome is TrialOutcome.ERROR and not self.metrics
+
+    def metric(self, name: str, default: Any = None) -> Any:
+        """One metric, resolving the names this package has renamed since.
+
+        The log is append-only by database trigger, so rows written before a rename
+        cannot be migrated in place — correctly. That leaves the schema split across the
+        rename, and a reader that asks for the current name gets nothing from an older
+        row. This resolves the split at read time, current name first, so a row written
+        either side of it answers the same question.
+        """
+        if name in self.metrics:
+            return self.metrics[name]
+        for legacy in _LEGACY_METRIC_NAMES.get(name, ()):
+            if legacy in self.metrics:
+                return self.metrics[legacy]
+        return default
 
 
 _SCHEMA = """
@@ -491,6 +549,41 @@ class TrialLog:
             ids,
         ).fetchall()
         return tuple(_row_to_trial(row) for row in rows)
+
+    def require_family_trial(self, hypothesis_id: str, trial_id: str) -> TrialRecord:
+        """The row ``trial_id`` names within this hypothesis's family, or refuse.
+
+        Refusing is the point. Callers resolve a ``trial_id`` precisely so they can stop
+        trusting a value the caller typed — a timestamp, most importantly. Returning
+        ``None`` for an id that resolves to nothing hands those callers the same
+        observation they get for *no* id at all, so the check they were performing
+        quietly reverts to the state it was written to replace.
+
+        The two failures are diagnosed apart because they mean different things. An id
+        that names nothing is a typo or a run from another database; an id that names a
+        row in *another* family is a real, correctly-formed identity pointed at the
+        wrong hypothesis, which is the harder case to notice by eye and the easier one
+        to produce by copy-paste.
+        """
+        self._require_hypothesis(hypothesis_id)
+        family = set(self.family_ids(hypothesis_id))
+        row = self._conn.execute("SELECT * FROM trials WHERE trial_id = ?", (trial_id,)).fetchone()
+        if row is None:
+            raise UnknownTrialError(
+                f"trial_id {trial_id!r} names no trial in this log ({self.db_path}). An "
+                "unresolvable id is not the same as no id: it is evidence that does not "
+                "check out, and treating it as absent would silently restore the "
+                "caller-supplied value this lookup exists to replace."
+            )
+        record = _row_to_trial(row)
+        if record.hypothesis_id not in family:
+            raise UnknownTrialError(
+                f"trial_id {trial_id!r} is logged against hypothesis "
+                f"{record.hypothesis_id!r}, which belongs to another hypothesis family — "
+                f"not {hypothesis_id!r}'s. The id is real, so it looks legitimate; it is "
+                "evidence about a different idea."
+            )
+        return record
 
     def count_trials(self, hypothesis_id: str) -> int:
         """How many evaluations were run against exactly this hypothesis.

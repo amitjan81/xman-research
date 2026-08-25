@@ -96,19 +96,24 @@ def feasibility_from_result(result: BacktestResult) -> FeasibilityFacts:
 
 
 def logged_run_at(
-    source: ResearchSession | TrialLog, hypothesis_id: str, trial_id: str
+    source: ResearchSession | TrialLog, hypothesis_id: str, trial_id: str | None
 ) -> dt.datetime | None:
-    """When the log says this trial happened. ``None`` when the row cannot be found.
+    """When the log says this trial happened.
 
-    ``None`` is returned rather than raised because C6 handles it: a run with no logged
-    timestamp falls back to ``RunEvidence.run_at``, and a run with neither is refused by
-    the gate. Inventing a timestamp here would defeat that refusal.
+    ``None`` only when the run carries no ``trial_id`` at all. A run that never claimed
+    to be logged legitimately has no logged timestamp, falls back to
+    ``RunEvidence.run_at``, and is refused by the gate if it has neither.
+
+    An id that *is* supplied and resolves to nothing raises
+    :class:`~xman_research.trial_log.UnknownTrialError` instead of returning ``None``.
+    Returning ``None`` there made a mistyped or foreign id read as a run that was simply
+    never logged, which is a stronger claim about weaker evidence — see
+    :meth:`~xman_research.trial_log.TrialLog.require_family_trial`.
     """
+    if trial_id is None:
+        return None
     log = source.log if isinstance(source, ResearchSession) else source
-    for record in log.family_trials(hypothesis_id):
-        if record.trial_id == trial_id:
-            return record.created_at
-    return None
+    return log.require_family_trial(hypothesis_id, trial_id).created_at
 
 
 def evidence_from_result(

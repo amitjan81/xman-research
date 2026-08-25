@@ -51,6 +51,7 @@ from xman_research.trial_log import (
     TrialOutcome,
     TrialRecord,
     UnknownHypothesisError,
+    UnknownTrialError,
 )
 
 __all__ = [
@@ -73,6 +74,7 @@ __all__ = [
     "TrialOutcome",
     "TrialRecord",
     "UnknownHypothesisError",
+    "UnknownTrialError",
     "open_session",
 ]
 
