@@ -89,12 +89,44 @@ __all__ = [
     "BookView",
     "DailyRecord",
     "FillRecord",
+    "PositionOutlivedItsExpiryError",
     "SettlementRecord",
     "Strategy",
     "TokenAlreadyUsedError",
     "TradeIntent",
     "run_backtest",
 ]
+
+
+class PositionOutlivedItsExpiryError(Exception):
+    """A session opened with a position whose contract expired on an earlier date.
+
+    **This is a contradiction, and the engine refuses on it rather than carrying on.**
+    An option that has expired is not a position; it is a cash flow that has already
+    happened. A book still holding one is a book whose equity curve is measuring
+    something that does not exist.
+
+    It is raised rather than repaired because the repair would have to invent the one
+    number the run exists to measure. A held-to-expiry straddle's entire payoff is
+    -|S_T - K| at the settlement value of its expiry session, so "force-settle at the
+    last mark" prices the trade at a mark from *before* the outcome it is trying to
+    observe — on the 2025-04-30 case that found this, a six-day-old option price standing
+    in for the payoff of the only trade in question. That is not a stamped estimate, it is
+    a fabricated result, and it would be fabricated on exactly the observation whose
+    absence caused the problem.
+
+    Raised loudly for the reason issue #26 gives: the alternative to a run that dies is
+    not a run that is fine, it is a run that silently produces no-op sessions. M1 enters
+    only when flat, so one unsettled straddle suppressed every subsequent entry for 248 of
+    385 sessions and the result read as a strategy that chose not to trade. A dead run
+    costs an afternoon; that one nearly published a Sharpe computed over a book that was
+    not trading.
+
+    In normal operation nothing reaches this. :func:`_propose` refuses to OPEN a position
+    whose expiry the run's own calendar cannot settle, so the contradiction is prevented
+    at entry and this guard is the invariant that says so — it fires only if a position
+    arrives by some route entry-time screening does not cover.
+    """
 
 
 class TokenAlreadyUsedError(Exception):
@@ -451,6 +483,15 @@ class BacktestResult:
     strategy_name: str
     strategy_parameters: dict[str, Any]
     unverified_inputs: tuple[str, ...]
+    open_at_end: tuple[str, ...] = ()
+    """Symbols still on the book when the window closed, marked at their last price.
+
+    Empty for a strategy that flattens, and non-empty is not by itself a defect — a
+    window has to end somewhere, and a position expiring after it has simply not resolved
+    yet. It is recorded because the failure it belongs to was silent in both directions:
+    a position parked by an *absent* expiry (now refused at entry) and one parked by the
+    window's *edge* both end as unrealised value in the final equity, and only one of them
+    is legitimate. A reader can now tell which, and how much."""
 
     @property
     def final_equity(self) -> float:
@@ -509,7 +550,15 @@ class BacktestResult:
                 + counts[str(Feasibility.NO_LIQUIDITY)]
                 + counts[str(Feasibility.CAPPED_TO_ZERO)]
                 + counts[str(Feasibility.GROUP_INCOMPLETE)]
+                + counts[str(Feasibility.UNSETTLEABLE)]
             ),
+            # Counted inside fills_infeasible AND broken out, because the two readings
+            # answer different questions: how much of what the strategy wanted did not
+            # happen, and how much of that was the corpus rather than the market. The
+            # first is what a not-evaluable rule should see; the second is what tells the
+            # researcher the corpus needs fixing rather than the strategy.
+            "fills_unsettleable": counts[str(Feasibility.UNSETTLEABLE)],
+            "positions_open_at_end": len(self.open_at_end),
             # Legs whose outcome was decided by a sibling rather than by their own
             # liquidity. Non-zero means the market let part of a structure through and not
             # the rest, which changes which hypothesis the run actually tested.
@@ -549,6 +598,7 @@ class BacktestResult:
             "daily": [record.as_dict() for record in self.daily],
             "total_costs": self.total_costs.as_dict(),
             "unverified_inputs": list(self.unverified_inputs),
+            "open_at_end": list(self.open_at_end),
         }
 
     def fingerprint(self) -> str:
@@ -599,6 +649,12 @@ def run_backtest(
     else:
         refs = resolution.sessions()
 
+    # Built before the loop, from the same resolved list the loop walks, so "can this
+    # expiry ever settle" is answered by the run's own calendar rather than by hope.
+    calendar = _SettlementCalendar(
+        session_dates=frozenset(ref.session_date for ref in refs), run_end=window.end
+    )
+
     cash = config.starting_cash
     positions: dict[str, Position] = {}
     fills: list[FillRecord] = []
@@ -646,6 +702,11 @@ def run_backtest(
             )
         session = SessionView.from_frame(ref.session_date, config.underlying, frame, refdata)
 
+        # Before the strategy is asked anything. A book carrying an expired contract is
+        # not a state any decision should be taken from, and the check comes first so the
+        # run stops at the contradiction rather than one session's worth of trading later.
+        _refuse_expired_positions(ref.session_date, positions, calendar)
+
         # **Margin is measured before settlement, not after.** _settle_expiring removes
         # every position expiring today, and a margin computed on what remains can never
         # see an expiry-day leg — which made the 2% expiry-day ELM, the one margin
@@ -668,7 +729,9 @@ def run_backtest(
             intents = strategy.decide(
                 session=session.through(minute), minute=minute, book=BookView(positions, cash)
             )
-            session_fills, cash = _execute_all(intents, session, minute, config, cash, positions)
+            session_fills, cash = _execute_all(
+                intents, session, minute, config, cash, positions, calendar
+            )
             for record in session_fills:
                 fills.append(record)
                 total_costs = total_costs + record.costs
@@ -692,6 +755,19 @@ def run_backtest(
 
         daily.append(_close_of_session(session, config, cash, positions, margin, unmargined))
 
+    if any(fill.feasibility.verdict is Feasibility.UNSETTLEABLE for fill in fills):
+        # A run that declined trades because the corpus cannot settle them tested a
+        # slightly different population than the strategy described, and the verdict
+        # carries that rather than the reader having to reconstruct it from the counts.
+        unverified.add(f"corpus.expiry_session_absent:{Confidence.UNVERIFIED}")
+    if positions:
+        # The other end of the same problem, and it was equally silent: the window closed
+        # with the book still holding something. Those positions are marked at their last
+        # observed price and their real payoff is not in this run at all, so a P&L that
+        # includes them is part estimate. Named here rather than left to be inferred from
+        # a non-zero final open_position_value.
+        unverified.add(f"book.open_at_run_end:{Confidence.UNVERIFIED}")
+
     # The margin approximation is never sourced well enough to be treated as verified, so
     # every run carries the flag whether or not any short leg was ever held. A run with no
     # margin exposure has a trivially correct margin number and the flag is harmless; a run
@@ -714,6 +790,7 @@ def run_backtest(
         strategy_name=strategy.name,
         strategy_parameters=dict(strategy.parameters()),
         unverified_inputs=tuple(sorted(unverified)),
+        open_at_end=tuple(sorted(positions)),
     )
 
     trial.record_params(
@@ -768,6 +845,40 @@ def _decision_minutes(session: SessionView, config: BacktestConfig) -> tuple[dt.
 
 
 @dataclass(frozen=True, slots=True)
+class _SettlementCalendar:
+    """The dates this run will actually visit, and where it stops.
+
+    Built once from the resolved session list, before the loop, and consulted at entry so
+    the engine never opens a position it can prove it cannot close.
+
+    **Reading it is not lookahead.** It carries which parquet files exist, and nothing
+    derived from their contents — no price, no volume, no outcome. The distinction that
+    matters is between market information (which would let a strategy trade on the future)
+    and apparatus information (which bounds what the apparatus can measure). A run already
+    conditions on the second everywhere: ``accept_gaps`` names the missing sessions, the
+    cost stack refuses dates outside its rate schedule, and the settlement table refuses
+    rules it has not implemented. This is the same kind of fact, applied at the one place
+    it was missing.
+    """
+
+    session_dates: frozenset[dt.date]
+    run_end: dt.date
+
+    def can_settle(self, expiry: dt.date) -> bool:
+        """Whether a position expiring on ``expiry`` can be settled by this run.
+
+        ``expiry > run_end`` is **True** deliberately: a window that ends before a
+        contract expires has not lost the settlement, it has stopped before it. That
+        position is reported as open at run end (see
+        :attr:`BacktestResult.open_at_end`) rather than refused, because refusing it would
+        let the window's right-hand edge silently decide which trades a strategy takes.
+        A missing session *inside* the window is the opposite case: the run walks straight
+        past the expiry date and settles nothing.
+        """
+        return expiry > self.run_end or expiry in self.session_dates
+
+
+@dataclass(frozen=True, slots=True)
 class _Proposal:
     """One intent, priced and judged, before its leg group has had its say."""
 
@@ -784,6 +895,7 @@ def _execute_all(
     config: BacktestConfig,
     cash: float,
     positions: dict[str, Position],
+    calendar: _SettlementCalendar,
 ) -> tuple[list[FillRecord], float]:
     """Judge every intent, then let each leg group decide as one.
 
@@ -793,7 +905,7 @@ def _execute_all(
     """
     records: list[FillRecord] = []
     for group in _group_intents(intents):
-        proposals = [_propose(intent, session, minute, config) for intent in group]
+        proposals = [_propose(intent, session, minute, config, calendar) for intent in group]
         grant = _group_grant(proposals)
         for proposal in proposals:
             record, cash = _apply(proposal, grant, session, minute, config, cash, positions)
@@ -887,6 +999,7 @@ def _propose(
     session: SessionView,
     minute: dt.datetime,
     config: BacktestConfig,
+    calendar: _SettlementCalendar,
 ) -> _Proposal:
     """Ask the market whether the intent was possible. Changes nothing."""
     contract = session.universe.by_symbol(intent.trading_symbol)
@@ -916,6 +1029,38 @@ def _propose(
                 f"{intent.trading_symbol} printed no bar at any minute this session — on "
                 "this corpus that is usually capture scope (front expiry only, spec 3 C1) "
                 "rather than a market fact, and the two must not be read the same way"
+            ),
+        )
+    if not calendar.can_settle(contract.expiry):
+        # The run will walk past this contract's expiry date without visiting it, so a
+        # position opened here could never be closed. Refused at entry, counted, and
+        # stamped — never silently skipped, and never opened and parked.
+        #
+        # **Why refuse the entry rather than let it open and raise later.** Both are
+        # refusals; they differ only in blast radius. Raising takes the whole run down for
+        # one absent session, which on the window this was found against would make a
+        # pre-registered 385-session gate unrunnable — and "the corpus is missing one
+        # expiry" is not a reason to be unable to measure the other 384 sessions. Refusing
+        # the entry costs the trades whose outcome is unobservable, which are precisely
+        # the trades that should be dropped, and leaves the loud failure
+        # (PositionOutlivedItsExpiryError) standing as the invariant behind it.
+        #
+        # It IS a change to the traded population, which is why it is a counted verdict
+        # rather than an early `return ()` inside a strategy: it lands in
+        # feasibility_counts, in fills_infeasible, and in the run's unverified_inputs, so a
+        # verdict computed over such a run cannot avoid saying so. Whether that fraction is
+        # tolerable is C6's decision through max_infeasible_fraction, not this function's.
+        verdict = replace(
+            verdict,
+            verdict=Feasibility.UNSETTLEABLE,
+            granted_lots=0,
+            reason=(
+                f"{intent.trading_symbol} expires {contract.expiry.isoformat()}, which is "
+                "not a session this run visits — the corpus has no file for that date, so "
+                "the position could be opened and never settled. Opening it would park a "
+                "position on the book for the rest of the run; settling it against any "
+                "other session's price would invent the payoff this trade exists to "
+                "measure"
             ),
         )
     return _Proposal(intent=intent, contract=contract, bar=bar, verdict=verdict)
@@ -973,6 +1118,39 @@ def _book(
             feasibility=verdict,
         ),
         cash,
+    )
+
+
+def _refuse_expired_positions(
+    session_date: dt.date,
+    positions: Mapping[str, Position],
+    calendar: _SettlementCalendar,
+) -> None:
+    """Refuse to open a session holding a position that expired before it.
+
+    The invariant behind :func:`_propose`'s entry-time refusal. See
+    :class:`PositionOutlivedItsExpiryError` for why this raises instead of repairing.
+    """
+    stale = sorted(
+        (symbol, position.contract.expiry)
+        for symbol, position in positions.items()
+        if position.contract.expiry < session_date
+    )
+    if not stale:
+        return
+    detail = ", ".join(
+        f"{symbol} (expired {expiry.isoformat()}"
+        + ("" if expiry in calendar.session_dates else ", no session in this run")
+        + ")"
+        for symbol, expiry in stale
+    )
+    raise PositionOutlivedItsExpiryError(
+        f"session {session_date.isoformat()} opened with {len(stale)} position(s) past "
+        f"their own expiry: {detail}. An expired option is not a position, and a book "
+        "holding one marks an instrument that no longer exists — which suppresses every "
+        "entry rule conditioned on being flat, silently, for the rest of the run. The "
+        "engine refuses rather than settling it at some other session's price, because "
+        "that price is not the payoff and pretending otherwise fabricates the result."
     )
 
 

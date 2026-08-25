@@ -260,6 +260,7 @@ class FeasibilityFacts:
             "no_liquidity",
             "capped_to_zero",
             "group_incomplete",
+            "unsettleable",
         ),
         not_an_intent: Sequence[str] = ("settled",),
         intents_resized: int = 0,
@@ -281,6 +282,16 @@ class FeasibilityFacts:
         C5's own ``BacktestResult.metrics()`` counts it under ``fills_infeasible``; omitting
         it here made the two components disagree about the same run, with C6 reading the
         lower number.
+
+        ``unsettleable`` **is infeasible**, and the choice was made before any number was
+        computed. C5 raises it when a contract's expiry is not a session the run visits, so
+        the trade is refused because the corpus cannot observe how it ended. The argument
+        for excluding it — like ``settled``, it is not the market's verdict — is real, and
+        it is rejected: ``infeasible_fraction`` feeds the not-evaluable rule, whose whole
+        job is to notice when too much of a run is not a measurement, and a corpus that
+        cannot settle a position is the purest case of that. Excluding it would also be
+        the one classification that cannot trip the gate, which is the wrong reason to
+        prefer a classification.
 
         ``settled`` **is not an intent.** Cash settlement at expiry is something the
         exchange does *to* the book — C5's own docstring says no participant can fail to

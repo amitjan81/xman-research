@@ -1,3 +1,25 @@
+> # ⛔ SUPERSEDED — THIS IS NOT M1's STANDING VERDICT
+>
+> **The NOT_EVALUABLE below is the verdict of a run whose book was wedged by an engine
+> defect (issue #26). It was true of that run and it is no longer M1's answer.**
+>
+> **M1's standing verdict is `research/m1/DECISION_RERUN.md` — FAILS_THRESHOLD**, from the
+> re-run of the same pre-registered gate over the same window after the defect was fixed:
+> DSR 0.3423, max drawdown 12.03%, stale-mark fraction 1.82% (against the 64.7% below).
+> The machine record that stands is `decision_rerun.json`; `decision.json` beside this file
+> is the machine record of *this* superseded run.
+>
+> **Why this file is still here, unedited.** It is the evidence for issue #26 and the reason
+> the fix exists — 64.7% stale marks and 162 zero-return sessions are what exposed the
+> defect, and both runs are real, both are in the trial log, and the re-run cost the family
+> a trial (N 8 -> 9) precisely because this one happened. Deleting it would erase why the
+> apparatus changed and would make the trial count unexplainable. Nothing below this banner
+> has been altered: no number, no claim, no verdict.
+>
+> Added when `feat/fix-wedged-book` merged, which is the commit that first put both records
+> in the same tree. The record as originally written, without this banner, is tagged
+> `record/m1-wedged-bcb8bd9`.
+
 # M1 — near-week short ATM straddle, on the backfilled corpus
 
 | | |
