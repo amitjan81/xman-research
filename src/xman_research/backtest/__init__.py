@@ -67,6 +67,7 @@ from xman_research.backtest.execution import (
     apply_participation_caps,
 )
 from xman_research.backtest.lot_size import (
+    BANKNIFTY_LOT_SIZE_EPOCHS,
     NIFTY_LOT_SIZE_EPOCHS,
     LotSizeAudit,
     LotSizeEpoch,
@@ -100,6 +101,7 @@ from xman_research.backtest.settlement import (
 from xman_research.backtest.strategies import ShortAtmStraddle
 
 __all__ = [
+    "BANKNIFTY_LOT_SIZE_EPOCHS",
     "METHOD_LAST_UNDERLYING_PRINT",
     "METHOD_MEAN_UNDERLYING_MINUTE_CLOSE",
     "NIFTY_LOT_SIZE_EPOCHS",
