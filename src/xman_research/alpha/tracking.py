@@ -92,6 +92,14 @@ says so, rather than treating any shortfall as an infinite breach.
 The CUSUM has **no slack term**. A slack parameter is a second free knob, and the whole claim
 this rule makes is that it cannot be retuned after seeing a bad month.
 
+**The second rule never fires alone, and is checked first anyway.** The whole window is itself
+a contiguous run, so the CUSUM is at most the window's total shortfall ``n * (mean - expected)``;
+a mean that reaches a t of ``-2`` has already carried that total past ``3 * sigma`` for any
+``n >= 3``. Rule 2 is therefore a naming device rather than an independent trigger, and it is
+evaluated first so that a template which is simply **losing money** is reported as that rather
+than as having drifted. Both are demotions; they are not the same diagnosis, and a report that
+collapsed them would send a reader looking for a regime change where there is a dead strategy.
+
 Nothing is demoted on fewer than ``min_settled`` settled ideas, and a template below that line
 is reported as unjudged with its count rather than passed over in silence — "no demotion" and
 "not enough evidence to demote" are different states and a report that showed them the same
@@ -117,7 +125,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from xman_research.alpha.features import DEFAULT_DECISION_TIME, FeatureBuilder
+from xman_research.alpha.features import DEFAULT_DECISION_TIME
 from xman_research.alpha.library import TemplateLibrary
 from xman_research.alpha.templates import parameter_key
 from xman_research.backtest.engine import BacktestConfig
@@ -690,7 +698,6 @@ class IdeaLedger:
         store: SessionStore,
         decision_time: dt.time = DEFAULT_DECISION_TIME,
         capital_base: float = DEFAULT_CAPITAL_BASE,
-        feature_builder: FeatureBuilder | None = None,
         settlement_rules: tuple[SettlementRule, ...] = SETTLEMENT_RULES,
         gaps_reason: str | None = None,
     ) -> tuple[Settlement, ...]:
@@ -713,37 +720,44 @@ class IdeaLedger:
         Nothing outside ``[as_of, as_of_end]`` is ever resolved. A ledger settling through a
         date cannot read past it, which is what keeps a sealed holdout sealed.
 
+        Sessions are read **whole**, unlike the truncated views the ranker is handed. The
+        ranker's view stops at the decision minute because a feature computed from later bars
+        would be look-ahead; a settlement is taken after the fact about a session that has
+        entirely happened, and an expiring leg is paid out of the settlement window, which
+        sits after the decision minute by construction. Reading a truncated view here would
+        make every expiry unmarkable for want of the bars that decide it.
+
         ``capital_base`` is the denominator realised returns are expressed over and must match
         the one the admission evidence was measured on; see the module docstring for why they
         are the same number and what stops them drifting apart.
         """
         if capital_base <= 0.0:
             raise LedgerError(f"capital_base must be positive, got {capital_base}")
-        builder = (
-            feature_builder
-            if feature_builder is not None
-            else FeatureBuilder(store, decision_time=decision_time)
-        )
         due = [idea for idea in self.open_ideas() if idea.as_of_date <= as_of_end]
         if not due:
             return ()
         settled: list[Settlement] = []
-        calendars: dict[str, tuple[dt.date, ...]] = {}
+        readers: dict[str, _SessionReader] = {}
         for idea in due:
-            sessions = calendars.get(idea.underlying)
-            if sessions is None:
-                sessions = _sessions_between(
+            reader = readers.get(idea.underlying)
+            if reader is None:
+                reader = _SessionReader(
                     store,
                     idea.underlying,
-                    min(other.as_of_date for other in due if other.underlying == idea.underlying),
-                    as_of_end,
-                    gaps_reason=gaps_reason,
+                    _refs_between(
+                        store,
+                        idea.underlying,
+                        min(
+                            other.as_of_date for other in due if other.underlying == idea.underlying
+                        ),
+                        as_of_end,
+                        gaps_reason=gaps_reason,
+                    ),
                 )
-                calendars[idea.underlying] = sessions
+                readers[idea.underlying] = reader
             entry = self._settle_one(
                 idea,
-                sessions=sessions,
-                builder=builder,
+                reader=reader,
                 decision_time=decision_time,
                 capital_base=capital_base,
                 settlement_rules=settlement_rules,
@@ -758,20 +772,19 @@ class IdeaLedger:
         self,
         idea: PresentedIdea,
         *,
-        sessions: Sequence[dt.date],
-        builder: FeatureBuilder,
+        reader: _SessionReader,
         decision_time: dt.time,
         capital_base: float,
         settlement_rules: tuple[SettlementRule, ...],
     ) -> Settlement | None:
-        after = [day for day in sessions if day > idea.as_of_date]
+        after = [day for day in reader.session_dates if day > idea.as_of_date]
         if len(after) < idea.hold_sessions:
             return None
         exit_date = after[idea.hold_sessions - 1]
         marks = self._mark_legs(
             idea,
             exit_date=exit_date,
-            builder=builder,
+            reader=reader,
             decision_time=decision_time,
             settlement_rules=settlement_rules,
         )
@@ -827,17 +840,10 @@ class IdeaLedger:
         idea: PresentedIdea,
         *,
         exit_date: dt.date,
-        builder: FeatureBuilder,
+        reader: _SessionReader,
         decision_time: dt.time,
         settlement_rules: tuple[SettlementRule, ...],
     ) -> tuple[LegMark, ...]:
-        views: dict[dt.date, SessionView | None] = {}
-
-        def view_for(day: dt.date) -> SessionView | None:
-            if day not in views:
-                views[day] = builder.session_view(idea.underlying, day)
-            return views[day]
-
         marks: list[LegMark] = []
         for leg in idea.legs:
             symbol = str(leg["trading_symbol"])
@@ -873,7 +879,7 @@ class IdeaLedger:
                         strike=float(leg["strike"]),
                         option_type=str(leg["option_type"]),
                         expiry=expiry,
-                        view=view_for(expiry),
+                        view=reader.view(expiry),
                         settlement_rules=settlement_rules,
                     )
                 )
@@ -885,7 +891,7 @@ class IdeaLedger:
                     units=units,
                     entry_price=entry_price,
                     exit_date=exit_date,
-                    view=view_for(exit_date),
+                    view=reader.view(exit_date),
                     decision_time=decision_time,
                 )
             )
@@ -1078,15 +1084,12 @@ def _drift_report(
             ),
             **common,
         )
-    if threshold is not None and sigma is not None and sigma > 0.0 and cusum <= threshold:
-        return DriftReport(
-            verdict=VERDICT_CUSUM_BREACH,
-            reason=(
-                f"the drift CUSUM reached {cusum:.6g}, at or below {CUSUM_K:g} sigma "
-                f"({threshold:.6g}, sigma={sigma:.6g}) over {len(marked)} settled ideas"
-            ),
-            **common,
-        )
+    # The negative-mean rule is checked first because it names the more specific fact. It is
+    # never the only rule that fires: the whole window is itself a contiguous run, so the
+    # CUSUM is at most the window's total shortfall, and a mean significant enough to reach
+    # a t of -2 has already carried that total past three sigma. Checking the CUSUM first
+    # would therefore report every losing template as "drifted" and leave "losing money"
+    # unreachable, which is the one distinction an operator most needs from this report.
     reference = card_mean if card_mean is not None else expected_mean
     if (
         realised_mean < 0.0
@@ -1101,6 +1104,15 @@ def _drift_report(
                 f"realised mean {realised_mean:.6g} over {len(marked)} settled ideas is below "
                 f"zero against an admitted {reference:.6g}, at a one-sided t of "
                 f"{t_statistic:.4g} (threshold {T_STATISTIC_THRESHOLD:g})"
+            ),
+            **common,
+        )
+    if threshold is not None and sigma is not None and sigma > 0.0 and cusum <= threshold:
+        return DriftReport(
+            verdict=VERDICT_CUSUM_BREACH,
+            reason=(
+                f"the drift CUSUM reached {cusum:.6g}, at or below {CUSUM_K:g} sigma "
+                f"({threshold:.6g}, sigma={sigma:.6g}) over {len(marked)} settled ideas"
             ),
             **common,
         )
@@ -1260,20 +1272,53 @@ def _with_cause(mark: LegMark, cause: str, reason: str) -> LegMark:
     )
 
 
-def _sessions_between(
+def _refs_between(
     store: SessionStore,
     underlying: str,
     start: dt.date,
     end: dt.date,
     *,
     gaps_reason: str | None,
-) -> tuple[dt.date, ...]:
+) -> tuple[Any, ...]:
     resolution = store.resolve(underlying, start, end)
     if gaps_reason is not None and not resolution.is_complete:
-        refs = resolution.accept_gaps(gaps_reason)
-    else:
-        refs = resolution.sessions()
-    return tuple(ref.session_date for ref in refs)
+        return resolution.accept_gaps(gaps_reason)
+    return resolution.sessions()
+
+
+class _SessionReader:
+    """Whole sessions for one underlying, read once each and kept for the batch.
+
+    A settlement run marks many ideas against the same handful of exit sessions, and a
+    session is tens of thousands of rows; reading each one per idea would dominate the cost
+    of the run. The cache is bounded by the settlement range the caller asked for, which is
+    the set of sessions the run was always going to touch.
+    """
+
+    def __init__(self, store: SessionStore, underlying: str, refs: Sequence[Any]) -> None:
+        self._store = store
+        self._underlying = underlying
+        self._refs = {ref.session_date: ref for ref in refs}
+        self._views: dict[dt.date, SessionView | None] = {}
+
+    @property
+    def session_dates(self) -> tuple[dt.date, ...]:
+        return tuple(sorted(self._refs))
+
+    def view(self, day: dt.date) -> SessionView | None:
+        if day in self._views:
+            return self._views[day]
+        ref = self._refs.get(day)
+        view: SessionView | None = None
+        if ref is not None and ref.has_refdata:
+            view = SessionView.from_frame(
+                ref.session_date,
+                self._underlying,
+                self._store.load_session(ref),
+                self._store.load_refdata(ref),
+            )
+        self._views[day] = view
+        return view
 
 
 def _presented_from_sheet_row(
