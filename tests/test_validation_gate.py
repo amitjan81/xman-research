@@ -13,8 +13,9 @@ from pathlib import Path
 
 import pytest
 
+from validation_helpers import benchmark_series, evidence, trading_sessions
 from xman_research import DataWindow, HypothesisRecord, ResearchSession
-from xman_research.validation.decision import ValidationConfig
+from xman_research.validation.decision import ValidationConfig, Validator
 from xman_research.validation.gate import (
     EPOCH_BOUNDARIES,
     EPOCH_PROVENANCE_STAMP,
@@ -266,6 +267,98 @@ def test_the_holdout_answer_covers_the_whole_amendment_family(
     with session.trial(amended, data_window=DataWindow(dt.date(2026, 3, 2), dt.date(2026, 6, 30))):
         pass
     assert inspect_holdout(session, record, policy=policy).touched
+
+
+def holdout_validator(tmp_path: Path, db_path: Path, record: HypothesisRecord) -> Validator:
+    """A validator over the fixture's own log, with a gate bound to ``record``."""
+    write_gate(tmp_path / "gate.toml", hypothesis_id=record.id)
+    config_path = tmp_path / "validation.toml"
+    config_path.write_text(
+        f'trial_log_path = "{db_path}"\n'
+        'gate_path = "gate.toml"\n'
+        "holdout_first_date = 2026-03-01\n"
+    )
+    return Validator(ValidationConfig.from_file(config_path))
+
+
+def logged_run(
+    session: ResearchSession, record: HypothesisRecord, window: DataWindow
+) -> tuple[str, dt.datetime]:
+    """One appended trial's id and the timestamp the log's own clock stamped it with.
+
+    ``run_at`` on the evidence must equal that timestamp: the thresholds-predate-the-run
+    check reconciles the two and refuses a disagreement.
+    """
+    with session.trial(record, data_window=window) as trial:
+        trial_id = trial.trial_id
+    row = next(row for row in session.log.family_trials(record.id) if row.trial_id == trial_id)
+    return trial_id, row.created_at
+
+
+def test_a_separately_run_holdout_benchmark_does_not_trip_the_check(
+    tmp_path: Path, db_path: Path, session: ResearchSession
+) -> None:
+    """Grading a holdout against a benchmark run in its own trial must still be possible.
+
+    The risk-matched increment compares two series over the identical sessions under the
+    identical cost model, so a caller whose benchmark is a *different* strategy re-runs it
+    over the holdout and files a second trial in the same family with the same window.
+    Exempting only the candidate would make that trial the evidence of a prior touch, and
+    the grading would refuse itself after the months had already been read.
+    """
+    record = register(session)
+    validator = holdout_validator(tmp_path, db_path, record)
+    dates = trading_sessions(dt.date(2026, 3, 2), 20)
+    window = DataWindow(dates[0], dates[-1])
+    candidate_trial_id, candidate_at = logged_run(session, record, window)
+    benchmark_trial_id, benchmark_at = logged_run(session, record, window)
+    assert candidate_trial_id != benchmark_trial_id
+
+    verdict = validator.grade_holdout(
+        evidence(
+            benchmark_series(dates, seed=11, label="candidate"),
+            run_at=candidate_at,
+            trial_id=candidate_trial_id,
+        ),
+        benchmark=evidence(
+            benchmark_series(dates, seed=12), run_at=benchmark_at, trial_id=benchmark_trial_id
+        ),
+        hypothesis=record,
+    )
+
+    assert verdict.holdout is not None
+    assert not verdict.holdout.touched
+    assert verdict.holdout.touching_trial_ids == ()
+
+
+def test_a_holdout_trial_from_an_earlier_read_still_trips_the_check(
+    tmp_path: Path, db_path: Path, session: ResearchSession
+) -> None:
+    """The exemption is exactly three trials wide, not "any trial with this window".
+
+    A fourth holdout row — an evaluation from some earlier session — is what the check
+    exists to find, and widening the exemption must not have made it invisible.
+    """
+    record = register(session)
+    validator = holdout_validator(tmp_path, db_path, record)
+    dates = trading_sessions(dt.date(2026, 3, 2), 20)
+    window = DataWindow(dates[0], dates[-1])
+    earlier_trial_id, _ = logged_run(session, record, window)
+    candidate_trial_id, candidate_at = logged_run(session, record, window)
+    benchmark_trial_id, benchmark_at = logged_run(session, record, window)
+
+    with pytest.raises(HoldoutTouchedError, match=earlier_trial_id):
+        validator.grade_holdout(
+            evidence(
+                benchmark_series(dates, seed=11, label="candidate"),
+                run_at=candidate_at,
+                trial_id=candidate_trial_id,
+            ),
+            benchmark=evidence(
+                benchmark_series(dates, seed=12), run_at=benchmark_at, trial_id=benchmark_trial_id
+            ),
+            hypothesis=record,
+        )
 
 
 # ----------------------------------------------------------------- configuration

@@ -450,9 +450,19 @@ class Validator:
         the run is shaped like a holdout run — writing it afterwards would mean a crash
         between the read and the write leaves the months read and the log saying otherwise.
 
-        The row is then exempted from the check it enables, along with the trial that
-        produced the evidence being graded; see :func:`inspect_holdout` for why the second
-        exemption is what makes the honest workflow possible at all.
+        The row is then exempted from the check it enables, along with the two trials that
+        produced the evidence being graded — the candidate's and the benchmark's; see
+        :func:`inspect_holdout` for why those exemptions are what make the honest workflow
+        possible at all.
+
+        **The benchmark's trial is exempt because it is part of this read, not a prior
+        one.** A risk-matched increment compares two series over the identical sessions
+        under the identical cost model, so a caller that re-runs its benchmark over the
+        holdout files a second trial in the same family with the same window. Where the
+        benchmark *is* the candidate run under a second label the two ids coincide and the
+        exemption changes nothing; where it is a separate run, exempting only the candidate
+        would make every holdout grading find the benchmark row and refuse itself, after
+        the months had already been read.
 
         One consequence, stated rather than hidden: the touch is a trial in the family, so
         it enters the deflation's selection count. That makes the holdout verdict very
@@ -495,7 +505,11 @@ class Validator:
                 policy=policy,
                 exempt_trial_ids=tuple(
                     identifier
-                    for identifier in (touch.trial_id, candidate.trial_id)
+                    for identifier in (
+                        touch.trial_id,
+                        candidate.trial_id,
+                        benchmark.trial_id,
+                    )
                     if identifier is not None
                 ),
             )
