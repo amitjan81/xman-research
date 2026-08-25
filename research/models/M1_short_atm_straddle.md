@@ -4,8 +4,9 @@
 |---|---|
 | Hypothesis | H1 — index variance risk premium |
 | Record | `h_817b33ff6b9f68e288161f5990739744` |
-| Status | **Awaiting owner approval** as a whole; no re-validation until approved. The §5 sizing amendment and its §12.1 gate are **owner-approved 2026-08-19**. |
-| Prior result | FAILS_THRESHOLD, n=79, DSR 0.6043 vs 0.90 |
+| **Role** | **BENCHMARK.** Not a candidate. Every conditional model is graded against this series (§3). |
+| Status | **Awaiting owner approval** as a whole; no re-validation until approved. The §5 sizing *amendment* and its §12.1 gate are **owner-approved 2026-08-19**. **Awaiting approval:** the §3/§10 alpha reframing, §11.1's demotion of cost-breakeven, §5's new realised-scale note, and the §4/§6/§7/§9/§13/§14 facts imported from the M1 re-run and PR #27/#29. |
+| Prior results | H1: FAILS_THRESHOLD, n=79, DSR 0.6043 vs 0.90. M1 re-run (`h_0b2ecbbc…`, post-wedge-fix): FAILS_THRESHOLD on two bars, n=384, DSR 0.3423 vs 0.90, MDD 12.03% vs 10%. |
 
 ---
 
@@ -27,9 +28,19 @@ $$T_t = \min\{ e \in \mathcal{E}_t : e > t \}$$
 
 Back-week and monthly cycles are excluded (liquidity). Underlying: NIFTY.
 
-## 3. Signal
+## 3. Signal — none, and that is what makes this the benchmark
 
-**None.** M1 is unconditional — it enters every session that satisfies §4. This is deliberate: it is the naive expression of H1 and the benchmark every conditional variant must beat risk-matched.
+**None.** M1 is unconditional: it enters every session satisfying §4, and holds to expiry, so it enters when flat — one straddle per weekly cycle.
+
+C5 names the unconditional always-on short straddle as the naive benchmark. **M1 *is* that portfolio.** Candidate and benchmark are the same run under two labels, over the same window, under the identical cost model, so
+
+$$\text{RMI}(\text{M1}) \;\equiv\; \text{SR}(r) - \text{SR}\!\left(r^{\text{bench}}\right)\Big|_{\text{risk-matched}} \;=\; 0$$
+
+**identically** — an algebraic identity, not a measurement. It holds for every window, every corpus and every sample size. Measured 0.0000 on both graded runs (H1 n=79; M1 re-run n=384), and it could not have been anything else.
+
+**Consequence: M1 cannot show alpha on any amount of data.** More sessions do not help. This is not a weak result awaiting power; it is a model that is definitionally incapable of producing the quantity the research programme grades on. M1's job is to *supply* the benchmark series, and it does that job whether or not it clears any bar of its own.
+
+The re-run makes the benchmark real: annualised Sharpe **0.8928** on 384 observations, against the wedged run's 0.196. Conditional models inherit that as the number to beat.
 
 ## 4. Entry
 
@@ -41,7 +52,7 @@ where $S_{t,\tau}$ is spot and $\mathcal{K}_t$ the listed strike grid. Enter
 
 $$\text{position}_t = \{ -n_t \text{ CE}(K_t, T_t),\; -n_t \text{ PE}(K_t, T_t) \}$$
 
-**Entry is suppressed when** $(T_t - t) < 1$ trading day, or either leg is unlisted, or either leg fails feasibility (§7), or $n_t = 0$ (§5).
+**Entry is suppressed when** $(T_t - t) < 1$ trading day, or either leg is unlisted, or either leg fails feasibility (§7), or $n_t = 0$ (§5), or the book is not flat, or $T_t$ is not a session this run visits (`UNSETTLEABLE`, §14.7).
 
 **Atomicity:** both legs share a `leg_group`. If either is infeasible, neither trades. If caps grant different sizes, both take $\min$.
 
@@ -59,6 +70,16 @@ Sizing is by **notional, not lots**, so that $\text{Sharpe}$, $\text{MDD}$ and t
 
 **The $n_t = 0$ branch is the one place sizing could re-introduce a dependence on $L_t$** — *which* sessions trade would become a function of the contract multiplier. §12's check is what removes it, by verifying no session reaches the branch, rather than assuming so.
 
+**Realised scale, and why a conditional model cannot inherit it.** The graded value is $N^{*} = ₹15{,}00{,}000$ of index notional, so
+
+$$n_{\text{base}} \;=\; \frac{N^{*}}{S_{t,\tau} L_t}$$
+
+is $O(1)$ **lot**, not $O(10)$. With NIFTY in the 20,000–26,500 band this window spans and $L_t = 75$, $n_{\text{base}} \approx 0.75$–$1.0$, giving $n_t = 1$ lot per leg on every entry. Corroborated two ways: the counts (178 legs / 385 sessions = 89 straddles, one per weekly cycle), and peak margin — ₹4,76,378.63 at $\rho_{\text{span}} + \rho_{\text{exp}} = 0.12$ over two legs implies $q S \approx ₹19.8$ lakh, i.e. $q = 75$ units at $S \approx 26{,}465$.
+
+**$L_t$ is contested, which widens this range rather than pinning it.** The engine sizes on the *declared* refdata value, which across this window steps $25 \to 75 \to 25 \to 75 \to 65$, while the bars support 75 through 2025-12-30 and 65 after (§12.1). At $L_t = 25$, $n_{\text{base}} \approx 2.5$. So $n_{\text{base}}$ is small, spot-dependent **and** lot-regime-dependent, stepping discontinuously at each contract-size boundary — one of which, 2024-11-20, lies inside the costable window (§13).
+
+**That is the obstruction for any conditional model.** A continuous multiplier $f \in [0,1]$ yields $n_t = \lfloor n_{\text{base}} f + 1/2 \rfloor$ ranging over a handful of integers — not a size but a **switch**, tripping at $f^{*} = 0.5/n_{\text{base}}$, itself a moving function of spot and lot regime. **M1's $N^{*}$ is therefore unusable for any model that sizes continuously** (M3 §12.1(b)).
+
 ## 6. Exit
 
 Hold to expiry. European cash settlement at
@@ -69,15 +90,19 @@ Payoff per unit: $-\max(S_T - K, 0) - \max(K - S_T, 0) = -|S_T - K|$.
 
 **Known divergence:** NSE's rule is volume-weighted; the corpus carries no index-level volume, so $W$ is unweighted. Affects every held-to-expiry payoff. **From 2026-08-03** NSE uses the Closing Auction Session price; that rule is carried `implemented=False` and **refuses to settle**, so the usable end is 2026-08-03.
 
+A position expiring after the run's right edge is **kept, not refused** — otherwise the window silently decides which trades the strategy takes — and reported in `open_at_end` with a `book.open_at_run_end` stamp.
+
 ## 7. Feasibility
 
 Per leg, requested units $q = n_t L_t$ against bar volume $V$ and open interest $\Omega$:
 
 $$q^* = \min\left(q,\; \lfloor \alpha V \rfloor,\; \lfloor \beta \Omega \rfloor\right), \qquad \alpha = 0.01,\; \beta = 0.005$$
 
-Verdicts: `FILLABLE` ($q^*=q$), `RESIZED` ($0<q^*<q$), `CAPPED_TO_ZERO`, `NO_LIQUIDITY` ($V=0$), `NO_BAR`, `GROUP_INCOMPLETE`.
+Verdicts: `FILLABLE` ($q^*=q$), `RESIZED` ($0<q^*<q$), `CAPPED_TO_ZERO`, `NO_LIQUIDITY` ($V=0$), `NO_BAR`, `GROUP_INCOMPLETE`, `UNSETTLEABLE` (§14.7).
 
 Fill price = bar close $+$ slippage $s$ bps, $s = 0$ by default — **deliberately the optimistic case**, so the assumption is visible and the cost-breakeven sweep has a clean origin. No quote data exists; spread cannot be modelled.
+
+**The caps were slack at $n_t = 1$ and are not slack in general.** M1 realised 0 `RESIZED` and 0 `CAPPED_TO_ZERO` across both graded runs, so $\alpha$ and $\beta$ never bound. At one lot, $\lfloor \beta \Omega \rfloor \geq 1$ holds under either open-interest unit convention, which is why `corpus.open_interest_not_divisible_by_lot_size` has so far been decorative. At larger $N^*$ it becomes load-bearing and the convention is still unconfirmed.
 
 ## 8. Costs
 
@@ -103,19 +128,35 @@ $\sigma_1, \sigma_2$ **undefined before 2024-10-01** — `RateNotInForceError`. 
 
 **Direction of error:** an assigned short pays no exercise STT, which makes short-variance results *cheaper*. It is a never-folded line item for that reason.
 
+**The whole stack stays in the model and stays stamped.** What changed is what it gates — §10.
+
 ## 9. Margin
 
 $$M_t = \mu \sum_{\text{short legs}} q \cdot S_{t} \cdot \left( \rho_{\text{span}} + \rho_{\text{exp}} + \mathbb{1}[t = T]\cdot \rho_{\text{elm}} \right)$$
 
 $\rho_{\text{span}}=0.10$ (UNVERIFIED), $\rho_{\text{exp}}=0.02$, $\rho_{\text{elm}}=0.02$ (SEBI 2024-11-20, sourced), $\mu$ = multiplier (sweep parameter).
 
-No portfolio netting → **overstates** $M$, understates ROC (conservative). No volatility scaling → **understates** $M$ in drawdown (**not** conservative). No error bound is claimed: SPAN is a scenario engine with no citable percentage.
+No portfolio netting → **overstates** $M$, understates ROC (conservative). No volatility scaling → **understates** $M$ in drawdown (**not** conservative). No error bound is claimed: SPAN is a scenario engine with no citable percentage. Margin is never a return denominator.
 
-## 10. Null hypothesis
+## 10. Null hypothesis — the unconditional variance premium, not an edge
 
-$$H_0:\; \mathbb{E}[r_t] \leq 0 \quad\text{after costs} \quad\wedge\quad \text{SR}(r) \leq \text{SR}(r^{\text{bench}})\ \text{risk-matched}$$
+M1 does not test for alpha (§3). It estimates the quantity conditional models' alpha is measured *relative to*. Its null is therefore a statement about the market:
 
-where $r_t$ = daily net return on capital base $N^*$.
+$$H_0:\quad \pi \;\equiv\; \mathbb{E}\!\left[\sigma^2_{\text{imp}}\right] - \mathbb{E}\!\left[\sigma^2_{\text{real}}\right] \;\leq\; 0$$
+
+estimated by the sign of the **gross** return on the unconditional short straddle:
+
+$$H_0:\quad \mathbb{E}\!\left[r_t^{\text{gross}}\right] \;\leq\; 0, \qquad r_t^{\text{gross}} \text{ = daily return on capital base } N^*, \text{ before } §8$$
+
+**Gross, and deliberately.** $\pi$ is a property of the price process. Statutory costs are a property of the tax code and the broker; folding them into the null makes the existence of the premium contingent on a fee schedule, which is a category error. A premium that exists and is not harvestable net of costs is a *financing* result — size, venue, broker — and it is a different question, asked later, of models that have already shown alpha.
+
+**Superseded form**, recorded rather than deleted:
+
+$$H_0^{\text{old}}:\ \mathbb{E}[r_t] \leq 0 \ \text{after costs} \;\wedge\; \text{SR}(r) \leq \text{SR}(r^{\text{bench}})\ \text{risk-matched}$$
+
+Both conjuncts were defective. The second is vacuous — it compares M1 with itself (§3). The first made a cost model the gate on an alpha question.
+
+**What M1 is still graded on.** `deflated_sharpe` and `max_drawdown` remain live: the first asks whether $\hat\pi > 0$ survives selection, the second whether the benchmark series is usable at all. Both were missed on the re-run (0.3423 vs 0.90; 12.03% vs 10%), and §5's note on the gate's own calibration applies — 0.893 annualised sits inside the band this apparatus was built unable to resolve.
 
 ## 11. Estimators
 
@@ -126,6 +167,14 @@ $$\text{SR}^* = \sqrt{V[\widehat{\text{SR}}]}\left[(1-\gamma)\Phi^{-1}\!\left(1-
 $\gamma$ = Euler–Mascheroni, $\gamma_4$ **non-excess**, both Sharpes per-period. **$N$ = `count_family_trials`, read from the log — never supplied.**
 
 $$\text{breakeven} = \sup\{ m : \bar r_{\text{gross}} - m\,\bar c > 0 \}$$
+
+### 11.1 Cost-breakeven — reported diagnostic, not a gate
+
+`cost_breakeven_multiple` answers *"how wrong can the cost model be before the gross effect is eaten"*. That is a question about deployability, and it is asked of hypotheses that have already shown alpha. It is computed and reported on every run and **does not gate the alpha verdict**.
+
+Observed: **12.889** (H1, n=79), **23.4384** (M1 re-run, n=384). Both comfortable, and neither decided a verdict.
+
+**Not comparable across models with different $N^*$.** Brokerage $b$ is a flat ₹20/order: doubling $N^*$ halves $b$ as a fraction of turnover and raises the multiple with no change in any effect. Compare breakeven only within one $N^*$. This matters because a continuously-sized model must raise $N^*$ to be expressible at all (§5, M3 §12.1(b)).
 
 ## 12. Parameters — pre-registered, no grid
 
@@ -154,16 +203,23 @@ $L_t$ here is the **bars-supported** lot size — `LotSizeAudit.reference_lot_si
 
 **What the check buys, stated exactly.** $\lfloor x + 1/2 \rfloor \geq 1 \iff x \geq 0.5$, so a passing check means no session reaches §5's $n_t = 0$ branch and §4's corresponding suppression never fires on this window. That makes the two clauses belt-and-braces rather than contradictory: the suppression is the honest behaviour *if* the branch is ever reached, and the check is the evidence that it is not. Without the check, which sessions trade would be a function of $L_t$ — the one dependence the notional rule exists to remove — and the invariance would hold for the statistics while quietly failing for the population.
 
+**Known defect, unresolved:** this clause names `reference_lot_size` while the engine sizes on the declared value. Recorded in `research/m1/gate.toml` and not silently fixed.
+
 ## 13. Window and epochs
 
 Costable: **2024-10-01 → 2026-08-03** (STT floor; CAS settlement ceiling). Spans epochs: 2024-11-20 (weekly cull, contract size, expiry ELM), 2025-02-10, 2025-04-01, 2025-09-01 (**expiry Thu→Tue**), 2026-04-01 (STT).
 
 Pooling five regimes yields a number describing no market that existed. **Report per-epoch and pooled; name which is graded.**
 
+Measured per-epoch on the re-run: the pre-committed positive sign holds in 5 of 6 epochs, and the current regime (`nse_expiry_tuesday_2025`, 142 sessions) returns an annualised Sharpe of **+0.124**. That is the benchmark a conditional model actually faces today.
+
 ## 14. Known limits
 
-1. Trial count is a **lower bound** — re-registering a reworded hypothesis resets the family (C4's documented hole).
+1. Trial count is a **lower bound** — re-registering a reworded hypothesis resets the family (C4's documented hole). The log stood at **9** after the re-run; it moves, and is read, never supplied.
 2. $\gamma_4$ estimated on $n$ observations is itself noisy; DSR inherits that.
-3. Expiry-eve entry has no exit — contract is dropped from the master on its expiry date (issue #23). Cost H26 ~43% of observations.
+3. Expiry-eve entry has no exit — contract is dropped from the master on its expiry date (issue #23). Cost H26 ~43% of observations. M1 held to expiry is exposed on the entry side only.
 4. Only $\delta$ is primary-sourced. Every verdict carries `unverified_inputs`.
 5. Settlement is unweighted where NSE's is volume-weighted.
+6. **The strike ladder $\mathcal{K}_t$ is a spot-tracking moving window, not a fixed grid** (`corpus.strike_ladder_is_a_moving_window`). For M1 this costs *marks*, not runs: settlement is on $S_T$ and needs no listed contract, so a strike that leaves the ladder mid-hold produces a stale mark rather than a refusal — measured stale-mark fraction 1.82% on the re-run. It is **fatal** for any model needing to re-trade a specific strike (M2 §0).
+7. Two listed weekly expiries have **no session file** in the corpus (2025-04-30, 2025-05-08). The engine refuses to open a position it cannot settle (`UNSETTLEABLE`) and raises if one is ever held past its expiry. Cost: 14 legs over 7 sessions, `infeasible_fraction` 7.87% against a 10% not-evaluable limit. **A third missing expiry would have returned NOT_EVALUABLE instead of a verdict**, and no census of missing expiries over the full 1,233-session corpus has been run.
+8. An apparatus defect permanently taxes the family: fixing the wedged book cost one trial, raising $\text{SR}^*$ for every future member. Issue #14 is the standing question of whether it should.
