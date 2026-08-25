@@ -155,6 +155,23 @@ result about the strategy, and it will not be reported as one.
 # =======================================================================================
 
 [thresholds]
+
+# CARRIED VERBATIM FROM THE STAGE-ONE REGISTRATION, not chosen here.
+#
+# research/banknifty/screen_v1.toml registered `thresholds = {alpha_to_advance = 0.5}` on the
+# hypothesis record before the screen ran, and validation/gate.py refuses to grade a run
+# whose hypothesis carries a criterion the gate does not — "the gate must grade every
+# criterion the hypothesis was registered with". So this bar is not a new pre-registration
+# and its value is not a choice: 0.5 is the number already in the log, and check_binding
+# refuses any other.
+#
+# WHAT IT DEMANDS: a candidate must beat the benchmark by half a unit of annualised Sharpe
+# to advance. The stage-one sheet already shows the best candidate at -0.656, so this bar is
+# known to be missed by every measured instance before any of them is graded. Recorded
+# plainly: nothing about this run's outcome on this criterion is in suspense, and the value
+# of grading it is that the miss goes on the record in the same form as everything else.
+alpha_to_advance = { at_least = 0.5 }
+
 deflated_sharpe = { at_least = 0.90 }
 cost_breakeven_multiple = { at_least = 2.0 }
 max_drawdown = { at_most = 0.10 }
