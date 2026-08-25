@@ -9,10 +9,10 @@ the number a conditional BANKNIFTY signal will have to beat.
 | | |
 |---|---|
 | Hypothesis | `h_1be59cf40faafce9635a4609b04e4f24` |
-| Trial | `t_b2db4c77d5744410898db4d4a594ad97` (first trial in BANKNIFTY's family) |
+| Trial | `t_418d0cf301e04595b16fa3c535746804` (second trial in BANKNIFTY's family; the first ran an earlier wording of the gap reason) |
 | Window | 2024-10-01 .. 2026-05-29, 353 sessions run |
 | Strategy | `short_atm_straddle`, target notional ₹1,500,000, min 1 day to expiry |
-| Fingerprint | `b6929269e7844de6…` |
+| Fingerprint | `105afff4cf3884b2…` |
 | Full payload | `bn_m1_benchmark.json` |
 
 The window starts at the STT floor rather than at the corpus start; `README.md` says why.
@@ -82,8 +82,10 @@ face a completely different ratio, and nothing here speaks to it.
 most.** The 10 declined cycles are declined because their expiry session failed the
 producer's expiry-day convergence check — which fires when the ATM straddle still carried
 residual time value at the close. That is not independent of what a short straddle earns on
-that expiry, so the 17 surviving cycles are a biased sample of the 27, in a direction this
-package cannot measure or correct. The fix is producer-side. Until then, no BANKNIFTY
+that expiry, so the cycles that survive are a biased sample of the 27, in a direction this
+package cannot measure or correct. 17 of the 27 have an expiry session on disk; the last of
+those expires past the window edge, so 16 straddles were opened and 15 settled inside the
+run. The fix is producer-side. Until then, no BANKNIFTY
 verdict over this corpus is entitled to be read as a verdict over BANKNIFTY.
 
 **The lot size the run used is wrong on more than half the window, on purpose.** Per the
@@ -135,8 +137,8 @@ refusal that needed a code change. Two behaviours looked like defects and are no
 
 One **pre-existing** defect was measured rather than fixed, per its own deferral note:
 `epoch_for` is called with a session date where it expects an expiry. On BANKNIFTY's
-monthly cycle that costs the corroboration sentence in the contradiction message on 9
-sessions and never attaches a wrong epoch. `CORPUS.md` has the detail.
+monthly cycle that costs the corroboration sentence in the contradiction message on 13
+in-sample sessions and never attaches a wrong epoch. `CORPUS.md` has the detail.
 
 ## Reproducing
 
@@ -146,4 +148,10 @@ uv run python -m xman_research.models.bn_benchmark
 
 Writes `bn_m1_benchmark.json` and appends one trial to the canonical family log at
 `/home/qa/runtime/data/research/trial_log.db`. Re-running appends another trial — the log
-is append-only by construction — so re-run it only when the run's inputs have changed.
+is append-only by construction — so re-run it only when the run's inputs have changed. The
+gap reason is one of those inputs: it travels in the config provenance and is hashed into
+the fingerprint, so rewording it is a new run and not a cosmetic edit.
+
+A BANKNIFTY **candidate** extends this record with `HypothesisRecord.amend`, so the family
+trial count accumulates. Minting it fresh would open a third family at zero and inherit
+none of the comparisons made here.

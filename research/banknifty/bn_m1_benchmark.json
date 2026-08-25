@@ -70,7 +70,7 @@
       "2026-05-26"
     ],
     "quarantined": [],
-    "resolved_at": "2026-08-25T17:46:10.666483+00:00",
+    "resolved_at": "2026-08-25T18:14:59.782751+00:00",
     "session_sha256": {
       "2024-10-01": "2a9c3412086c782e986050a66b31250506cc1cf78cc26a326884b7c46d96e55c",
       "2024-10-03": "0db8ec868d1eb0d1be42669065c0cd8b731a70d973e3f7cdf363cf90f0cccf5e",
@@ -460,9 +460,9 @@
     "settlements": 30,
     "stale_mark_fraction": 0.13314447592067988
   },
-  "family_trial_count_after_run": 1,
-  "fingerprint": "b6929269e7844de6f578d8167147dca6cf993bc6588ef901df069fb7f6aeb9c1",
-  "gap_policy": "BN-M1 benchmark over BANKNIFTY 2024-10-01..2026-05-29. The NSE calendar expects 407 sessions; 353 are on disk and 54 are absent. 53 of the 54 are sessions the producer captured and QUARANTINED, so no parquet was ever published: 43 for premium-below-intrinsic candles alongside a rolling-spot vs index divergence above 0.5% (clustered Apr-Jul 2025), and 10 for expiry-day convergence failure \u2014 2024-10-09, 2024-11-13, 2025-01-30, 2025-02-27, 2025-04-24, 2025-05-29, 2025-08-28, 2025-12-30, 2026-03-30 and 2026-05-26. The 54th, 2024-11-20, is in no manifest at all: NSE did not hold a session (Maharashtra state election) and the calendar this store uses expects one. \n\nTHE TEN MATTER FAR MORE THAN THE FORTY-THREE, and not because of their number. Every one of them is a front-contract EXPIRY session, so for ten of the window's 27 expiry cycles the session at which the position would have cash-settled does not exist. The engine refuses to open a position it can never settle, which is correct and is not softened here: those cycles are declined at entry and counted as UNSETTLEABLE. This run therefore measures the premium over the 17 cycles the corpus can settle, not over 27, and the population is quarantine-selected rather than random \u2014 expiry-day convergence failure is most likely on the expiries where the ATM straddle held the most residual value, which is not independent of what a short straddle earns there. \n\nThe window is NOT narrowed to avoid the holes. Narrowing to a hole-free sub-range would fragment one benchmark into a dozen and would discard the 2024-11-13 weekly-to-monthly regime change, the 15/30/35 lot-size boundaries and the April-July 2025 cluster, all of which are the conditions a BANKNIFTY strategy would actually have traded through. Quarantined sessions are excluded, not read: accept_gaps is called without include_quarantined, so nothing the producer marked untrustworthy enters the P&L.",
+  "family_trial_count_after_run": 2,
+  "fingerprint": "105afff4cf3884b25fc34daf22f7a6199328ddb72085332a8534c793d64f6c3a",
+  "gap_policy": "BN-M1 benchmark over BANKNIFTY 2024-10-01..2026-05-29. The NSE calendar expects 407 sessions; 353 are on disk and 54 are absent. 53 of the 54 are sessions the producer captured and QUARANTINED, so no parquet was ever published: 42 for premium-below-intrinsic candles alongside a rolling-spot vs index divergence above 0.5% (clustered Apr-Jul 2025), 1 (2026-03-09) for the premium check alone with no divergence component, and 10 for expiry-day convergence failure \u2014 2024-10-09, 2024-11-13, 2025-01-30, 2025-02-27, 2025-04-24, 2025-05-29, 2025-08-28, 2025-12-30, 2026-03-30 and 2026-05-26. The 54th, 2024-11-20, is in no manifest at all: NSE did not hold a session (Maharashtra state election) and the calendar this store uses expects one. \n\nTHE TEN MATTER FAR MORE THAN THE FORTY-THREE, and not because of their number. Every one of them is a front-contract EXPIRY session, so for ten of the window's 27 expiry cycles the session at which the position would have cash-settled does not exist. The engine refuses to open a position it can never settle, which is correct and is not softened here: those cycles are declined at entry and counted as UNSETTLEABLE. This run therefore measures the premium over the cycles the corpus can settle \u2014 17 whose expiry session exists, of which the last expires past the window edge, so 16 are openable and fewer still settle inside the run \u2014 not over 27. The population is quarantine-selected rather than random: expiry-day convergence failure is most likely on the expiries where the ATM straddle held the most residual value, which is not independent of what a short straddle earns there. \n\nThe window is NOT narrowed to avoid the holes. Narrowing to a hole-free sub-range would fragment one benchmark into a dozen and would discard the 2024-11-13 weekly-to-monthly regime change, the 15/30/35 lot-size boundaries and the April-July 2025 cluster, all of which are the conditions a BANKNIFTY strategy would actually have traded through. Quarantined sessions are excluded, not read: accept_gaps is called without include_quarantined, so nothing the producer marked untrustworthy enters the P&L.",
   "holdout_first_date": "2026-06-01",
   "hypothesis_id": "h_1be59cf40faafce9635a4609b04e4f24",
   "hypothesis_name": "BN-M1 \u2014 BANKNIFTY near-expiry short ATM straddle (benchmark)",
@@ -703,7 +703,7 @@
       "target_notional": 1500000.0
     }
   },
-  "trial_id": "t_b2db4c77d5744410898db4d4a594ad97",
+  "trial_id": "t_418d0cf301e04595b16fa3c535746804",
   "underlying": "BANKNIFTY",
   "unverified_inputs": [
     "book.open_at_run_end:unverified",

@@ -19,10 +19,16 @@ family this record starts is BANKNIFTY's own, it starts at zero because no BANKN
 has ever been run, and this run is the first entry in it. Nothing that will be graded
 against a threshold reads either count today.
 
+**That only stays true if BANKNIFTY candidates amend this record.** ``count_family_trials``
+walks the amendment lineage, so a future BANKNIFTY candidate minted as a fresh record
+opens a *third* family at zero and inherits none of the comparisons made here — which is
+the move ``models/m1.py`` calls suspicious, arriving one step later. A BANKNIFTY candidate
+is an :meth:`HypothesisRecord.amend` of this record.
+
 **The window and why it starts where it does.** The in-sample corpus runs
 2024-08-01..2026-05-29 (see ``research/banknifty/README.md``); this run starts
 2024-10-01, the first date the securities-transaction-tax schedule is in force. Sessions
-before it are now costable — rate schedules extrapolate rather than refuse — but
+before it remain runnable — rate schedules extrapolate rather than refuse — but
 extrapolating STT *understates* the charge, because STT has only ever been revised upward.
 A benchmark that another run has to beat must not be flattered by construction, so the two
 months are given up instead. The lot-size measurement in
@@ -89,9 +95,10 @@ UNDERLYING = "BANKNIFTY"
 GAP_REASON = (
     "BN-M1 benchmark over BANKNIFTY 2024-10-01..2026-05-29. The NSE calendar expects 407 "
     "sessions; 353 are on disk and 54 are absent. 53 of the 54 are sessions the producer "
-    "captured and QUARANTINED, so no parquet was ever published: 43 for premium-below-"
+    "captured and QUARANTINED, so no parquet was ever published: 42 for premium-below-"
     "intrinsic candles alongside a rolling-spot vs index divergence above 0.5% (clustered "
-    "Apr-Jul 2025), and 10 for expiry-day convergence failure — 2024-10-09, 2024-11-13, "
+    "Apr-Jul 2025), 1 (2026-03-09) for the premium check alone with no divergence "
+    "component, and 10 for expiry-day convergence failure — 2024-10-09, 2024-11-13, "
     "2025-01-30, 2025-02-27, 2025-04-24, 2025-05-29, 2025-08-28, 2025-12-30, 2026-03-30 "
     "and 2026-05-26. The 54th, 2024-11-20, is in no manifest at all: NSE did not hold a "
     "session (Maharashtra state election) and the calendar this store uses expects one. "
@@ -101,8 +108,10 @@ GAP_REASON = (
     "cycles the session at which the position would have cash-settled does not exist. The "
     "engine refuses to open a position it can never settle, which is correct and is not "
     "softened here: those cycles are declined at entry and counted as UNSETTLEABLE. This "
-    "run therefore measures the premium over the 17 cycles the corpus can settle, not over "
-    "27, and the population is quarantine-selected rather than random — expiry-day "
+    "run therefore measures the premium over the cycles the corpus can settle — 17 whose "
+    "expiry session exists, of which the last expires past the window edge, so 16 are "
+    "openable and fewer still settle inside the run — not over 27. The population is "
+    "quarantine-selected rather than random: expiry-day "
     "convergence failure is most likely on the expiries where the ATM straddle held the "
     "most residual value, which is not independent of what a short straddle earns there. "
     "\n\n"
@@ -133,6 +142,13 @@ def bn_m1_record() -> HypothesisRecord:
             "settlement and charged full statutory costs, earns no return distinguishable "
             "from zero once the frictions it actually pays are deducted."
         ),
+        # THIS STRING IS ID-BEARING. The record's id is a hash over every field, so
+        # rewording it mints a different hypothesis and orphans the trials logged under
+        # the old one. `thresholds` is required non-empty because a graded record must
+        # write its criteria down before the run; a benchmark has none, and a prose value
+        # saying exactly that is preferred to a fake number that a gate could read.
+        # `DecisionGate` skips non-numeric thresholds, so this cannot be graded by
+        # accident, and `test_lot_size_banknifty.py` asserts no gate file binds this id.
         thresholds={
             "graded": (
                 "NONE. This record is a benchmark and an engine proof, not a candidate: "
@@ -195,16 +211,19 @@ def bn_m1_record() -> HypothesisRecord:
 
 def run_benchmark(*, json_out: Path | None = None) -> dict[str, Any]:
     """Run BN-M1 over the in-sample window and return its metrics payload."""
-    if BENCHMARK_END >= HOLDOUT_FIRST_DATE:
+    window = DataWindow(BENCHMARK_START, BENCHMARK_END)
+    # Checked on the window that actually reaches the store, not on the constants it was
+    # built from: the window is the only thing `run_backtest` resolves sessions against,
+    # so it is the only place a seal breach could arrive.
+    if window.end >= HOLDOUT_FIRST_DATE:
         raise ValueError(
-            f"benchmark window ends {BENCHMARK_END}, on or after the sealed holdout "
+            f"benchmark window ends {window.end}, on or after the sealed holdout "
             f"boundary {HOLDOUT_FIRST_DATE} — this run may not read holdout sessions."
         )
     store = SessionStore()
     strategy = ShortAtmStraddle()
     config = BacktestConfig(underlying=UNDERLYING, gap_reason=GAP_REASON)
     record = bn_m1_record()
-    window = DataWindow(BENCHMARK_START, BENCHMARK_END)
 
     with open_session(TRIAL_LOG_PATH) as session:
         session.register(record)

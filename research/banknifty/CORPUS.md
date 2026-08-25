@@ -113,7 +113,10 @@ the chance rate for even multiples. The coarsest candidate that explains essenti
 row is the estimate the evidence supports. 45 was tested and explains at most a third of
 any regime, which is chance, so it is not carried as a candidate.
 
-**Every one of the 509 sessions declares `LotSize: 30` in its refdata.** Nothing in the
+**Every one of the 392 published in-sample sessions declares `LotSize: 30` in its
+refdata.** The corpus holds 509 sessions, but the 61 from 2026-06-01 are sealed and no
+bundle of theirs was opened, so this claim is made over what was read and not over the
+corpus as a whole. Nothing in the
 corpus ever declares 15 or 35. This is the publish-time-dependence defect the NIFTY table
 already records: the corpus was published in one batch against the then-current scrip
 master, so one value is stamped onto four regimes. The refdata belongs to the producer
@@ -140,11 +143,20 @@ unchanged, because ties break to the coarsest value and a 75-lot session still r
 window in which it can be observed, because the post-2024 cycle is monthly and a session
 can sit 30 days before its front expiry rather than NIFTY's 7.
 
-Measured: on **9** in-sample sessions (2025-06-27, and 2025-07-16 .. 2025-07-30, whose
-front contract is the 35-lot 2025-07-31 expiry) the session-keyed lookup falls in the gap
-between two epochs and returns `None`, so the "this is a recorded regime" sentence is
-dropped from the contradiction message. It never attaches the *wrong* epoch anywhere in
-the corpus. The consequence is a weaker message, not a wrong number.
+Measured over all 392 in-sample sessions: the session-keyed lookup falls in the gap
+between two epochs and returns `None` on **48** of them, but a contradiction message is
+only produced where the declared lot size is actually contradicted, which narrows the
+consequence to **13**:
+
+| Sessions | Front contract | Effect |
+|---|---|---|
+| 2024-08-01 .. 2024-08-06 (4) | 2024-08-07, lot 15 | message loses its corroboration line |
+| 2025-06-27, 2025-07-16 .. 2025-07-30 (9) | 2025-07-31, lot 35 | message loses its corroboration line |
+| the other 35 | a 30-lot expiry | no effect — declared 30 is correct, so no message exists |
+
+It never attaches the *wrong* epoch anywhere in the corpus: checked on all 392 sessions by
+comparing the expiry-keyed answer against the session-keyed one, zero mismatches. The
+consequence is a weaker message, not a wrong number.
 
 ## Expiry regimes
 
@@ -197,7 +209,9 @@ The engine refuses to open a position it can prove it cannot close, so those cyc
 declined at entry and counted `UNSETTLEABLE`. That refusal is correct and was not softened.
 Two consequences a reader must carry:
 
-1. **The tradeable population is 17 of 27 cycles**, not 27.
+1. **The tradeable population is at most 17 of 27 cycles**, not 27 — and fewer in
+   practice: the last of the 17 expires past the window edge, so BN-M1 opened 16 straddles
+   and settled 15.
 2. **It is quarantine-selected, not random.** Expiry-day convergence failure is most likely
    on expiries where the ATM straddle retained the most residual value at the close — which
    is not independent of what a short straddle earns on that expiry. Any BANKNIFTY result

@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import datetime as dt
 import os
-import tempfile
 from itertools import pairwise
 from pathlib import Path
 
@@ -41,7 +40,7 @@ from xman_research.backtest import (
     run_backtest,
 )
 from xman_research.clock import ManualClock
-from xman_research.models.bn_benchmark import BENCHMARK_END, HOLDOUT_FIRST_DATE
+from xman_research.models.bn_benchmark import HOLDOUT_FIRST_DATE
 from xman_research.session_store import DEFAULT_CORPUS_ROOT, MissingSessionsError, SessionStore
 
 CORPUS_ROOT = Path(os.environ.get("XMAN_RESEARCH_CORPUS_ROOT") or DEFAULT_CORPUS_ROOT)
@@ -59,6 +58,11 @@ KNOWN_MISSING = dt.date(2024, 10, 9)
 RUN_START = dt.date(2024, 10, 14)
 RUN_END = dt.date(2024, 10, 18)
 EXPIRY = dt.date(2024, 10, 16)
+
+#: Every date this module reads is in October 2024, decades of trading days before the
+#: sealed holdout. Checked at import so a future edit of the constants above cannot slip
+#: past a corpus-absent skip.
+assert MONTH_END < HOLDOUT_FIRST_DATE, "this module may not read sealed holdout sessions"
 
 #: What the bars say the lot size was on this contract, against the 30 its refdata
 #: declares — the first BANKNIFTY regime in ``BANKNIFTY_LOT_SIZE_EPOCHS``.
@@ -83,9 +87,9 @@ def store() -> SessionStore:
 
 
 @pytest.fixture(scope="module")
-def result(store: SessionStore):
+def result(store: SessionStore, tmp_path_factory: pytest.TempPathFactory):
     log = TrialLog(
-        Path(tempfile.mkdtemp(prefix="xman_research_bn_e2e_")) / "research.db",
+        tmp_path_factory.mktemp("xman_research_bn_e2e") / "research.db",
         clock=ManualClock(dt.datetime(2026, 8, 25, 9, 15, tzinfo=dt.UTC)),
         code_version=StaticCodeVersion("0" * 40, dirty=False),
     )
@@ -204,6 +208,10 @@ def test_the_straddle_runs_five_sessions_and_settles_on_banknifty(result) -> Non
     # the window then ends on. That position is *open at run end*, not lost: it is marked at
     # its last price and the run says so, rather than letting the window's edge decide which
     # trades the strategy took.
+    #
+    # The symbols are a PIN on corpus content, not a derivation: they name the strike the
+    # 2024-10-17 ATM lookup selected. A republished corpus that moves that strike fails
+    # here, which is the intended signal — the run changed, and the reader should know.
     assert produced.open_at_end == (
         f"{UNDERLYING}-23Oct2024-51800-CE",
         f"{UNDERLYING}-23Oct2024-51800-PE",
@@ -234,10 +242,3 @@ def test_the_run_landed_as_one_row_in_the_trial_log(result) -> None:
     assert row.metric("sessions_run") == 5
     assert row.metric("fingerprint") == produced.fingerprint()
     assert row.params["strategy"] == "short_atm_straddle"
-
-
-def test_the_test_window_stays_inside_the_in_sample_range() -> None:
-    """The seal, asserted rather than remembered."""
-    assert MONTH_END < HOLDOUT_FIRST_DATE
-    assert RUN_END < HOLDOUT_FIRST_DATE
-    assert RUN_END <= BENCHMARK_END

@@ -72,7 +72,10 @@ reversible choice, and the runs are recorded here as evidence for whoever does r
 circulars.
 
 **BANKNIFTY says the same thing louder.** Its refdata declares **30** on every one of the
-509 captured sessions, and the bars carry four regimes: 15 through the 30/01/2025 expiry,
+392 published sessions dated 2024-08-01..2026-05-29 — the corpus holds 509 sessions, but
+the 61 from 2026-06-01 are a sealed holdout and no bundle of theirs was opened, so the
+claim is made only over what was read — and the bars carry four regimes: 15 through the
+30/01/2025 expiry,
 30 through 26/06/2025, **35** through 30/12/2025, and 30 again from 27/01/2026. Measured
 over the 392 published in-sample sessions (2024-08-01..2026-05-29), **221 of them
 contradict their own declared lot size** — see :data:`BANKNIFTY_LOT_SIZE_EPOCHS` for the
@@ -80,12 +83,13 @@ per-regime row counts and shares. Two things make this table encodable where NIF
 were not: the boundaries were measured against front expiries rather than session dates,
 and each falls on an expiry handover with no contract observed under two multipliers.
 
-**The 35 regime is why :data:`CANDIDATE_LOT_SIZES` grew.** Detection needs the true value
-in the candidate set: with 30 declared and 35 missing, the declared share (15.5%) fails the
-floor while the best remaining alternative (15, at 32%) fails the ceiling, so
-:attr:`LotSizeAudit.contradicts_declared` returns False and the session runs unstamped.
-That is the one failure mode this module exists to prevent, and it was live for 102
-sessions.
+**The 35 regime is the reason :data:`CANDIDATE_LOT_SIZES` must contain 35.** Detection
+requires the true multiplier among the candidates: under a declared 30, a 35-lot regime
+yields a declared share of ~15% and a best alternative of 15 at ~32%, so with 35 absent
+neither the floor nor the ceiling fires,
+:attr:`LotSizeAudit.contradicts_declared` is False, and 102 sessions whose declared lot
+size does not describe their own bars run unstamped. That is the one failure mode this
+module exists to prevent.
 
 **A related defect, reported and not fixed here.** :func:`epoch_for` takes a parameter
 named ``expiry``, but its only production caller — :meth:`LotSizeAudit.contradiction_message`
@@ -95,11 +99,15 @@ whether the epoch is session-keyed or expiry-keyed is a semantic change to a fro
 dataclass and belongs in its own change, with the owner's call. **BANKNIFTY widens the
 window in which it is observable** — its post-2024 cycle is monthly, so a session sits up
 to 30 days before its front expiry rather than NIFTY's 7. Measured against the in-sample
-corpus the consequence is bounded and one-directional: on 9 sessions (2025-06-27 and
-2025-07-16..2025-07-30, whose front contract is the 35-lot 31/07/2025 expiry) the
-session-keyed lookup lands in the gap between two epochs and returns ``None``, dropping the
-"this is a recorded regime" line from :meth:`LotSizeAudit.contradiction_message`. It never
-attaches the *wrong* epoch anywhere in the corpus. A missing corroboration line is a
+corpus the consequence is bounded and one-directional. The session-keyed lookup lands in
+the gap between two epochs on 48 in-sample sessions, but a message is only produced where
+the declared lot size is contradicted, which narrows it to **13**: 2024-08-01..2024-08-06
+(front contract the 15-lot 07/08/2024 expiry) and 2025-06-27 plus 2025-07-16..2025-07-30
+(front contract the 35-lot 31/07/2025 expiry). On those the "this is a recorded regime"
+line is dropped from :meth:`LotSizeAudit.contradiction_message`. The other 35 sessions sit
+before a 30-lot expiry, where the declared value is right and no message is generated at
+all. It never attaches the *wrong* epoch anywhere in the corpus — checked on all 392
+in-sample sessions, zero mismatches. A missing corroboration line is a
 weaker message, not a wrong number.
 
 The cause is publish-time dependence, the same class already fixed for symbols on the
@@ -166,12 +174,12 @@ __all__ = [
 #: has not seen is still *detected* — reporting "no candidate explains this" is a better
 #: failure than silently accepting the declared value.
 #:
-#: **35 is load-bearing and its absence was a silent hole.** BANKNIFTY's refdata declares
-#: 30 on every session, and across the 102 sessions whose front contract expires between
-#: 2025-07-31 and 2025-12-30 the bars divide by 35 alone. Without 35 among the candidates
-#: the declared value explains 15.5% of rows — far under :data:`_DECLARED_FLOOR` — while
-#: the best available alternative (15, at 32%) is far under :data:`_ALTERNATIVE_CEILING`,
-#: so :attr:`LotSizeAudit.contradicts_declared` stays False and those sessions run
+#: **35 is load-bearing.** BANKNIFTY's refdata declares 30 on every session, and across
+#: the 102 sessions whose front contract expires between 2025-07-31 and 2025-12-30 the
+#: bars divide by 35 alone. Drop 35 from this tuple and the declared value explains 15.5%
+#: of those rows — far under :data:`_DECLARED_FLOOR` — while the best remaining
+#: alternative (15, at 32%) is far under :data:`_ALTERNATIVE_CEILING`, so
+#: :attr:`LotSizeAudit.contradicts_declared` stays False and those sessions run
 #: **unstamped**. A candidate set that cannot name a regime cannot convict one.
 #:
 #: 45 was measured over the same corpus and explains at most 33% of any regime's rows, a
@@ -342,10 +350,10 @@ BANKNIFTY_LOT_SIZE_EPOCHS: tuple[LotSizeEpoch, ...] = (
             "Measured over the 102 published corpus sessions whose front contract expires "
             "between 31/07/2025 and 30/12/2025 (6 expiries, 1,469,277 positive-volume "
             "option rows): 100.00% of rows divide by 35 and nothing else comes close — "
-            "32.11% by 15, 15.51% by the declared 30, 9.97% by 45. This is the regime the "
-            "candidate set could not name before 35 was added to it: with 30 declared and "
-            "35 absent from CANDIDATE_LOT_SIZES, no alternative clears the ceiling and "
-            "every one of these 102 sessions runs unstamped."
+            "32.11% by 15, 15.51% by the declared 30, 9.97% by 45. Detecting this regime "
+            "requires 35 among CANDIDATE_LOT_SIZES: under a declared 30 the declared share "
+            "sits below the floor while the best alternative without 35 — 15, at 32% — "
+            "sits below the ceiling, so neither test fires and the session runs unstamped."
         ),
     ),
     LotSizeEpoch(

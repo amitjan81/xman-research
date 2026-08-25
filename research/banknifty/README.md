@@ -12,7 +12,10 @@ get to choose them while looking at a result.
 | **Holdout — sealed** | **2026-06-01 .. 2026-08-25** | **60 published (1 quarantined)** |
 
 **The holdout is unread.** Counting its sessions in the manifest is allowed and is how the
-numbers above were obtained; loading a bar from it is not. It is spent once, by a
+numbers above were obtained. Opening **any file of a holdout session** is not — not a
+parquet, and not a `.refdata` bundle either: refdata carries the ATM±10 strike ladder,
+which discloses that session's spot level to within about 1000 points. "Bar" is too narrow
+a word for what the seal covers. It is spent once, by a
 pre-registered decision, and it is spent by nothing else — not by a benchmark, not by a
 sanity check, not by "just looking".
 
@@ -51,8 +54,9 @@ from the run it describes is worse than none. What it has to say, and what that 
 says:
 
 1. How many sessions are expected, present and absent for that exact window.
-2. That 43 of the absences are the premium-below-intrinsic / spot-divergence quarantines
-   clustered April-July 2025, and that the rest are expiry-day convergence failures.
+2. How the absences split by the producer's own reason: for the benchmark window, 42
+   premium-below-intrinsic-with-divergence quarantines clustered April-July 2025, 1
+   premium-only (2026-03-09), and 10 expiry-day convergence failures.
 3. **That ten of the absences are front-contract expiry sessions**, named, so a
    hold-to-expiry strategy cannot silently lose ten cycles. The engine declines those
    cycles as `UNSETTLEABLE`; the reason says so and the result counts them.
