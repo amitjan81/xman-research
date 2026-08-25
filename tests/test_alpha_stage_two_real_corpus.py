@@ -37,6 +37,11 @@ UNDERLYING = "NIFTY"
 HOLD = 3
 SCAN_AS_OF = "2026-04-24"
 
+#: A hold-3 position needs more calendar headroom than a hold-1 one, so it can only open on a
+#: session whose nearest listed expiry is far enough out to survive three sessions. The
+#: Wednesday after an expiry is such a session; the Friday before one is not.
+HOLD_3_AS_OF = "2026-04-15"
+
 pytestmark = pytest.mark.skipif(
     not (CORPUS_ROOT / UNDERLYING).is_dir(),
     reason=f"no captured corpus at {CORPUS_ROOT / UNDERLYING}",
@@ -358,3 +363,68 @@ def test_the_holdout_may_not_overlap_the_screened_window(tmp_path: Path) -> None
             holdout_first=dt.date(2026, 3, 1),
             holdout_end=dt.date(2026, 4, 30),
         )
+
+
+def test_the_scan_builds_an_admitted_template_at_the_hold_it_was_admitted_at(
+    tmp_path: Path,
+) -> None:
+    """An idea on real data, at a hold the template's own default is not.
+
+    The unconditional straddle declares a one-session hold and fires on every session, so
+    admitting it at three is what separates "the ranker reads the admitted point" from "the
+    ranker happens to agree with the declared default". The anchor record holds to cash
+    settlement and therefore reports no hold of its own, which is exactly the case the
+    admission guard permits a point to be named for.
+    """
+    decision = Path(__file__).resolve().parents[1] / "research" / "h1" / "decision.json"
+    library = TemplateLibrary(tmp_path / "templates.json")
+    template = default_registry().get("short_atm_straddle_hold_n")
+    assert template.hold_sessions == 1, "this test is only meaningful against a hold-1 default"
+    point = template.resolve({"hold_sessions": HOLD})
+    library.admit(
+        template=template,
+        decision_path=decision,
+        parameters=point,
+        by="e2e",
+        reason="the ranker must build at the admitted point, not the declared default",
+        override_reason="E2E fixture: the anchor record failed its gate",
+    )
+    library_path = library.save()
+
+    ideas_path = tmp_path / "ideas.json"
+    assert (
+        main(
+            [
+                "--library",
+                str(library_path),
+                "scan",
+                "--as-of",
+                HOLD_3_AS_OF,
+                "--universe",
+                UNDERLYING,
+                "--out",
+                str(ideas_path),
+                *["--corpus-root", str(CORPUS_ROOT)],
+            ]
+        )
+        == 0
+    )
+    sheet = json.loads(ideas_path.read_text())
+    assert sheet["ideas"], sheet["no_ideas_reason"]
+    idea = sheet["ideas"][0]
+    trade = idea["rationale"]["trade"]
+    assert idea["parameters"]["hold_sessions"] == HOLD
+    assert trade["hold_sessions"] == HOLD
+    assert f"{HOLD} session(s)" in trade["exit_rule"]
+    # The expiry invalidator is a statement about surviving the hold being proposed, so it
+    # must move with the admitted point rather than with the template's declared default.
+    expiry_rule = next(
+        rule
+        for rule in idea["rationale"]["invalidators"]
+        if rule["name"] == "contract_expires_inside_hold"
+    )
+    assert expiry_rule["threshold"] == float(HOLD)
+    assert idea["rationale"]["evidence_source"] == str(decision)
+    print(
+        f"\nhold-{HOLD} idea: {idea['template_id']}[{idea['parameter_key']}] score={idea['score']}"
+    )
