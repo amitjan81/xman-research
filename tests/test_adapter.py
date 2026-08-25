@@ -21,6 +21,7 @@ from xman_research import (
     ManualClock,
     StaticCodeVersion,
     TrialLog,
+    UnknownTrialError,
 )
 from xman_research.adapter import (
     costs_by_date,
@@ -128,7 +129,7 @@ def build_result(
     fills: tuple[FillRecord, ...] = (),
     settlements: tuple[SettlementRecord, ...] = (),
     days: tuple[DailyRecord, ...] = (),
-    trial_id: str = "t_constructed",
+    trial_id: str | None = "t_constructed",
     unverified: tuple[str, ...] = ("epoch_table.secondary_sourced",),
 ) -> BacktestResult:
     total = sum(record.costs.total for record in fills) + sum(
@@ -169,13 +170,23 @@ def full_result() -> BacktestResult:
 
 
 def adapt(result: BacktestResult, *, label: str) -> RunEvidence:
-    """Adapt against a log that knows the hypothesis but holds no row for this trial.
+    """Adapt against a log that holds this trial, which is the only shape that adapts.
 
-    An unregistered hypothesis raises rather than yielding ``None``: a hypothesis id the
-    log has never seen is a caller error, not a missing row, and the adapter lets that
-    through rather than converting it into a silently absent timestamp.
+    The row is appended here rather than left out because a ``trial_id`` that names no
+    row is now refused (issue #19) — it used to yield a silently absent timestamp, which
+    is what made a mistyped id indistinguishable from an unlogged run. These tests are
+    about costs, capital and passthrough, so they need a resolvable id and are not the
+    place to exercise the refusal; ``test_an_unresolvable_trial_id_is_refused`` is.
     """
     log, record = logged_hypothesis()
+    if result.trial_id is not None:
+        log.append_trial(
+            hypothesis_id=record.id,
+            params={},
+            data_window=DataWindow(DAY_ONE, DAY_THREE),
+            metrics={},
+            trial_id=result.trial_id,
+        )
     return evidence_from_result(result, session=log, hypothesis_id=record.id, label=label)
 
 
@@ -303,18 +314,38 @@ def test_run_at_comes_from_the_log_row_not_the_wall_clock() -> None:
     assert logged_run_at(log, record.id, row.trial_id) == row.created_at
 
 
-def test_an_unlogged_trial_yields_no_timestamp_rather_than_a_guess() -> None:
+def test_a_run_carrying_no_trial_id_yields_no_timestamp_rather_than_a_guess() -> None:
     """C6 refuses to grade a run that cannot say when it happened. Inventing one defeats that."""
+    log, record = logged_hypothesis()
+    result = build_result(
+        days=(daily(DAY_ONE, 1e6), daily(DAY_TWO, 1e6), daily(DAY_THREE, 1e6)),
+        trial_id=None,
+    )
+
+    assert logged_run_at(log, record.id, None) is None
+    assert (
+        evidence_from_result(result, session=log, hypothesis_id=record.id, label="x").run_at is None
+    )
+
+
+def test_an_unresolvable_trial_id_is_refused_rather_than_read_as_unlogged() -> None:
+    """Issue #19. A run that claims an id and cannot back it up is bad evidence, not absent.
+
+    This is the case the previous test used to cover, and covering both under one
+    assertion was the defect: a mistyped or foreign id produced exactly the observation
+    a run with no id at all produces, so the thresholds-predate-the-run check reverted to
+    the caller-typed ``run_at`` without saying so.
+    """
     log, record = logged_hypothesis()
     result = build_result(
         days=(daily(DAY_ONE, 1e6), daily(DAY_TWO, 1e6), daily(DAY_THREE, 1e6)),
         trial_id="t_never_logged",
     )
 
-    assert logged_run_at(log, record.id, "t_never_logged") is None
-    assert (
-        evidence_from_result(result, session=log, hypothesis_id=record.id, label="x").run_at is None
-    )
+    with pytest.raises(UnknownTrialError, match="names no trial in this log"):
+        logged_run_at(log, record.id, "t_never_logged")
+    with pytest.raises(UnknownTrialError):
+        evidence_from_result(result, session=log, hypothesis_id=record.id, label="x")
 
 
 # ------------------------------------------------------------------------------- passthrough

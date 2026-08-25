@@ -724,18 +724,22 @@ PERIODICITY_MISMATCH_STAMP = "increment.periods_per_year_mismatch"
 def _logged_created_at(
     session: ResearchSession, hypothesis_id: str, trial_id: str | None
 ) -> dt.datetime | None:
-    """The log's own ``created_at`` for ``trial_id``, if the log holds that trial."""
+    """The log's own ``created_at`` for ``trial_id``, or refuse.
+
+    ``None`` means the run carries no ``trial_id``, which is legitimate — the caller's
+    ``run_at`` is then all there is and the gate decides whether that is enough.
+
+    An id that is supplied and does not resolve raises. It used to fall back to
+    ``run_at``, which made a mistyped or foreign id look exactly like no id at all: the
+    thresholds-predate-the-run check reverted to trusting a caller-typed timestamp,
+    which is the thing resolving ``trial_id`` was added to stop. Which database is
+    canonical is still C4's question, but it is answered for this call by
+    ``ValidationConfig.trial_log_path`` — so "not in the configured log" is now a
+    statement this component can make and refuse on.
+    """
     if trial_id is None:
         return None
-    for record in session.log.family_trials(hypothesis_id):
-        if record.trial_id == trial_id:
-            return record.created_at
-    # A trial_id that names no row in this family falls back to the caller-typed run_at.
-    # That is a residual hole in the same check: a mistyped or foreign trial_id looks
-    # exactly like no trial_id at all. Closing it means deciding whether an unresolvable
-    # trial_id is a typo or a run from another log, which is C4's question about which
-    # database is canonical, not one this component can answer.
-    return None
+    return session.log.require_family_trial(hypothesis_id, trial_id).created_at
 
 
 def _reconcile_run_timestamp(
