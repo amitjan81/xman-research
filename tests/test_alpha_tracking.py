@@ -40,6 +40,7 @@ from xman_research.alpha.tracking import (
     VERDICT_WITHIN_TOLERANCE,
     ConflictingSheetError,
     IdeaLedger,
+    PresentedIdea,
     Settlement,
     apply_demotions,
     cusum_low,
@@ -841,3 +842,48 @@ def test_a_settlement_with_no_parameter_key_never_selects_by_an_empty_point(
 
     assert [report.parameter_key for report in reports] == [""]
     assert reports[0].card_mean_return_at_hold is None
+
+
+def _idea_sized(requested: int, granted: int) -> PresentedIdea:
+    return PresentedIdea(
+        as_of="2026-04-20",
+        template_id=TEMPLATE,
+        parameters={"hold_sessions": 1.0},
+        underlying=UNDERLYING,
+        rank=1,
+        score=1.0,
+        expected_edge=0.001,
+        granted_lots=granted,
+        hold_sessions=1,
+        legs=(),
+        generated_at="2026-04-20T18:00:00+00:00",
+        code_version="0" * 40,
+        requested_lots=requested,
+    )
+
+
+def test_a_capped_idea_is_scored_at_the_size_its_evidence_was_measured_at() -> None:
+    """The caps cut the lots, not the expectation, so realised is put back on that size.
+
+    Without this the drift on a capped idea is negative purely from sizing, and for a
+    positive expectation that bias points toward demotion — the one direction every other
+    bias in this module deliberately does not point.
+    """
+    assert _idea_sized(requested=4, granted=1).size_scale == 4.0
+    assert _idea_sized(requested=1, granted=1).size_scale == 1.0
+
+
+def test_an_unsized_idea_is_not_given_an_invented_ratio() -> None:
+    """Granted nothing, or a sheet that never said what was asked for: no ratio exists."""
+    assert _idea_sized(requested=4, granted=0).size_scale == 1.0
+    idea = _idea_sized(requested=4, granted=2)
+    assert PresentedIdea.from_dict({**idea.as_dict(), "requested_lots": None}).size_scale == 1.0
+
+
+def test_the_ratio_is_lots_not_notionals_so_a_two_legged_structure_is_not_halved() -> None:
+    """A straddle's notional sums both short legs; its lots do not.
+
+    Deriving the ratio from ``target_notional / notional`` would divide every straddle's
+    realised return by about two — a correction twice the size of the error it fixes.
+    """
+    assert _idea_sized(requested=2, granted=2).size_scale == 1.0

@@ -60,13 +60,15 @@ figure — a decision record whose runner does not report one — the promised e
 unscaled and the report says so in its reason rather than quietly comparing the two bases.
 
 **Realised is normalised to the size the evidence was measured at.** A ledger row's profit
-is earned at the lots the scan was granted, which the participation caps may have cut below
-what ``target_notional`` implies, while the card's figure comes from a run sized at that
-target. Left alone, a capped idea's realised return would be scaled down purely by sizing,
-and for a positive expectation that bias points *toward* demotion — the one direction the
-rest of this module's biases do not point. So realised is multiplied by
-``target_notional / notional``, both of which the sheet already carries on the trade, and an
-idea missing either is settled unscaled with that stated on the row.
+is earned at the lots the scan was *granted*, which the participation caps may have cut below
+the lots it *requested* at its target notional, while the card's figure comes from a run
+sized at that target. Left alone, a capped idea's realised return would be scaled down purely
+by sizing, and for a positive expectation that bias points *toward* demotion — the one
+direction the rest of this module's biases do not point. So realised is multiplied by
+``requested_lots / granted_lots``, both of which the sheet already carries, and an idea
+missing either is settled unscaled with that stated on the row. Lots and not notionals: a
+structure's notional is the sum over its short legs, so a straddle's ratio would carry a
+factor of two that has nothing to do with sizing.
 
 **Marks are gross of costs, which biases against demotion.** The admission card's figure is
 net of the statutory cost drag; a ledger row's is not. The realised number is therefore
@@ -287,22 +289,26 @@ class PresentedIdea:
     legs: tuple[Mapping[str, Any], ...]
     generated_at: str
     code_version: str
-    target_notional: float | None = None
-    """The notional the admission's evidence was measured at, as the sheet reported it."""
-    notional: float | None = None
-    """The notional the scan could actually size, after the participation caps bound."""
+    requested_lots: int | None = None
+    """Lots the strategy asked for at its target notional, before the caps bound."""
 
     @property
     def size_scale(self) -> float:
         """What a realised return must be multiplied by to be comparable with the card's.
 
-        ``1.0`` where the sheet reports no target or no achieved notional, or where the
-        scan was granted nothing: an idea that could not be sized has no ratio, and
-        inventing one would put a made-up number into the drift series.
+        The strategy asked for a number of lots at its target notional and the participation
+        caps granted some of them; the profit below is earned at the granted lots and the
+        evidence was measured at the requested ones, so the ratio of the two puts both on one
+        size. Lots rather than notionals, because a structure's notional sums its short legs
+        and a straddle's would divide the ratio by two.
+
+        ``1.0`` where the sheet reports no request, or where the scan was granted nothing:
+        an idea that could not be sized has no ratio, and inventing one would put a made-up
+        number into the drift series.
         """
-        if self.target_notional is None or self.notional is None or self.notional <= 0.0:
+        if self.requested_lots is None or self.granted_lots <= 0:
             return 1.0
-        return self.target_notional / self.notional
+        return self.requested_lots / self.granted_lots
 
     @property
     def parameter_key(self) -> str:
@@ -335,8 +341,7 @@ class PresentedIdea:
             "expected_edge": self.expected_edge,
             "granted_lots": self.granted_lots,
             "hold_sessions": self.hold_sessions,
-            "target_notional": self.target_notional,
-            "notional": self.notional,
+            "requested_lots": self.requested_lots,
             "legs": [dict(leg) for leg in self.legs],
             "generated_at": self.generated_at,
             "code_version": self.code_version,
@@ -354,8 +359,9 @@ class PresentedIdea:
             expected_edge=float(payload["expected_edge"]),
             granted_lots=int(payload["granted_lots"]),
             hold_sessions=int(payload["hold_sessions"]),
-            target_notional=_optional_float(payload.get("target_notional")),
-            notional=_optional_float(payload.get("notional")),
+            requested_lots=(
+                None if payload.get("requested_lots") is None else int(payload["requested_lots"])
+            ),
             legs=tuple(dict(leg) for leg in payload.get("legs") or ()),
             generated_at=str(payload["generated_at"]),
             code_version=str(payload["code_version"]),
@@ -1501,8 +1507,7 @@ def _presented_from_sheet_row(
         expected_edge=float(row["expected_edge"]),
         granted_lots=int(row["granted_lots"]),
         hold_sessions=int(trade["hold_sessions"]),
-        target_notional=_optional_float(trade.get("target_notional")),
-        notional=_optional_float(trade.get("notional")),
+        requested_lots=(None if row.get("requested_lots") is None else int(row["requested_lots"])),
         legs=tuple(dict(leg) for leg in trade.get("legs") or ()),
         generated_at=generated_at,
         code_version=code_version,
