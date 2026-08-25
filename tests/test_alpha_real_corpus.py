@@ -31,6 +31,15 @@ import pytest
 from xman_research.alpha.cli import main
 from xman_research.session_store import DEFAULT_CORPUS_ROOT
 
+#: Every admission in this file files the shipped H1 decision record, which reports a
+#: failed gate. `TemplateLibrary.admit` refuses to admit on unpassed evidence without a
+#: written override, and these tests need an ADMITTED template to have a ranker at all.
+RANKER_OVERRIDE = (
+    "test fixture: the anchor H1 record failed its gate. The ranker is under test "
+    "here, and it needs an ADMITTED template to propose anything at all."
+)
+
+
 CORPUS_ROOT = Path(os.environ.get("XMAN_RESEARCH_CORPUS_ROOT") or DEFAULT_CORPUS_ROOT)
 UNDERLYING = "NIFTY"
 #: Anchored to the repository, not to the working directory: a test that only passes
@@ -75,6 +84,8 @@ def seeded_library(tmp_path: Path) -> Path:
             "alpha-framework E2E",
             "--reason",
             "the anchor hypothesis's evidence, so the ranker has something to rank",
+            "--override-reason",
+            RANKER_OVERRIDE,
         ]
     )
     assert exit_code == 0

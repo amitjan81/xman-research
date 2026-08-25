@@ -162,6 +162,13 @@ def build_parser() -> argparse.ArgumentParser:
     seed.add_argument("--by", help="who is making this decision")
     seed.add_argument("--reason", help="why; defaults to a description of the source record")
     seed.add_argument("--notes", help="free text carried on the entry")
+    seed.add_argument(
+        "--override-reason",
+        help=(
+            "required with --admit when the decision record did not pass its gate; "
+            "recorded verbatim on the entry"
+        ),
+    )
 
     seed_screen = library_commands.add_parser(
         "seed-from-screen",

@@ -49,6 +49,15 @@ from xman_research.alpha.templates import (
 )
 from xman_research.session_store import SessionStore
 
+#: Every admission in this file files the shipped H1 decision record, which reports a
+#: failed gate. `TemplateLibrary.admit` refuses to admit on unpassed evidence without a
+#: written override, and these tests need an ADMITTED template to have a ranker at all.
+RANKER_OVERRIDE = (
+    "test fixture: the anchor H1 record failed its gate. The ranker is under test "
+    "here, and it needs an ADMITTED template to propose anything at all."
+)
+
+
 #: Anchored to the repository, not to the working directory: a test that only passes
 #: when pytest happens to be invoked from the repo root is a test with a hidden
 #: precondition.
@@ -75,6 +84,7 @@ def _library(tmp_path: Path, clock: ManualClock, *template_ids: str) -> Template
     registry = default_registry()
     for template_id in template_ids:
         library.admit(
+            override_reason=RANKER_OVERRIDE,
             template=registry.get(template_id),
             decision_path=DECISION_RECORD,
             by="tester",
@@ -139,6 +149,7 @@ def _two_templates_of_different_strength(
     library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
     for template_id in ("short_atm_straddle_hold_n", "a_weaker_sibling"):
         library.admit(
+            override_reason=RANKER_OVERRIDE,
             template=registry.get(template_id),
             decision_path=DECISION_RECORD,
             by="tester",
@@ -249,6 +260,7 @@ def test_a_tie_breaks_on_template_id_then_product(
     library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
     for template_id in ("short_atm_straddle_hold_n", "a_twin_of_the_benchmark"):
         library.admit(
+            override_reason=RANKER_OVERRIDE,
             template=registry.get(template_id),
             decision_path=DECISION_RECORD,
             by="tester",
