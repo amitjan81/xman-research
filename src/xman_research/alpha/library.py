@@ -647,12 +647,27 @@ class TemplateLibrary:
         made against a version somebody else has since added to. It is a check, not a lock —
         see the module docstring for exactly what that leaves open.
 
+        The comparison runs through :meth:`AdmissionRecord.from_dict`, so adding an optional
+        field to an entry does not make every previously written library unappendable.
+
         The write goes to a temp file and is renamed into place, so a reader never observes
         a partially written library.
         """
         if self._path.exists():
-            stored = json.loads(self._path.read_text()).get("entries") or []
+            raw = json.loads(self._path.read_text()).get("entries") or []
             mine = [entry.as_dict() for entry in self._entries]
+            # Compared through the reader, not as raw JSON. An entry written before an
+            # optional field existed carries no key for it while a freshly serialised one
+            # carries an explicit null; the two describe the same admission, and a raw
+            # comparison would report a concurrent writer who was never there. Round-tripping
+            # puts both sides in the same shape, so the check answers the question it asks.
+            try:
+                stored = [AdmissionRecord.from_dict(row).as_dict() for row in raw]
+            except (KeyError, TypeError, ValueError) as error:
+                raise LibraryFileError(
+                    f"the library at {self._path} holds an entry this reader cannot "
+                    f"deserialise, so it cannot be appended to: {error}"
+                ) from error
             if len(stored) > len(mine) or stored != mine[: len(stored)]:
                 raise AppendOnlyLibraryError(
                     f"the library at {self._path} holds {len(stored)} entries that are not "

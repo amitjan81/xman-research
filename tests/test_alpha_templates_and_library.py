@@ -23,6 +23,7 @@ from xman_research.alpha.library import (
     DecisionRecordError,
     EvidenceCard,
     LibraryFileError,
+    MeasuredHoldMismatchError,
     TemplateLibrary,
     UnpassedEvidenceError,
 )
@@ -969,3 +970,94 @@ def test_an_exit_skips_a_leg_the_session_no_longer_lists_and_closes_the_rest() -
     intents = _exit_intents(session, book, "g")
     assert [intent.trading_symbol for intent in intents] == [listed.contract.trading_symbol]
     assert {intent.leg_group for intent in intents} == {"g"}
+
+
+def test_saving_over_entries_written_before_an_optional_field_existed_still_appends(
+    tmp_path: Path, clock: ManualClock, registry: TemplateRegistry
+) -> None:
+    """Adding an optional field must not make every library written before it unappendable.
+
+    The append-only check compares stored entries against what is about to be written. Raw,
+    an older entry has no key for a newly added optional field while a fresh one has an
+    explicit null, so the two would differ and `save` would report a concurrent writer that
+    never existed.
+    """
+    path = tmp_path / "older.json"
+    library = TemplateLibrary(path, clock=clock)
+    library.admit(
+        template=registry.get("short_atm_straddle_hold_n"),
+        decision_path=DECISION_RECORD,
+        by="first",
+        reason="one",
+        status=AdmissionStatus.CANDIDATE,
+    )
+    library.save()
+
+    # Strip the field, as a library written before it existed would be.
+    document = json.loads(path.read_text())
+    for entry in document["entries"]:
+        del entry["override_reason"]
+    path.write_text(json.dumps(document, indent=2, sort_keys=True))
+
+    reloaded = TemplateLibrary.load(path, clock=clock)
+    reloaded.admit(
+        template=registry.get("short_atm_strangle_hold_n"),
+        decision_path=DECISION_RECORD,
+        by="second",
+        reason="two",
+        status=AdmissionStatus.CANDIDATE,
+    )
+    assert reloaded.save() == path
+    assert len(TemplateLibrary.load(path).entries()) == 2
+
+
+def _record_measuring_hold(tmp_path: Path, hold: int) -> Path:
+    """A decision record whose in-sample run reports a hold of ``hold`` sessions."""
+    payload = json.loads(DECISION_RECORD.read_text())
+    payload["runs"]["in_sample"]["strategy_parameters"] = {"hold_sessions": hold}
+    path = tmp_path / f"decision_hold_{hold}.json"
+    path.write_text(json.dumps(payload))
+    return path
+
+
+def test_admit_refuses_a_record_measuring_a_hold_the_ranker_will_not_trade(
+    library: TemplateLibrary, registry: TemplateRegistry, tmp_path: Path
+) -> None:
+    """A hold-3 record's numbers describe a different trade from the hold-1 the ranker builds."""
+    with pytest.raises(MeasuredHoldMismatchError, match="two different trades"):
+        library.admit(
+            template=registry.get("short_atm_straddle_hold_n"),
+            decision_path=_record_measuring_hold(tmp_path, 3),
+            by="tester",
+            reason="evidence from a longer hold",
+            override_reason=OVERRIDE,
+        )
+    assert library.entries() == ()
+
+
+def test_the_card_carries_the_hold_the_record_measured_when_the_two_agree(
+    library: TemplateLibrary, registry: TemplateRegistry, tmp_path: Path
+) -> None:
+    entry = library.admit(
+        template=registry.get("short_atm_straddle_hold_n"),
+        decision_path=_record_measuring_hold(tmp_path, 1),
+        by="tester",
+        reason="evidence at the hold the ranker trades",
+        override_reason=OVERRIDE,
+    )
+    assert entry.evidence.hold_sessions == 1
+    assert entry.evidence.measured_strategy_parameters == {"hold_sessions": 1}
+
+
+def test_a_record_reporting_no_hold_at_all_falls_back_to_the_template(
+    library: TemplateLibrary, registry: TemplateRegistry
+) -> None:
+    """H1 measured a straddle held to cash settlement, which reports no hold to compare."""
+    entry = library.admit(
+        template=registry.get("short_atm_straddle_hold_n"),
+        decision_path=DECISION_RECORD,
+        by="tester",
+        reason="a differently shaped piece of evidence, judged by a human",
+        override_reason=OVERRIDE,
+    )
+    assert entry.evidence.hold_sessions == 1
