@@ -375,7 +375,7 @@ def _structure_intents(
     )
 
 
-def _exit_intents(book: BookView, session_date: dt.date, group: str) -> Sequence[TradeIntent]:
+def _exit_intents(session: SessionView, book: BookView, group: str) -> Sequence[TradeIntent]:
     """Close every open leg, as one group.
 
     Grouped for the same reason the entry is: closing one leg and not the other leaves the
@@ -385,13 +385,25 @@ def _exit_intents(book: BookView, session_date: dt.date, group: str) -> Sequence
     ``GROUP_INCOMPLETE`` rather than absorbed, so a run can report how often its holds were
     not the length it claims.
 
-    A contract expiring on ``session_date`` is skipped: the instrument master drops it on
-    its own expiry date, so no closing order can be expressed and the exchange cash-settles
-    it.
+    **A leg the session's instrument master no longer lists is skipped.** No closing order
+    can be expressed against a contract that is not in the universe — the engine refuses a
+    composed trading symbol outright, and it is right to, because composing one is how a
+    backtest comes to trade an instrument that was never listed. The position stays open and
+    the exchange cash-settles it, which the run's settlement count reports.
+
+    Two conditions, and the second is not redundant. A contract expiring on the session date
+    is dropped from that session's master, so the universe check alone would catch it; the
+    explicit expiry check states the rule the corpus is expected to follow, and keeps the
+    behaviour correct for a master that lists an expiring contract on its last day. Holds
+    longer than a session meet the other case routinely: a weekly contract can leave the
+    master a session or two before the date it expires on.
     """
     intents: list[TradeIntent] = []
+    session_date = session.session_date
     for position in book.positions():
         if position.contract.expiry == session_date:
+            continue
+        if session.universe.by_symbol(position.contract.trading_symbol) is None:
             continue
         lots = abs(position.units) // position.contract.lot_size
         if lots <= 0:
@@ -516,7 +528,7 @@ class HoldNSpread:
             self._last_counted = session.session_date
         if self._sessions_held < self.hold_sessions:
             return ()
-        return _exit_intents(book, session.session_date, f"{self._group_prefix()}-exit")
+        return _exit_intents(session, book, f"{self._group_prefix()}-exit")
 
     def feature(self, name: str, session_date: dt.date) -> float | None:
         """The supplied value of ``name`` on ``session_date``, or ``None`` if there is none."""

@@ -62,8 +62,8 @@ from xman_research.alpha.spec import ScreenSpecError, load_screen_spec
 from xman_research.alpha.templates import UnknownTemplateError, default_registry
 from xman_research.backtest.engine import BacktestConfig
 from xman_research.backtest.execution import ParticipationLimits
+from xman_research.evaluation import open_session
 from xman_research.session_store import CalendarCoverageError, SessionStore, SessionStoreError
-from xman_research.trial_log import TrialLog
 
 __all__ = ["build_parser", "main"]
 
@@ -272,12 +272,15 @@ def _screen(args: argparse.Namespace) -> int:
     store = SessionStore(root=args.corpus_root) if args.corpus_root else SessionStore()
     log_path = args.trial_log if args.trial_log else spec.trial_log_path
     builder = FeatureBuilder(store, decision_time=spec.decision_time)
-    log = TrialLog(log_path)
+    # `open_session` is this package's wiring boundary: the one place a SystemClock and a
+    # git version provider are constructed. Building a TrialLog directly here would make
+    # the CLI a second such place, free to disagree with the first about either.
+    research = open_session(log_path)
     try:
         sheet = ScreeningRun(
             store=store,
             registry=default_registry(),
-            trial_log=log,
+            trial_log=research.log,
             hypothesis=spec.hypothesis,
             window=spec.window,
             benchmark=spec.benchmark,
@@ -287,7 +290,7 @@ def _screen(args: argparse.Namespace) -> int:
             feature_builder=builder,
         ).run()
     finally:
-        log.close()
+        research.close()
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(sheet.as_dict(), indent=2, sort_keys=True) + "\n")
     print(

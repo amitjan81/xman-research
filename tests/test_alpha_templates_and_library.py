@@ -697,11 +697,22 @@ class _FakeBook:
         return self._positions
 
 
-class _FakeSession:
-    """The one attribute the conditioner gate and the hold counter read."""
+class _FakeUniverse:
+    """Answers the one question the exit rule asks: is this leg still listed today."""
 
-    def __init__(self, session_date: dt.date) -> None:
+    def __init__(self, positions=()) -> None:
+        self._listed = {position.contract.trading_symbol for position in positions}
+
+    def by_symbol(self, trading_symbol: str):
+        return trading_symbol if trading_symbol in self._listed else None
+
+
+class _FakeSession:
+    """The two attributes the conditioner gate, the hold counter and the exit rule read."""
+
+    def __init__(self, session_date: dt.date, positions=()) -> None:
         self.session_date = session_date
+        self.universe = _FakeUniverse(positions)
 
 
 def _walk(strategy, days, holding_after_entry: bool = True) -> list[str]:
@@ -716,7 +727,9 @@ def _walk(strategy, days, holding_after_entry: bool = True) -> list[str]:
     holding = False
     for day, entered in days:
         book = _FakeBook(() if not holding else _LIVE_SHORT)
-        intents = strategy.decide(session=_FakeSession(day), minute=None, book=book)
+        intents = strategy.decide(
+            session=_FakeSession(day, book.positions()), minute=None, book=book
+        )
         tags = {intent.tag for intent in intents}
         if "entry" in tags:
             seen.append("entry")
@@ -797,7 +810,10 @@ def test_a_position_that_settled_inside_the_hold_leaves_the_strategy_ready_to_re
     assert [intent.tag for intent in intents] == ["entry"]
     # ...and the counter restarted with it, rather than carrying the dead position's age.
     assert (
-        strategy.decide(session=_FakeSession(third), minute=None, book=_FakeBook(_LIVE_SHORT)) == ()
+        strategy.decide(
+            session=_FakeSession(third, _LIVE_SHORT), minute=None, book=_FakeBook(_LIVE_SHORT)
+        )
+        == ()
     )
 
 
@@ -806,10 +822,13 @@ def test_a_strategy_first_handed_a_book_it_did_not_open_still_exits() -> None:
     strategy = _AlwaysEnters(hold_sessions=1)
     first, second = _sessions(2)
     assert (
-        strategy.decide(session=_FakeSession(first), minute=None, book=_FakeBook(_LIVE_SHORT)) == ()
+        strategy.decide(
+            session=_FakeSession(first, _LIVE_SHORT), minute=None, book=_FakeBook(_LIVE_SHORT)
+        )
+        == ()
     )
     intents = strategy.decide(
-        session=_FakeSession(second), minute=None, book=_FakeBook(_LIVE_SHORT)
+        session=_FakeSession(second, _LIVE_SHORT), minute=None, book=_FakeBook(_LIVE_SHORT)
     )
     assert [intent.tag for intent in intents] == ["exit"]
 
@@ -838,7 +857,7 @@ def test_the_exit_buys_back_every_short_as_one_group_and_skips_a_contract_expiri
             position("NIFTY-B-CE", exit_day),
         )
     )
-    intents = _exit_intents(book, exit_day, "g")
+    intents = _exit_intents(_FakeSession(exit_day, book.positions()), book, "g")
     assert {intent.trading_symbol for intent in intents} == {"NIFTY-A-CE", "NIFTY-A-PE"}
     assert len({intent.leg_group for intent in intents}) == 1
     assert all(intent.side is Side.BUY for intent in intents)
