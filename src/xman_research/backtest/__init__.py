@@ -86,16 +86,22 @@ from xman_research.backtest.market import (
     SessionView,
 )
 from xman_research.backtest.settlement import (
+    METHOD_LAST_UNDERLYING_PRINT,
+    METHOD_MEAN_UNDERLYING_MINUTE_CLOSE,
     SETTLEMENT_RULES,
+    OptionImpliedSettlement,
     SettlementRule,
     SettlementValue,
     SettlementWindowError,
+    option_implied_settlement,
     settlement_rule_for,
     settlement_value,
 )
 from xman_research.backtest.strategies import ShortAtmStraddle
 
 __all__ = [
+    "METHOD_LAST_UNDERLYING_PRINT",
+    "METHOD_MEAN_UNDERLYING_MINUTE_CLOSE",
     "NIFTY_LOT_SIZE_EPOCHS",
     "SETTLEMENT_RULES",
     "BacktestConfig",
@@ -117,6 +123,7 @@ __all__ = [
     "LotSizeAudit",
     "LotSizeEpoch",
     "MarginRequirement",
+    "OptionImpliedSettlement",
     "OptionType",
     "ParticipationLimits",
     "RateLookup",
@@ -139,6 +146,7 @@ __all__ = [
     "apply_participation_caps",
     "audit_lot_size",
     "epoch_for",
+    "option_implied_settlement",
     "run_backtest",
     "settlement_rule_for",
     "settlement_value",
