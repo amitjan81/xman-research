@@ -13,6 +13,7 @@ structurally; this file checks that the *new* reporting surface reads from the l
 from __future__ import annotations
 
 import datetime as dt
+import math
 from pathlib import Path
 
 import pytest
@@ -31,7 +32,11 @@ from xman_research import (
 from xman_research.adapter import logged_run_at
 from xman_research.validation.decision import _logged_created_at
 from xman_research.validation.series import ReturnSeries
-from xman_research.validation.statistics import SelectionUniverse, deflated_sharpe_ratio
+from xman_research.validation.statistics import (
+    SelectionUniverse,
+    deflated_sharpe_ratio,
+    probabilistic_sharpe_ratio,
+)
 
 WINDOW = DataWindow(dt.date(2025, 1, 1), dt.date(2025, 6, 30))
 
@@ -323,3 +328,41 @@ def test_the_log_is_still_append_only_after_all_of_this(
                 "'{\"sharpe\": 99}', outcome FROM trials"
             )
         assert log.count_trials(record.id) == 1
+
+
+def test_a_family_where_every_row_recorded_no_result_still_reports_a_number(
+    session: ResearchSession,
+) -> None:
+    """Reachable, not hypothetical: H26 v1 is two rows and both of them raised.
+
+    Setting every row aside leaves no logged search at all, and the expected maximum of
+    zero draws does not exist. The no-selection case is the correct limit, so the second
+    number degenerates to the undeflated probabilistic Sharpe rather than raising.
+    """
+    record = hypothesis()
+    session.register(record)
+    for _ in range(2):
+        append(session.log, record, outcome=TrialOutcome.ERROR, error="TypeError: boom")
+
+    data = series_from([0.01, 0.012, -0.004, 0.02, 0.008, 0.011, -0.002, 0.015] * 12)
+    result = deflated_sharpe_ratio(data, universe=SelectionUniverse(session, record))
+
+    assert result.selection_size == 2
+    assert result.selection_size_excluding_no_result == 0
+    assert math.isfinite(result.value_excluding_no_result)
+    assert result.value_excluding_no_result == pytest.approx(probabilistic_sharpe_ratio(data))
+    assert result.value_excluding_no_result > result.value
+
+
+def test_a_single_surviving_row_is_the_no_selection_case(session: ResearchSession) -> None:
+    """One trial is no maximum to have been selected, so SR* is exactly 0."""
+    record = hypothesis()
+    session.register(record)
+    append(session.log, record, metrics={"sharpe_per_period": 0.02})
+    append(session.log, record, outcome=TrialOutcome.ERROR, error="boom")
+
+    data = series_from([0.01, 0.012, -0.004, 0.02, 0.008, 0.011, -0.002, 0.015] * 12)
+    result = deflated_sharpe_ratio(data, universe=SelectionUniverse(session, record))
+
+    assert result.selection_size_excluding_no_result == 1
+    assert result.value_excluding_no_result == pytest.approx(probabilistic_sharpe_ratio(data))

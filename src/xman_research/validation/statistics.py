@@ -344,9 +344,19 @@ def deflated_sharpe_ratio(
     if setting_aside == universe.size:
         value_excluding = value
     else:
+        # A family every one of whose rows recorded no result leaves setting_aside == 0,
+        # and it is reachable: H26 v1 is two rows and both of them raised with no metrics.
+        # The expected maximum of zero draws does not exist, and `expected_max_sharpe`
+        # rightly refuses it. One draw is the nearest thing that does exist and it is the
+        # correct reading of the limit — SR* = 0, no selection burden, so the number
+        # reported is the undeflated probabilistic Sharpe. The *size* beside it is still
+        # the true 0, because that is what was counted; only the deflation is evaluated at
+        # the no-selection case, and reporting 1 there would misstate the log.
         value_excluding = _math.probabilistic_sharpe(
             observed=observed,
-            benchmark=_math.expected_max_sharpe(sharpe_variance=variance, trials=setting_aside),
+            benchmark=_math.expected_max_sharpe(
+                sharpe_variance=variance, trials=max(setting_aside, 1)
+            ),
             sample_length=sample_length,
             skew=skew,
             kurtosis=kurtosis,
