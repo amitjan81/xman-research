@@ -121,26 +121,21 @@ def test_a_short_settlement_window_is_refused_rather_than_averaged() -> None:
 
 
 def test_the_rule_in_force_is_selected_by_date() -> None:
-    """The acceptance criterion: expiry settles against the stored formula for that date."""
+    """The acceptance criterion: expiry settles against the stored formula for that date.
+
+    The two rows compute genuinely different statistics — a 30-minute mean before 3 August
+    2026, a single closing print after it — which is what makes selecting by date the point
+    rather than a formality. The post-auction row's own behaviour, its UNVERIFIED tier and
+    the corroboration that licenses it are held in ``tests/test_settlement_cas.py``.
+    """
     before = settlement_rule_for(dt.date(2026, 6, 9))
     after = settlement_rule_for(dt.date(2026, 8, 3))
 
     assert before.method == "mean_of_underlying_minute_close_over_window"
     assert before.implemented
-    assert after.method == "closing_auction_session_equilibrium_price"
-    assert not after.implemented
-
-
-def test_a_session_under_the_closing_auction_regime_refuses_to_settle() -> None:
-    """NSE changed the statistic on 3 Aug 2026 and this corpus cannot compute the new one.
-
-    Refusing is the whole value of a dated table. Silently applying the superseded rule
-    would produce a number that looks like a settlement and is not one.
-    """
-    session = _session(dt.date(2026, 8, 4), {}, base=23_000.0)
-
-    with pytest.raises(SettlementWindowError, match="closing_auction_session"):
-        settlement_value(session)
+    assert after.method == "last_underlying_print_in_closing_window"
+    assert after.implemented
+    assert after.method != before.method
 
 
 def test_settlement_rules_are_ordered_and_dated() -> None:
