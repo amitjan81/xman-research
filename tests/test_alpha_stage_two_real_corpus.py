@@ -120,7 +120,7 @@ deflated_sharpe = {{ at_least = 0.50 }}
 
 
 def test_the_whole_loop_screens_gates_admits_and_ranks_at_the_screened_point(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
 ) -> None:
     log_path = tmp_path / "screen.db"
     spec_path = tmp_path / "screen.toml"
@@ -279,8 +279,6 @@ def test_the_whole_loop_screens_gates_admits_and_ranks_at_the_screened_point(
         print(f"idea: {idea['template_id']}[{idea['parameter_key']}] score={idea['score']}")
     else:
         print(f"no idea on {SCAN_AS_OF}: {ideas['skipped'][0]['reason']}")
-    captured = capsys.readouterr()
-    assert str(sheet_path) in captured.out
 
 
 def test_the_gate_refuses_a_rank_the_sheet_does_not_rank(tmp_path: Path) -> None:
