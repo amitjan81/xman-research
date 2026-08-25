@@ -53,7 +53,9 @@ from xman_research.alpha.features import (
 from xman_research.alpha.library import EvidenceCard
 from xman_research.alpha.templates import (
     HOLD_SESSIONS,
+    StrategyTemplate,
     TemplateRegistry,
+    parameter_key,
 )
 from xman_research.backtest.engine import BacktestConfig, BacktestResult, run_backtest
 from xman_research.clock import Clock, SystemClock
@@ -79,7 +81,9 @@ __all__ = [
     "ScreeningRun",
     "ScreeningRunError",
     "evidence_card_from_screen",
+    "feature_pass",
     "load_screen_sheet",
+    "replace_gap_reason",
 ]
 
 SCREEN_SHEET_SCHEMA_VERSION = 1
@@ -201,8 +205,7 @@ class CandidateInstance:
         same instance carries the same name in a later screen whose grid was reordered or
         extended around it.
         """
-        stated = ",".join(f"{name}={value:g}" for name, value in sorted(self.params.items()))
-        return f"{self.template_id}@{self.underlying}[{stated}]"
+        return f"{self.template_id}@{self.underlying}[{parameter_key(self.params)}]"
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -555,26 +558,13 @@ class ScreeningRun:
         are absent, so every conditioned instance declines to enter on it — the safe
         direction :class:`~xman_research.alpha.templates.HoldNSpread` documents.
         """
-        resolution = self._store.resolve(underlying, self._window.start, self._window.end)
-        refs = (
-            resolution.accept_gaps(self._gaps_reason)
-            if self._gaps_reason is not None
-            else resolution.sessions()
+        return feature_pass(
+            store=self._store,
+            features=self._features,
+            underlying=underlying,
+            window=self._window,
+            gaps_reason=self._gaps_reason,
         )
-        series: dict[str, dict[dt.date, float]] = {}
-        regimes: dict[dt.date, str | None] = {}
-        featureless: list[dt.date] = []
-        for ref in refs:
-            try:
-                frame = self._features.build(underlying, ref.session_date)
-            except (AsOfNotASessionError, InsufficientHistoryError, SessionStoreError):
-                featureless.append(ref.session_date)
-                continue
-            regimes[ref.session_date] = frame.regime.tag
-            for name, feature in frame.features.items():
-                if feature.value is not None:
-                    series.setdefault(name, {})[ref.session_date] = feature.value
-        return series, regimes, tuple(featureless)
 
     def _backtest(
         self, instance: CandidateInstance, series: Mapping[str, Mapping[dt.date, float]]
@@ -758,6 +748,39 @@ class ScreeningRun:
         }
 
 
+def feature_pass(
+    *,
+    store: SessionStore,
+    features: FeatureBuilder,
+    underlying: str,
+    window: DataWindow,
+    gaps_reason: str | None,
+) -> tuple[dict[str, dict[dt.date, float]], dict[dt.date, str | None], tuple[dt.date, ...]]:
+    """Every feature, for every session in ``window``, and the sessions that have none.
+
+    Shared by the screen and by the stage-two gate runner so that an instance graded at a
+    gate is conditioned on numerically the same series it was screened on. Two computations
+    of one feature would make a stage-two verdict a statement about a different strategy
+    from the one the sheet ranked.
+    """
+    resolution = store.resolve(underlying, window.start, window.end)
+    refs = resolution.accept_gaps(gaps_reason) if gaps_reason is not None else resolution.sessions()
+    series: dict[str, dict[dt.date, float]] = {}
+    regimes: dict[dt.date, str | None] = {}
+    featureless: list[dt.date] = []
+    for ref in refs:
+        try:
+            frame = features.build(underlying, ref.session_date)
+        except (AsOfNotASessionError, InsufficientHistoryError, SessionStoreError):
+            featureless.append(ref.session_date)
+            continue
+        regimes[ref.session_date] = frame.regime.tag
+        for name, feature in frame.features.items():
+            if feature.value is not None:
+                series.setdefault(name, {})[ref.session_date] = feature.value
+    return series, regimes, tuple(featureless)
+
+
 def replace_gap_reason(config: BacktestConfig, gaps_reason: str | None) -> BacktestConfig:
     """``config`` with its gap policy set to ``gaps_reason``, and every other field kept."""
     if config.gap_reason == gaps_reason:
@@ -879,7 +902,9 @@ def _ranked(rows: Sequence[ScreenedInstance]) -> tuple[ScreenedInstance, ...]:
     return (*measured, *unmeasured)
 
 
-def evidence_card_from_screen(sheet: ScreenSheet, instance_id: str, *, source: str) -> EvidenceCard:
+def evidence_card_from_screen(
+    sheet: ScreenSheet, instance_id: str, *, source: str, template: StrategyTemplate
+) -> EvidenceCard:
     """A library evidence card for one screened instance, pointing back at its sheet.
 
     **The card is stage-one evidence and says so on every field that could be mistaken for
@@ -895,7 +920,11 @@ def evidence_card_from_screen(sheet: ScreenSheet, instance_id: str, *, source: s
     the discount in the flattering direction.
     """
     row = sheet.row(instance_id)
+    # Resolved rather than the grid point as written: the card is compared against an
+    # admission's point, and only a resolved pair is comparable — see `parameter_key`.
+    point = template.resolve(row.instance.params)
     return EvidenceCard(
+        parameters=point,
         n_observations=row.n_observations,
         annualised_sharpe=row.annualised_sharpe,
         deflated_sharpe=None,
@@ -946,6 +975,10 @@ def evidence_card_from_screen(sheet: ScreenSheet, instance_id: str, *, source: s
             "alpha": (
                 f"{source}:instances[{instance_id}].alpha — the ranking statistic, an "
                 "annualised Sharpe of the spread over the sheet's benchmark"
+            ),
+            "parameters": (
+                f"{source}:instances[{instance_id}].instance.params, filled out with "
+                f"{row.instance.template_id}'s declared defaults [{parameter_key(point)}]"
             ),
         },
     )

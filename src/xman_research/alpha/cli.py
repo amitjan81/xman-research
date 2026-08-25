@@ -43,9 +43,16 @@ from xman_research.alpha.features import (
     DEFAULT_REGIME_LOOKBACK_SESSIONS,
     FeatureBuilder,
 )
+from xman_research.alpha.gate import (
+    DECISION_RECORD_NAME,
+    StageTwoGateError,
+    run_stage_two_gate,
+)
 from xman_research.alpha.library import (
     DEFAULT_LIBRARY_PATH,
     AdmissionStatus,
+    AdmittedParametersMismatchError,
+    AmbiguousParameterPointError,
     DecisionRecordError,
     LibraryFileError,
     TemplateLibrary,
@@ -147,6 +154,45 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    stage_two = commands.add_parser(
+        "gate", help="grade one screened instance against a pre-registered gate"
+    )
+    stage_two.add_argument("--sheet", required=True, type=Path, help="path to a screen sheet")
+    stage_two.add_argument(
+        "--rank", type=int, default=1, help="which ranked instance to grade, one-based"
+    )
+    stage_two.add_argument(
+        "--gate", required=True, type=Path, help="path to the pre-registered gate TOML"
+    )
+    stage_two.add_argument(
+        "--out", required=True, type=Path, help=f"directory to write {DECISION_RECORD_NAME} into"
+    )
+    stage_two.add_argument(
+        "--holdout-end",
+        required=True,
+        help=(
+            "last date of the holdout, YYYY-MM-DD. Required rather than defaulted: where the "
+            "unseen months end is a pre-registration, and the holdout is read only if the "
+            "in-sample verdict passes"
+        ),
+    )
+    stage_two.add_argument(
+        "--holdout-first",
+        help="first date of the holdout (default: the day after the screened window)",
+    )
+    stage_two.add_argument(
+        "--corpus-root", type=Path, help="override the session store's corpus root"
+    )
+    stage_two.add_argument(
+        "--trial-log",
+        type=Path,
+        help="where to append this run's trials; defaults to the log the sheet names",
+    )
+    stage_two.add_argument(
+        "--gaps-reason",
+        help="override the gap policy; defaults to the one the screened sheet recorded",
+    )
+
     library = commands.add_parser("library", help="inspect and change template admissions")
     library_commands = library.add_subparsers(dest="library_command", required=True)
 
@@ -207,6 +253,14 @@ def build_parser() -> argparse.ArgumentParser:
     demote.add_argument("--template", required=True)
     demote.add_argument("--by", required=True)
     demote.add_argument("--reason", required=True)
+    demote.add_argument(
+        "--point",
+        help=(
+            "which admitted parameter point to demote, as the key `library list` prints. "
+            "Required when the template is filed at more than one: a bare id names two "
+            "different trades"
+        ),
+    )
     return parser
 
 
@@ -218,14 +272,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _scan(args)
         if args.command == "screen":
             return _screen(args)
+        if args.command == "gate":
+            return _gate(args)
         return _library(args)
     except (
+        AdmittedParametersMismatchError,
+        AmbiguousParameterPointError,
         CalendarCoverageError,
         DecisionRecordError,
         LibraryFileError,
         ScreenSpecError,
         ScreeningRunError,
         SessionStoreError,
+        StageTwoGateError,
         UnknownTemplateError,
         UnpassedEvidenceError,
         ValueError,
@@ -317,6 +376,30 @@ def _screen(args: argparse.Namespace) -> int:
     return _EXIT_OK
 
 
+def _gate(args: argparse.Namespace) -> int:
+    """Stage two: one screened instance, one pre-registered gate, one decision record."""
+    run = run_stage_two_gate(
+        sheet_path=args.sheet,
+        gate_path=args.gate,
+        out_dir=args.out,
+        rank=args.rank,
+        holdout_end=dt.date.fromisoformat(args.holdout_end),
+        holdout_first=(dt.date.fromisoformat(args.holdout_first) if args.holdout_first else None),
+        store=SessionStore(root=args.corpus_root) if args.corpus_root else None,
+        trial_log_path=args.trial_log,
+        gaps_reason=args.gaps_reason,
+    )
+    print(run.decision.summary())
+    print()
+    print(f"{args.out / DECISION_RECORD_NAME}: {run.decision.outcome}")
+    print(
+        f"family trial count at decision: {run.trial_count} "
+        f"(the screen at {run.sheet_path} contributed {run.screen_trials})"
+    )
+    print(f"holdout spent: {run.holdout_spent}")
+    return _EXIT_OK
+
+
 def _seed_from_screen(
     args: argparse.Namespace, library: TemplateLibrary, registry: TemplateRegistry
 ) -> int:
@@ -327,9 +410,12 @@ def _seed_from_screen(
             f"{len(sheet.instances)} of them"
         )
     row = sheet.instances[args.rank - 1]
-    card = evidence_card_from_screen(sheet, row.instance.instance_id, source=str(args.sheet))
+    template = registry.get(row.instance.template_id)
+    card = evidence_card_from_screen(
+        sheet, row.instance.instance_id, source=str(args.sheet), template=template
+    )
     entry = library.seed_from_screen(
-        template=registry.get(row.instance.template_id),
+        template=template,
         evidence=card,
         sheet_path=args.sheet,
         by=args.by or "seed-from-screen",
@@ -351,6 +437,26 @@ def _seed_from_screen(
     return _EXIT_OK
 
 
+def _point_named(
+    library: TemplateLibrary, template_id: str, key: str | None
+) -> dict[str, float] | None:
+    """The parameter point ``key`` names, or ``None`` to let the library decide.
+
+    ``None`` is passed through rather than resolved here, so a template filed at two points
+    is refused by :meth:`TemplateLibrary.current` with its own message instead of by a
+    second check that could disagree with it.
+    """
+    if key is None:
+        return None
+    for entry in reversed(library.history(template_id)):
+        if entry.parameter_key == key:
+            return dict(entry.parameters)
+    raise ValueError(
+        f"template {template_id!r} has no entry at [{key}]; it is filed at "
+        f"{list(library.points(template_id))}"
+    )
+
+
 def _library(args: argparse.Namespace) -> int:
     registry = default_registry()
     library = TemplateLibrary.load(args.library)
@@ -362,28 +468,39 @@ def _library(args: argparse.Namespace) -> int:
         # invisible in the command that exists to find it.
         filed = {entry.template_id for entry in library.entries()}
         for template_id in sorted(set(registry.ids()) | filed):
-            entry = library.current(template_id)
-            status = str(entry.status) if entry else "unfiled"
-            suffix = (
-                f" — {entry.admitted_by} at {entry.admitted_at}: {entry.reason}"
-                if entry
-                else " — no entry in this library"
-            )
             unregistered = "" if template_id in registry else " [NOT REGISTERED]"
-            print(f"{template_id}: {status}{unregistered}{suffix}")
-            if entry is not None and entry.override_reason:
-                # On its own line and unabbreviated: an admission over unpassed evidence is
-                # the one thing in this listing a reader must not be able to skim past.
-                print(f"    ADMITTED OVER UNPASSED EVIDENCE: {entry.override_reason}")
+            points = library.points(template_id)
+            if not points:
+                print(f"{template_id}: unfiled{unregistered} — no entry in this library")
+                continue
+            # One line per point, not per template. A template admitted at two points is two
+            # admissions carrying two different sets of numbers, and a listing that showed
+            # only the latest would hide whichever the ranker is also proposing tonight.
+            latest = {row.parameter_key: row for row in library.history(template_id)}
+            for key in points:
+                entry = latest[key]
+                print(
+                    f"{template_id}[{key}]: {entry.status}{unregistered} — "
+                    f"{entry.admitted_by} at {entry.admitted_at}: {entry.reason}"
+                )
+                if entry.override_reason:
+                    # On its own line and unabbreviated: an admission over unpassed evidence
+                    # is the one thing in this listing a reader must not be able to skim past.
+                    print(f"    ADMITTED OVER UNPASSED EVIDENCE: {entry.override_reason}")
         return _EXIT_OK
 
     if args.library_command == "seed-from-screen":
         return _seed_from_screen(args, library, registry)
 
     if args.library_command == "demote":
-        entry = library.demote(template_id=args.template, by=args.by, reason=args.reason)
+        entry = library.demote(
+            template_id=args.template,
+            by=args.by,
+            reason=args.reason,
+            parameters=_point_named(library, args.template, args.point),
+        )
         library.save()
-        print(f"{entry.template_id}: demoted by {entry.admitted_by}")
+        print(f"{entry.template_id}[{entry.parameter_key}]: demoted by {entry.admitted_by}")
         return _EXIT_OK
 
     template = registry.get(args.template)

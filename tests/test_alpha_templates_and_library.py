@@ -19,11 +19,12 @@ from xman_research import ManualClock
 from xman_research.alpha.library import (
     AdmissionRecord,
     AdmissionStatus,
+    AdmittedParametersMismatchError,
+    AmbiguousParameterPointError,
     AppendOnlyLibraryError,
     DecisionRecordError,
     EvidenceCard,
     LibraryFileError,
-    MeasuredHoldMismatchError,
     TemplateLibrary,
     UnpassedEvidenceError,
 )
@@ -39,6 +40,7 @@ from xman_research.alpha.templates import (
     UnknownTemplateError,
     _exit_intents,
     default_registry,
+    parameter_key,
 )
 from xman_research.backtest.costs import Side
 from xman_research.backtest.engine import Strategy, TradeIntent
@@ -1024,7 +1026,7 @@ def test_admit_refuses_a_record_measuring_a_hold_the_ranker_will_not_trade(
     library: TemplateLibrary, registry: TemplateRegistry, tmp_path: Path
 ) -> None:
     """A hold-3 record's numbers describe a different trade from the hold-1 the ranker builds."""
-    with pytest.raises(MeasuredHoldMismatchError, match="two different trades"):
+    with pytest.raises(AdmittedParametersMismatchError, match="two different trades"):
         library.admit(
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=_record_measuring_hold(tmp_path, 3),
@@ -1061,3 +1063,133 @@ def test_a_record_reporting_no_hold_at_all_falls_back_to_the_template(
         override_reason=OVERRIDE,
     )
     assert entry.evidence.hold_sessions == 1
+
+
+# ------------------------------------------------- the admitted parameter point
+
+
+def _decision_record(
+    tmp_path: Path, *, template_parameters: dict[str, float] | None, hold_sessions: int = 3
+) -> Path:
+    """A minimal decision record in the shape the stage-two runner writes."""
+    run: dict[str, object] = {
+        "trial_id": "t-1",
+        "strategy": f"hold_{hold_sessions}_short_atm_straddle",
+        "strategy_parameters": {"hold_sessions": hold_sessions, "target_notional": 1_500_000.0},
+        "metrics": {},
+    }
+    if template_parameters is not None:
+        run["template_parameters"] = template_parameters
+    path = tmp_path / "decision.json"
+    path.write_text(
+        json.dumps(
+            {
+                "outcome": "fails_threshold",
+                "hypothesis_id": "h_point",
+                "in_sample": {
+                    "window": "2025-10-01..2026-03-31",
+                    "trial_id": "t-1",
+                    "metrics": {
+                        "gate_status": "failed",
+                        "sample_length": 119,
+                        "annualised_sharpe": 0.4,
+                        "deflated_sharpe": 0.1,
+                        "max_drawdown": 0.05,
+                        "mean_gross_return": 0.002,
+                        "mean_cost_drag": 0.0005,
+                        "unverified_inputs": [],
+                    },
+                },
+                "runs": {"in_sample": run},
+            }
+        )
+    )
+    return path
+
+
+def test_an_admission_carries_the_point_the_record_measured(tmp_path: Path) -> None:
+    """With no point supplied, the record's own point is the one admitted."""
+    template = default_registry().get("short_atm_straddle_hold_n")
+    point = template.resolve({"hold_sessions": 3})
+    record = _decision_record(tmp_path, template_parameters=point)
+    library = TemplateLibrary(tmp_path / "library.json")
+    entry = library.admit(
+        template=template,
+        decision_path=record,
+        by="tester",
+        reason="the record's own point",
+        override_reason="evidence failed its gate; admitted for this test",
+    )
+    assert entry.parameters == point
+    assert entry.parameter_key == parameter_key(point)
+    assert entry.evidence.parameters == point
+    assert entry.evidence.hold_sessions == 3
+
+
+def test_admitting_a_point_the_record_did_not_measure_is_refused(tmp_path: Path) -> None:
+    """The guard compares points, not just holds: a different structure width is caught."""
+    template = default_registry().get("short_atm_strangle_hold_n")
+    record = _decision_record(
+        tmp_path, template_parameters=template.resolve({"atr_multiple": 0.5, "hold_sessions": 3})
+    )
+    library = TemplateLibrary(tmp_path / "library.json")
+    with pytest.raises(AdmittedParametersMismatchError, match="two different trades"):
+        library.admit(
+            template=template,
+            decision_path=record,
+            by="tester",
+            reason="a wider strangle than the record measured",
+            parameters={"atr_multiple": 1.0, "hold_sessions": 3},
+            override_reason="evidence failed its gate",
+        )
+
+
+def test_a_record_with_no_point_still_has_its_hold_checked(tmp_path: Path) -> None:
+    """Weaker, and deliberately kept: a hold is all a point-less record can be checked on."""
+    template = default_registry().get("short_atm_straddle_hold_n")
+    record = _decision_record(tmp_path, template_parameters=None, hold_sessions=3)
+    library = TemplateLibrary(tmp_path / "library.json")
+    with pytest.raises(AdmittedParametersMismatchError, match="names no template"):
+        library.admit(
+            template=template,
+            decision_path=record,
+            by="tester",
+            reason="hold 1 against a hold-3 record",
+            parameters={"hold_sessions": 1},
+            override_reason="evidence failed its gate",
+        )
+
+
+def test_one_template_admitted_at_two_points_is_two_admissions(tmp_path: Path) -> None:
+    """The ranker instantiates each, so the library must not collapse them."""
+    template = default_registry().get("short_atm_straddle_hold_n")
+    library = TemplateLibrary(tmp_path / "library.json")
+    for hold in (1, 3):
+        point = template.resolve({"hold_sessions": hold})
+        library.admit(
+            template=template,
+            decision_path=_decision_record(
+                tmp_path / f"h{hold}", template_parameters=point, hold_sessions=hold
+            ),
+            by="tester",
+            reason=f"hold {hold}",
+            override_reason="evidence failed its gate",
+        )
+    admitted = library.admitted()
+    assert len(admitted) == 2
+    assert {entry.parameter_key for entry in admitted} == {
+        parameter_key(template.resolve({"hold_sessions": hold})) for hold in (1, 3)
+    }
+
+    # A bare id now names two different trades, and demoting one must not touch the other.
+    with pytest.raises(AmbiguousParameterPointError, match="parameter points"):
+        library.current(template.template_id)
+    library.demote(
+        template_id=template.template_id,
+        by="tester",
+        reason="hold 1 drifted",
+        parameters={"hold_sessions": 1},
+    )
+    survivors = library.admitted()
+    assert len(survivors) == 1
+    assert survivors[0].parameters["hold_sessions"] == 3

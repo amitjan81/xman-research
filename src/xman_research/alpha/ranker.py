@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from xman_research.alpha.explain import (
@@ -56,7 +56,7 @@ from xman_research.alpha.features import (
     InsufficientHistoryError,
 )
 from xman_research.alpha.library import AdmissionRecord, TemplateLibrary
-from xman_research.alpha.templates import StrategyTemplate, TemplateRegistry
+from xman_research.alpha.templates import StrategyTemplate, TemplateRegistry, parameter_key
 from xman_research.backtest.costs import Side
 from xman_research.backtest.engine import BookView, TradeIntent
 from xman_research.backtest.execution import ParticipationLimits, apply_participation_caps
@@ -124,10 +124,18 @@ class SkippedCandidate:
     underlying: str
     reason: str
     detail: str
+    parameters: Mapping[str, float] = field(default_factory=dict)
+    """The admitted point this skip is about — two points are two candidates."""
+
+    @property
+    def parameter_key(self) -> str:
+        return parameter_key(self.parameters)
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "template_id": self.template_id,
+            "parameters": {name: float(value) for name, value in sorted(self.parameters.items())},
+            "parameter_key": self.parameter_key,
             "underlying": self.underlying,
             "reason": self.reason,
             "detail": self.detail,
@@ -140,6 +148,8 @@ class Idea:
 
     rank: int
     template_id: str
+    parameters: Mapping[str, float]
+    """The admitted point this idea was built at — the trade, not the template's default."""
     underlying: str
     score: float
     expected_edge: float
@@ -163,10 +173,16 @@ class Idea:
         """
         return tuple(rule.name for rule in self.rationale.invalidators if rule.breached)
 
+    @property
+    def parameter_key(self) -> str:
+        return parameter_key(self.parameters)
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "rank": self.rank,
             "template_id": self.template_id,
+            "parameters": {name: float(value) for name, value in sorted(self.parameters.items())},
+            "parameter_key": self.parameter_key,
             "underlying": self.underlying,
             "score": self.score,
             "expected_edge": self.expected_edge,
@@ -297,9 +313,7 @@ class NightlyScan:
                 # template instead, so the sheet says which product was unreadable and why.
                 unreadable.append(error)
                 skipped.extend(
-                    SkippedCandidate(
-                        admission.template_id, underlying, SKIP_NO_FEATURES, str(error)
-                    )
+                    _skipped(admission, underlying, SKIP_NO_FEATURES, str(error))
                     for admission in admitted
                 )
                 continue
@@ -317,9 +331,12 @@ class NightlyScan:
             # difference.
             raise unreadable[0]
 
-        # Highest score first; ties break on template id then product so the order does not
-        # depend on which product happened to be scanned first.
-        ideas.sort(key=lambda idea: (-idea.score, idea.template_id, idea.underlying))
+        # Highest score first; ties break on template id, then the admitted point, then
+        # product, so the order does not depend on which product happened to be scanned
+        # first — nor, for a template admitted twice, on which point was filed first.
+        ideas.sort(
+            key=lambda idea: (-idea.score, idea.template_id, idea.parameter_key, idea.underlying)
+        )
         ranked = tuple(
             replace(idea, rank=position + 1) for position, idea in enumerate(ideas[: self._top_n])
         )
@@ -337,7 +354,12 @@ class NightlyScan:
                 "max_pct_of_open_interest": self._participation.max_pct_of_open_interest,
             },
             ideas=ranked,
-            skipped=tuple(sorted(skipped, key=lambda skip: (skip.underlying, skip.template_id))),
+            skipped=tuple(
+                sorted(
+                    skipped,
+                    key=lambda skip: (skip.underlying, skip.template_id, skip.parameter_key),
+                )
+            ),
             rests_on_unpassed_evidence=any(
                 idea.rationale.gate_status != "passed" for idea in ranked
             ),
@@ -356,8 +378,8 @@ class NightlyScan:
     ) -> Idea | SkippedCandidate:
         template_id = admission.template_id
         if template_id not in self._registry:
-            return SkippedCandidate(
-                template_id,
+            return _skipped(
+                admission,
                 underlying,
                 SKIP_TEMPLATE_NOT_REGISTERED,
                 (
@@ -367,8 +389,8 @@ class NightlyScan:
             )
         template = self._registry.get(template_id)
         if underlying not in template.products:
-            return SkippedCandidate(
-                template_id,
+            return _skipped(
+                admission,
                 underlying,
                 SKIP_PRODUCT_NOT_SUPPORTED,
                 (
@@ -383,8 +405,8 @@ class NightlyScan:
             else TriggerExplanation.from_conditioner(template.conditioner, frame)
         )
         if not trigger.fired:
-            return SkippedCandidate(
-                template_id,
+            return _skipped(
+                admission,
                 underlying,
                 SKIP_TRIGGER_DID_NOT_FIRE,
                 _trigger_detail(trigger),
@@ -394,8 +416,8 @@ class NightlyScan:
         regime_factor = card.regime_factor(frame.regime.tag)
         base_edge = card.mean_return_at_hold
         if base_edge is None:
-            return SkippedCandidate(
-                template_id,
+            return _skipped(
+                admission,
                 underlying,
                 SKIP_NO_EXPECTED_EDGE,
                 (
@@ -408,8 +430,8 @@ class NightlyScan:
             # Ranking it would put a trade at the top of a sheet that its own admission
             # evidence says loses money. The score is a ratio, so a negative numerator also
             # inverts the ordering: the worst candidate would sort best among the negatives.
-            return SkippedCandidate(
-                template_id,
+            return _skipped(
+                admission,
                 underlying,
                 SKIP_NON_POSITIVE_EDGE,
                 (
@@ -420,16 +442,16 @@ class NightlyScan:
             )
 
         if view is None:
-            return SkippedCandidate(
-                template_id,
+            return _skipped(
+                admission,
                 underlying,
                 SKIP_NO_SESSION_VIEW,
                 f"{underlying} has no readable session on {self._as_of}",
             )
         minute = frame.decision_minute
         if minute is None:
-            return SkippedCandidate(
-                template_id,
+            return _skipped(
+                admission,
                 underlying,
                 SKIP_NO_ENTRY,
                 (
@@ -439,15 +461,17 @@ class NightlyScan:
                 ),
             )
 
+        point = self._parameters(template, admission)
+        hold_sessions = template.hold_for(point)
         strategy = template.build(
-            self._parameters(template),
+            point,
             underlying,
             feature_series=self._feature_series(frame),
         )
         intents = strategy.decide(session=view, minute=minute, book=_EMPTY_BOOK)
         if not intents:
-            return SkippedCandidate(
-                template_id,
+            return _skipped(
+                admission,
                 underlying,
                 SKIP_NO_ENTRY,
                 (
@@ -460,12 +484,12 @@ class NightlyScan:
 
         granted, verdicts, detail = _feasibility(intents, view, minute, self._participation)
         if granted <= 0:
-            return SkippedCandidate(template_id, underlying, SKIP_INFEASIBLE, detail)
+            return _skipped(admission, underlying, SKIP_INFEASIBLE, detail)
 
         spot = view.spot_at(minute)
         if spot is None or spot <= 0:
-            return SkippedCandidate(
-                template_id,
+            return _skipped(
+                admission,
                 underlying,
                 SKIP_NO_MARGIN,
                 f"{underlying} has no positive spot at {minute.isoformat()}",
@@ -473,8 +497,8 @@ class NightlyScan:
 
         legs, notional, premium, requirement = self._position(intents, granted, view, minute, spot)
         if requirement.total <= 0:
-            return SkippedCandidate(
-                template_id,
+            return _skipped(
+                admission,
                 underlying,
                 SKIP_NO_MARGIN,
                 (
@@ -484,8 +508,8 @@ class NightlyScan:
             )
         margin_ratio = requirement.total / notional if notional > 0 else 0.0
         if margin_ratio <= 0:
-            return SkippedCandidate(
-                template_id,
+            return _skipped(
+                admission,
                 underlying,
                 SKIP_NO_MARGIN,
                 "the position has no positive notional to express margin against",
@@ -502,10 +526,10 @@ class NightlyScan:
             ),
             exit_rule=(
                 f"buy both legs back at {self._features.decision_time.isoformat()} after "
-                f"{template.hold_sessions} session(s); a contract that reaches its expiry "
+                f"{hold_sessions} session(s); a contract that reaches its expiry "
                 "first cash-settles instead"
             ),
-            hold_sessions=template.hold_sessions,
+            hold_sessions=hold_sessions,
             target_notional=_as_float(strategy.parameters().get("target_notional")),
             notional=notional,
             premium_received=premium,
@@ -528,9 +552,16 @@ class NightlyScan:
                 frame,
                 expiry=dt.date.fromisoformat(expiry) if expiry else None,
                 spot=spot,
+                hold_sessions=hold_sessions,
             ),
             regime=frame.regime,
+            parameters=point,
             extra_provenance={
+                "parameters": (
+                    f"the point this template is admitted at [{parameter_key(point)}], read "
+                    f"from {admission.decision_path}; the ranker builds the trade there and "
+                    "nowhere else"
+                ),
                 "expected_edge": (
                     "admission card mean_return_at_hold x regime factor "
                     f"{regime_factor:g} (see evidence.provenance for the card's own sources)"
@@ -553,6 +584,7 @@ class NightlyScan:
         return Idea(
             rank=0,
             template_id=template_id,
+            parameters=point,
             underlying=underlying,
             score=score,
             expected_edge=expected_edge,
@@ -567,14 +599,23 @@ class NightlyScan:
             rationale=rationale,
         )
 
-    def _parameters(self, template: StrategyTemplate) -> dict[str, float]:
-        """The template's declared defaults, with the scan's notional override applied.
+    def _parameters(
+        self, template: StrategyTemplate, admission: AdmissionRecord
+    ) -> dict[str, float]:
+        """The admitted parameter point, with the scan's notional override applied.
 
-        The override goes through :meth:`StrategyTemplate.resolve`, so a caller asking for a
-        size outside the declared range is refused rather than silently building a strategy
-        the admission evidence never measured.
+        **The point comes from the admission, not from the template's defaults.** The
+        evidence card's expected edge was measured at one point, and building at any other
+        would attach that number to a trade nothing measured — a hold-3 mean return behind a
+        hold-1 proposal. An entry filed before points were recorded carries none, and the
+        declared defaults are then the only point available.
+
+        ``target_notional`` is the one parameter a scan may move: it scales the position
+        without changing the trade, and every headline statistic on the card is a return
+        rather than an amount. The override goes through :meth:`StrategyTemplate.resolve`,
+        so a size outside the declared range is refused rather than silently built.
         """
-        supplied: dict[str, float] = {}
+        supplied = dict(admission.parameters)
         if self._target_notional is not None and "target_notional" in template.parameters:
             supplied["target_notional"] = self._target_notional
         return template.resolve(supplied)
@@ -656,6 +697,23 @@ class NightlyScan:
 #: decision rather than a list of candidates, and sizing against an existing book is a
 #: different problem with a different owner.
 _EMPTY_BOOK = BookView({}, 0.0)
+
+
+def _skipped(
+    admission: AdmissionRecord, underlying: str, reason: str, detail: str
+) -> SkippedCandidate:
+    """One skip, carrying the admission's own point.
+
+    Written once rather than at each of the dozen refusal sites: a skip that lost the point
+    would report two admissions of one template as two indistinguishable lines.
+    """
+    return SkippedCandidate(
+        template_id=admission.template_id,
+        underlying=underlying,
+        reason=reason,
+        detail=detail,
+        parameters=admission.parameters,
+    )
 
 
 def _feasibility(

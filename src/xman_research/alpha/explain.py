@@ -216,12 +216,19 @@ def invalidators_for(
     *,
     expiry: dt.date | None,
     spot: float | None,
+    hold_sessions: int | None = None,
 ) -> tuple[Invalidator, ...]:
     """The conditions under which this template's reasoning stops holding today.
 
     Derived from the same features the trigger read, so each is checkable against tomorrow's
     frame without any further judgement.
+
+    ``hold_sessions`` is the hold of the trade actually being proposed. It is supplied rather
+    than read off the template because a template admitted at a three-session hold proposes a
+    three-session trade whatever its declared default says, and the expiry invalidator is a
+    statement about the contract surviving *that* hold. Omitted, the declared default applies.
     """
+    hold = template.hold_sessions if hold_sessions is None else hold_sessions
     found: list[Invalidator] = []
 
     gap = frame.value("overnight_gap_return")
@@ -293,16 +300,16 @@ def invalidators_for(
             name="contract_expires_inside_hold",
             rule=(
                 "the contract sold reaches its expiry on or before the exit minute of a "
-                f"{template.hold_sessions}-session hold; a contract is dropped from the "
+                f"{hold}-session hold; a contract is dropped from the "
                 "instrument master on its own expiry date, so the buy-back cannot be "
                 "expressed, the position cash-settles instead, and the observation stops "
                 "being the hold the evidence measured"
             ),
             observed=sessions_left,
-            threshold=float(template.hold_sessions),
+            threshold=float(hold),
             # `<=`, not `<`: a contract expiring ON the exit session cannot be bought back
             # at all, which is exactly the outcome this invalidator warns about.
-            breached=sessions_left is not None and sessions_left <= template.hold_sessions,
+            breached=sessions_left is not None and sessions_left <= hold,
         )
     )
     return tuple(found)
@@ -314,6 +321,8 @@ class Rationale:
 
     schema_version: int
     template_id: str
+    parameters: Mapping[str, float]
+    """The admitted point the trade below was built at — half of what identifies it."""
     template_name: str
     underlying: str
     as_of: str
@@ -334,6 +343,7 @@ class Rationale:
         return {
             "schema_version": self.schema_version,
             "template_id": self.template_id,
+            "parameters": {name: float(value) for name, value in sorted(self.parameters.items())},
             "template_name": self.template_name,
             "underlying": self.underlying,
             "as_of": self.as_of,
@@ -362,6 +372,7 @@ class Rationale:
         trade: TradeSpec,
         invalidators: Sequence[Invalidator],
         regime: RegimeTag,
+        parameters: Mapping[str, float] | None = None,
         extra_provenance: Mapping[str, str] | None = None,
     ) -> Rationale:
         """Assemble a rationale, carrying the evidence card through verbatim.
@@ -398,6 +409,7 @@ class Rationale:
         return cls(
             schema_version=RATIONALE_SCHEMA_VERSION,
             template_id=template.template_id,
+            parameters=dict(parameters if parameters is not None else admission.parameters),
             template_name=template.name,
             underlying=frame.underlying,
             as_of=frame.as_of.isoformat(),

@@ -439,8 +439,15 @@ def test_a_screened_instance_seeds_the_library_as_a_candidate_and_never_as_admit
         candidates=[CandidateSpec("short_atm_strangle_hold_n", {"atr_multiple": (0.5,)})],
     )
     top = sheet.instances[0]
-    card = evidence_card_from_screen(sheet, top.instance.instance_id, source="sheet.json")
+    template = default_registry().get(top.instance.template_id)
+    card = evidence_card_from_screen(
+        sheet, top.instance.instance_id, source="sheet.json", template=template
+    )
 
+    # The card carries the resolved parameter point, which is what an admission is checked
+    # against — a card that named only its hold could not tell a half-ATR strangle from a
+    # full-ATR one.
+    assert card.parameters == template.resolve(top.instance.params)
     assert card.gate_status is None
     assert card.passed_gate is False
     assert card.deflated_sharpe is None

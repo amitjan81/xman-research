@@ -65,6 +65,7 @@ __all__ = [
     "TemplateRegistry",
     "UnknownTemplateError",
     "default_registry",
+    "parameter_key",
     "shipped_templates",
 ]
 
@@ -88,6 +89,23 @@ EMA20_Z_ABS = "ema20_z_abs"
 OVERNIGHT_GAP_SIGMAS = "overnight_gap_sigmas"
 SESSIONS_TO_NEAREST_EXPIRY = "sessions_to_nearest_expiry"
 DAY_OF_WEEK = "day_of_week"
+
+
+def parameter_key(params: Mapping[str, float]) -> str:
+    """A canonical name for one parameter point, stable across dict orderings.
+
+    **The identity of an admission is the template id plus this key**, so the same string
+    has to come out of a screened instance, an admission record and a nightly candidate.
+    Spelled once here, and formatted with ``%g`` so that a point read back from JSON as
+    ``3.0`` names the same key as the ``3`` that was written — two spellings of one hold
+    would otherwise register as two admissions of one template.
+
+    Compare only points that have been through :meth:`StrategyTemplate.resolve`. A grid
+    point carries the names the researcher listed and a resolved one carries every declared
+    parameter, so keying the two against each other reports a mismatch that is an artefact
+    of which defaults were spelled out.
+    """
+    return ",".join(f"{name}={float(value):g}" for name, value in sorted(params.items()))
 
 
 class UnknownTemplateError(KeyError):

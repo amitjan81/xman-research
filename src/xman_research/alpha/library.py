@@ -40,12 +40,12 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from xman_research.alpha.templates import StrategyTemplate
+from xman_research.alpha.templates import StrategyTemplate, parameter_key
 from xman_research.clock import Clock, SystemClock
 from xman_research.validation.decision import GateStatus, Outcome
 
@@ -57,11 +57,12 @@ __all__ = [
     "SCREENED_NOT_GATED",
     "AdmissionRecord",
     "AdmissionStatus",
+    "AdmittedParametersMismatchError",
+    "AmbiguousParameterPointError",
     "AppendOnlyLibraryError",
     "DecisionRecordError",
     "EvidenceCard",
     "LibraryFileError",
-    "MeasuredHoldMismatchError",
     "TemplateLibrary",
     "UnpassedEvidenceError",
 ]
@@ -98,12 +99,23 @@ class AppendOnlyLibraryError(RuntimeError):
     """The stored library is not a prefix of what is about to be written."""
 
 
-class MeasuredHoldMismatchError(ValueError):
-    """A decision record measured a hold the template the ranker would build does not trade.
+class AdmittedParametersMismatchError(ValueError):
+    """The point being admitted is not the point the evidence measured.
 
     Distinct from :class:`UnpassedEvidenceError`: the evidence may have passed everything
     it was graded against and still describe a different trade from the one about to carry
-    it. Admitting anyway would put a hold-N record's numbers behind hold-M proposals.
+    it. Admitting anyway would put a hold-3 record's numbers behind hold-1 proposals, or a
+    half-ATR strangle's numbers behind a full-ATR one.
+    """
+
+
+class AmbiguousParameterPointError(ValueError):
+    """A template named without a point, in a library that holds it at more than one.
+
+    Every entry is filed against ``(template_id, parameters)``, so a template can be live at
+    two points at once and a bare id then names two different trades. Refused rather than
+    resolved to the most recent entry: demoting the wrong point would leave the ranker
+    proposing exactly the idea somebody meant to stop.
     """
 
 
@@ -172,6 +184,14 @@ class EvidenceCard:
     cost_stamps: tuple[str, ...]
     regime_table: Mapping[str, float] | None
     provenance: Mapping[str, str]
+    parameters: Mapping[str, float] | None = None
+    """The resolved template parameter point this evidence was measured at, if it names one.
+
+    ``None`` means the source could not state a point — a decision record written by a
+    runner that does not build from a template, for instance. The hold is then all that is
+    recoverable, and :attr:`hold_sessions` carries it; :meth:`TemplateLibrary.admit` falls
+    back to comparing holds and says so.
+    """
 
     @property
     def passed_gate(self) -> bool:
@@ -212,12 +232,17 @@ class EvidenceCard:
             "cost_stamps": list(self.cost_stamps),
             "regime_table": dict(self.regime_table) if self.regime_table else None,
             "provenance": dict(self.provenance),
+            "parameters": dict(self.parameters) if self.parameters is not None else None,
         }
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> EvidenceCard:
         table = payload.get("regime_table")
+        point = payload.get("parameters")
         return cls(
+            parameters=(
+                {str(k): float(v) for k, v in point.items()} if isinstance(point, Mapping) else None
+            ),
             n_observations=payload.get("n_observations"),
             annualised_sharpe=payload.get("annualised_sharpe"),
             deflated_sharpe=payload.get("deflated_sharpe"),
@@ -317,6 +342,14 @@ class EvidenceCard:
             "window": f"{source}:in_sample.window",
             "measured_strategy": f"{source}:runs.in_sample.strategy",
             "measured_strategy_parameters": f"{source}:runs.in_sample.strategy_parameters",
+            "parameters": (
+                f"{source}:runs.in_sample.template_parameters"
+                if isinstance(measured.get("template_parameters"), Mapping)
+                else (
+                    "absent: the record names no template parameter point, so the hold above "
+                    "is the whole of what is recoverable about the trade it measured"
+                )
+            ),
             "cost_stamps": f"{source}:in_sample.metrics.unverified_inputs",
             "regime_table": (
                 "absent: the source record's epoch list partitions the window by statutory "
@@ -344,6 +377,7 @@ class EvidenceCard:
             cost_stamps=tuple(str(stamp) for stamp in metrics.get("unverified_inputs") or ()),
             regime_table=None,
             provenance=provenance,
+            parameters=_parameter_point(measured.get("template_parameters")),
         )
 
 
@@ -365,6 +399,14 @@ class AdmissionRecord:
     admitted_at: str
     admitted_by: str
     reason: str
+    parameters: Mapping[str, float] = field(default_factory=dict)
+    """The resolved parameter point the ranker must build this template at.
+
+    **The point is part of the entry's identity, not a detail on it.** One template admitted
+    at a three-session hold and at a one-session hold is two admissions carrying two
+    different sets of numbers, and the ranker instantiates each at its own point. Grouping
+    by :attr:`template_id` alone would silently keep whichever was filed last.
+    """
     notes: str | None = None
     override_reason: str | None = None
     """Why this admission was made over evidence that did not pass its gate.
@@ -374,9 +416,21 @@ class AdmissionRecord:
     beside it is exactly the state the override policy exists to prevent.
     """
 
+    @property
+    def parameter_key(self) -> str:
+        """The canonical name of this entry's point — half of the entry's identity."""
+        return parameter_key(self.parameters)
+
+    @property
+    def identity(self) -> tuple[str, str]:
+        """``(template_id, parameter_key)``: what makes two entries the same admission."""
+        return (self.template_id, self.parameter_key)
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "template_id": self.template_id,
+            "parameters": {name: float(value) for name, value in sorted(self.parameters.items())},
+            "parameter_key": self.parameter_key,
             "hypothesis_id": self.hypothesis_id,
             "decision_path": self.decision_path,
             "decision_outcome": self.decision_outcome,
@@ -392,8 +446,14 @@ class AdmissionRecord:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> AdmissionRecord:
+        """Read one entry back.
+
+        ``parameter_key`` in the document is **not** read into a field: it is derived from
+        ``parameters``, and a second stored copy could disagree with the point it names.
+        """
         return cls(
             template_id=str(payload["template_id"]),
+            parameters=_parameter_point(payload.get("parameters")) or {},
             hypothesis_id=_as_str(payload.get("hypothesis_id")),
             decision_path=str(payload["decision_path"]),
             decision_outcome=_as_str(payload.get("decision_outcome")),
@@ -460,28 +520,61 @@ class TemplateLibrary:
         """Every status change, oldest first."""
         return tuple(self._entries)
 
-    def history(self, template_id: str) -> tuple[AdmissionRecord, ...]:
-        return tuple(entry for entry in self._entries if entry.template_id == template_id)
+    def history(
+        self, template_id: str, *, parameters: Mapping[str, float] | None = None
+    ) -> tuple[AdmissionRecord, ...]:
+        """Every entry naming ``template_id``, narrowed to one point when one is given."""
+        rows = tuple(entry for entry in self._entries if entry.template_id == template_id)
+        if parameters is None:
+            return rows
+        wanted = parameter_key(parameters)
+        return tuple(entry for entry in rows if entry.parameter_key == wanted)
 
-    def current(self, template_id: str) -> AdmissionRecord | None:
-        """The latest entry naming ``template_id``, or ``None`` if it has none."""
-        history = self.history(template_id)
+    def points(self, template_id: str) -> tuple[str, ...]:
+        """Every parameter point ``template_id`` has an entry at, oldest first, deduplicated."""
+        seen: dict[str, None] = {}
+        for entry in self.history(template_id):
+            seen.setdefault(entry.parameter_key, None)
+        return tuple(seen)
+
+    def current(
+        self, template_id: str, *, parameters: Mapping[str, float] | None = None
+    ) -> AdmissionRecord | None:
+        """The latest entry for one admission, or ``None`` if there is none.
+
+        With ``parameters`` omitted the template must have entries at no more than one
+        point; a template live at two points is two admissions, and answering with the more
+        recent would name a trade the caller did not ask about.
+        """
+        if parameters is None:
+            known = self.points(template_id)
+            if len(known) > 1:
+                raise AmbiguousParameterPointError(
+                    f"template {template_id!r} has entries at {len(known)} parameter points "
+                    f"({list(known)}). Name the point: a bare id here would answer about "
+                    "whichever was filed last."
+                )
+        history = self.history(template_id, parameters=parameters)
         return history[-1] if history else None
 
-    def status(self, template_id: str) -> AdmissionStatus | None:
-        entry = self.current(template_id)
+    def status(
+        self, template_id: str, *, parameters: Mapping[str, float] | None = None
+    ) -> AdmissionStatus | None:
+        entry = self.current(template_id, parameters=parameters)
         return entry.status if entry else None
 
     def admitted(self) -> tuple[AdmissionRecord, ...]:
-        """The current entry of every template whose latest status is ``ADMITTED``.
+        """The current entry of every admission whose latest status is ``ADMITTED``.
 
-        Ordered by template id so a scan over the library is deterministic.
+        Keyed by ``(template_id, parameter_key)``, so one template admitted at two points
+        appears twice and the ranker instantiates it at each. Ordered by that pair so a scan
+        over the library is deterministic.
         """
-        latest = {entry.template_id: entry for entry in self._entries}
+        latest = {entry.identity: entry for entry in self._entries}
         return tuple(
-            latest[template_id]
-            for template_id in sorted(latest)
-            if latest[template_id].status is AdmissionStatus.ADMITTED
+            latest[identity]
+            for identity in sorted(latest)
+            if latest[identity].status is AdmissionStatus.ADMITTED
         )
 
     def admit(
@@ -491,6 +584,7 @@ class TemplateLibrary:
         decision_path: Path | str,
         by: str,
         reason: str,
+        parameters: Mapping[str, float] | None = None,
         status: AdmissionStatus = AdmissionStatus.ADMITTED,
         notes: str | None = None,
         override_reason: str | None = None,
@@ -518,18 +612,39 @@ class TemplateLibrary:
 
         source = Path(decision_path)
         payload = _read_decision_record(source)
+        measured_point = _parameter_point(_measured_run(payload).get("template_parameters"))
         measured_hold = _measured_hold(payload)
-        if measured_hold is not None and measured_hold != template.hold_sessions:
-            raise MeasuredHoldMismatchError(
-                f"{source} measured a {measured_hold}-session hold and the ranker builds "
-                f"{template.template_id} at {template.hold_sessions}. An admission attaches "
-                "this record's numbers to the trades the ranker will propose, and those are "
-                "two different trades: the mean return at hold, the expiry invalidator and "
-                "the drawdown all describe the measured one."
+        # The point the ranker will build at. Defaulting to the record's own point is what
+        # lets `admit` be typed without a parameter flag and still admit the trade the
+        # evidence describes; a supplied point is then an assertion the guard below checks.
+        admitted_point = template.resolve(
+            parameters if parameters is not None else measured_point,
+        )
+        admitted_hold = template.hold_for(admitted_point)
+        if measured_point is not None:
+            measured_key = parameter_key(template.resolve(measured_point))
+            if measured_key != parameter_key(admitted_point):
+                raise AdmittedParametersMismatchError(
+                    f"{source} measured {template.template_id} at [{measured_key}] and this "
+                    f"admission names [{parameter_key(admitted_point)}]. An admission attaches "
+                    "this record's numbers to the trades the ranker will propose, and those "
+                    "are two different trades: the mean return at hold, the expiry "
+                    "invalidator and the drawdown all describe the measured one."
+                )
+        elif measured_hold is not None and measured_hold != admitted_hold:
+            # The record names no point, so the hold is the whole of what can be compared.
+            # Weaker than the check above and stated as such: two structures at one hold
+            # pass it, and only `measured_strategy` on the card distinguishes them.
+            raise AdmittedParametersMismatchError(
+                f"{source} measured a {measured_hold}-session hold and this admission builds "
+                f"{template.template_id} at {admitted_hold}. The record names no template "
+                "parameter point, so the hold is all there is to compare — and these are two "
+                "different trades: the mean return at hold, the expiry invalidator and the "
+                "drawdown all describe the measured one."
             )
         evidence = EvidenceCard.from_decision_record(
             payload,
-            hold_sessions=measured_hold if measured_hold is not None else template.hold_sessions,
+            hold_sessions=measured_hold if measured_hold is not None else admitted_hold,
             source=str(source),
         )
         outcome = _as_str(payload.get("outcome"))
@@ -547,6 +662,7 @@ class TemplateLibrary:
 
         entry = AdmissionRecord(
             template_id=template.template_id,
+            parameters=admitted_point,
             hypothesis_id=_as_str(payload.get("hypothesis_id")),
             decision_path=str(source),
             decision_outcome=outcome,
@@ -570,6 +686,7 @@ class TemplateLibrary:
         sheet_path: Path | str,
         by: str,
         reason: str,
+        parameters: Mapping[str, float] | None = None,
         trial_ids: Sequence[str] = (),
         notes: str | None = None,
     ) -> AdmissionRecord:
@@ -591,6 +708,9 @@ class TemplateLibrary:
             raise ValueError("seed_from_screen requires a written `reason`")
         entry = AdmissionRecord(
             template_id=template.template_id,
+            parameters=template.resolve(
+                parameters if parameters is not None else evidence.parameters
+            ),
             hypothesis_id=None,
             decision_path=str(sheet_path),
             decision_outcome=SCREENED_NOT_GATED,
@@ -605,27 +725,40 @@ class TemplateLibrary:
         self._entries.append(entry)
         return entry
 
-    def demote(self, *, template_id: str, by: str, reason: str) -> AdmissionRecord:
-        """Record that ``template_id`` is no longer admitted, against a written reason.
+    def demote(
+        self,
+        *,
+        template_id: str,
+        by: str,
+        reason: str,
+        parameters: Mapping[str, float] | None = None,
+    ) -> AdmissionRecord:
+        """Record that one admission is no longer live, against a written reason.
 
-        The evidence card is carried forward from the entry being demoted rather than
-        cleared: what the offline loop measured did not stop being true, and a demotion
-        whose entry showed no evidence would be unreviewable.
+        ``parameters`` names which admission when the template is filed at more than one
+        point; with one point it may be omitted. The evidence card and the point are carried
+        forward from the entry being demoted rather than cleared: what the offline loop
+        measured did not stop being true, and a demotion whose entry showed no evidence
+        would be unreviewable.
         """
         if not by.strip():
             raise ValueError("demote requires `by`: a demotion is somebody's decision")
         if not reason.strip():
             raise ValueError("demote requires a written `reason`")
-        previous = self.current(template_id)
+        previous = self.current(template_id, parameters=parameters)
         if previous is None:
             raise KeyError(
-                f"template {template_id!r} has no entry in this library, so there is "
-                "nothing to demote"
+                f"template {template_id!r} has no entry in this library"
+                + (f" at [{parameter_key(parameters)}]" if parameters is not None else "")
+                + ", so there is nothing to demote"
             )
         if previous.status is AdmissionStatus.DEMOTED:
-            raise ValueError(f"template {template_id!r} is already demoted")
+            raise ValueError(
+                f"template {template_id!r} at [{previous.parameter_key}] is already demoted"
+            )
         entry = AdmissionRecord(
             template_id=template_id,
+            parameters=previous.parameters,
             hypothesis_id=previous.hypothesis_id,
             decision_path=previous.decision_path,
             decision_outcome=previous.decision_outcome,
@@ -706,6 +839,30 @@ def _passes(outcome: str | None, evidence: EvidenceCard) -> bool:
     return outcome == PASSING_OUTCOME and evidence.gate_status == PASSING_GATE_STATUS
 
 
+def _measured_run(payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The record's in-sample run summary, or an empty mapping when it carries none."""
+    runs = payload.get("runs")
+    run = runs.get("in_sample") if isinstance(runs, Mapping) else None
+    return run if isinstance(run, Mapping) else {}
+
+
+def _parameter_point(value: Any) -> dict[str, float] | None:
+    """A parameter point read from a document, or ``None`` when there is not one there.
+
+    Every value must be a number. A point carrying a string is not a point this library can
+    compare, and coercing one would let a mismatch through under a key that reads as a match.
+    """
+    if not isinstance(value, Mapping) or not value:
+        return None
+    point: dict[str, float] = {}
+    for name, raw in value.items():
+        number = _as_float(raw)
+        if number is None:
+            return None
+        point[str(name)] = number
+    return point
+
+
 def _measured_hold(payload: Mapping[str, Any]) -> int | None:
     """The hold the record's in-sample run actually traded, if it reports one.
 
@@ -713,9 +870,7 @@ def _measured_hold(payload: Mapping[str, Any]) -> int | None:
     settlement, say — which is a different shape of evidence rather than a disagreement, and
     is left for the human reading ``measured_strategy`` on the card to judge.
     """
-    runs = payload.get("runs")
-    run = runs.get("in_sample") if isinstance(runs, Mapping) else None
-    parameters = run.get("strategy_parameters") if isinstance(run, Mapping) else None
+    parameters = _measured_run(payload).get("strategy_parameters")
     if not isinstance(parameters, Mapping):
         return None
     return _as_int(parameters.get("hold_sessions"))
