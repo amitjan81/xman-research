@@ -1,0 +1,263 @@
+# M2 decision gate — the thresholds, written down BEFORE the run.
+#
+# Committed in its own commit, ahead of any commit carrying a result.
+#
+# THIS GATE SUPERSEDES research/h26/gate.toml, which is NOT edited and stays in the
+# repository grading the 80-session window it was written for. H26's gate itself
+# superseded an earlier version and left that one in history; the same discipline applies
+# here. What changed is the window, and every number below is re-argued against it.
+#
+# =======================================================================================
+# THE SAMPLE
+#
+# In-sample: 2024-10-01 .. 2026-04-30. 385 sessions found / 388 expected, 3 missing
+#            (2024-11-20, 2025-04-30, 2025-05-08), accepted with a written reason naming
+#            all three. 384 return observations — the number every bar is sized against.
+# Holdout:   2026-05-01 .. 2026-08-03, 64 sessions, complete, SEALED.
+#
+# The window's lower bound is M1 §13's securities-transaction-tax floor: before
+# 2024-10-01 the rates are undefined and the cost stack raises rather than guessing. M2
+# inherits it because M2 inherits M1 §8 verbatim.
+#
+# The upper bound needs a note, because M2's reason differs from M1's. M1 stops at
+# 2026-08-03 because it SETTLES and the Closing Auction Session rule refuses. M2 never
+# settles — both arms exit by trading and the eligibility guard bars expiry-session
+# entries — so the refusal should not be reachable at all. The same ceiling is used
+# anyway, so that M1 and M2 are graded over the identical population of sessions and any
+# difference between the two verdicts is a difference between the models rather than
+# between their windows. The run reports its settlement count, so the immunity is checked
+# rather than assumed.
+#
+# THE GAP-EVENT CENSUS IS NOT PRE-COMPUTED HERE, and that is a departure from H26's gate,
+# stated rather than left to be noticed. H26 counted its 45 observable gaps before
+# committing its gate, using date arithmetic and bar PRESENCE only. That census does not
+# size any bar below: the deflated Sharpe is computed on the RETURN SERIES, which has one
+# observation per session transition (384), not one per observable gap. H26's own
+# calibration confirms this — it is labelled "n=79", the return count, not "n=45". So the
+# census is a reported diagnostic, and it is reported from the run's own output in
+# DECISION.md rather than pre-computed at the cost of a second full pass over 385 sessions
+# of bars. What IS pre-registered is that it must be reported, alongside the calendar
+# transition count, and never conflated with it.
+# =======================================================================================
+
+hypothesis_id = "h_a63a756ae984683a60176fe41e2acf7a"
+recorded_at = 2026-08-19T00:00:00Z
+
+amendment_justification = """
+M2 is registered as an AMENDMENT of H26 v2 (h_cacfc556d38a2bda25efef59eb5544cf), which is
+an amendment of H26 v1, which is an amendment of H1. The chain is
+H1 -> H26 v1 -> H26 v2 -> M2, and the deflated Sharpe deflates against a family count that
+spans all four.
+
+H26's gate already made this argument and it is not restated in full. What is new is only
+that M2 amends H26 rather than being re-registered: the sizing rule changed (notional
+rather than one lot) and the window changed, both id-bearing, and the sanctioned response
+to an id-bearing change is amend(), which COSTS a trial. Re-registering a reworded
+hypothesis to reset the family count is C4's one documented hole and is refused.
+
+The direction of error is the whole argument, exactly as it was for H26: an amendment
+inflates N, deflates the Sharpe, and can only make M2 harder to pass.
+"""
+
+supersession = """
+WHAT MOVED, AND WHAT WAS REFUSED.
+
+MOVED: the deflated-Sharpe bar, UPWARD, from 0.80 to 0.90. See [thresholds]. H26 set 0.80
+because 0.90 was auto-failing at 79 observations against three or four trials, and H1's
+reasoning rejects an auto-failing bar. At 384 observations that condition has evaporated.
+A bar kept at 0.80 after the fact that justified it disappeared would be an inheritance,
+which H26's own gate refused in as many words: "a number copied across that change would
+be a preference wearing a pre-registration's clothes."
+
+REFUSED: moving the holdout boundary. H26 refused it once already, when the vendor
+backfill made 2026-06-13 available; the historical backfill now makes the same temptation
+available in the other direction, and it is refused for the same reason. Every session the
+backfill added is OLDER than 2026-05-01, so no move is even needed to use it — which is
+precisely what makes this re-run clean.
+
+REFUSED: narrowing the window to avoid the three missing sessions. Narrowing to
+2024-12-01 or later would discard roughly 140 sessions including the regime change the
+per-epoch analysis is most interested in; narrowing around each hole would fragment one
+trial into three. accept_gaps with a written reason naming 2024-11-20, 2025-04-30 and
+2025-05-08 is the honest form, and the missing dates travel in the result's provenance.
+"""
+
+cross_epoch_justification = """
+See research/m1/gate.toml, whose cross-epoch argument applies here unchanged and is not
+restated: this window crosses six boundaries, two of which changed the traded object, H1's
+rate-change reasoning explicitly does not cover them, and the pooled number therefore
+describes no market that existed. The pooled verdict is graded; the per-epoch breakdown is
+descriptive and ungraded.
+
+ONE THING IS SHARPER FOR M2 THAN FOR M1, and it is the expiry-day change. M2's tradeable
+population is defined by which session transitions are observable, and both boundaries of
+the weekly expiry cycle are dark: no entry ON expiry day (the contract settles) and no
+entry the session BEFORE it (the expiring contract is dropped from the instrument master
+on its expiry date, issue #23). nse_expiry_tuesday_2025 therefore does not merely change
+the cost or the margin — IT CHANGES WHICH WEEKDAYS M2 CAN TRADE AT ALL. Before 2025-09-01
+expiries were Thursdays, so Wednesday and Thursday entries were lost and the surviving
+weekdays were Friday, Monday and Tuesday. After it, Monday and Tuesday are lost and the
+survivors are Wednesday, Thursday and Friday.
+
+That matters because the weekend gap is the mechanism's amplified case, and which side of
+the weekend survives is decided by this boundary. Pooling across it pools two different
+samples of the calendar, not merely two cost regimes. It is recorded here, in advance, as
+the strongest structural reason to read the per-epoch table rather than the pooled number
+— and as a limit on what the pooled number can mean even if it passes.
+"""
+
+# =======================================================================================
+# IN-SAMPLE THRESHOLDS
+# =======================================================================================
+
+[thresholds]
+
+# RECALIBRATED UPWARD, from H26's 0.80. Synthetic Gaussian series at 384 observations,
+# graded through this package's own deflated_sharpe_ratio, 40 seeds per point. M2 runs
+# AFTER M1 against the same canonical log, so the realised family count at M2's grading
+# is EIGHT (inventory below) and N=8 is the row that governs.
+#
+# Reproduce: uv run python -m xman_research.h1.calibrate_thresholds \
+#              --case 384:8 --bar 0.80 --bar 0.90 --bar 0.95
+#
+#   true ann. Sharpe:   0.0    0.5    1.0    1.5    2.0    2.5    3.0
+#   median DSR:        0.199  0.410  0.650  0.841  0.945  0.986  0.997
+#   share >= 0.80:      0.0%  10.0%  25.0%  52.5%  72.5%  85.0%  95.0%
+#   share >= 0.90:      0.0%   2.5%  20.0%  30.0%  57.5%  80.0%  85.0%
+#   share >= 0.95:      0.0%   0.0%   2.5%  22.5%  42.5%  65.0%  82.5%
+#
+# H26's gate recorded that at n=79 and N=4 "even a true annualised Sharpe of 3.0 has a
+# median deflated Sharpe of 0.782 — under the bar", and concluded its own Sharpe verdict
+# was "dominated by the SELECTION COUNT, not by the market". At n=384 and N=8 the same
+# effect size has a median of 0.997. The domination has reversed: N grew from 4 to 8 while
+# n grew from 79 to 384, and observations win.
+#
+# So 0.90:
+#   * is not auto-failing — 57.5% of draws clear it at a true Sharpe of 2.0, 85% at 3.0;
+#   * is not a non-gate — noise clears it in 0.0% of 40 draws;
+#   * matches M1's bar, which is right, because M1 and M2 are graded on the same window
+#     against nearly the same trial count and a difference between their bars would be a
+#     difference nobody could justify from the grid.
+#
+# RAISING A BAR ON A HYPOTHESIS THAT ALREADY MISSED invites the suspicion that it was
+# raised to guarantee a second miss, so the answer is stated plainly. The bar is set
+# before the run, in its own commit, from a synthetic grid that cannot see the corpus, and
+# the direction is the conservative one — it can only cost a true positive, never
+# manufacture a false one. The alternative, keeping 0.80, would have been the flattering
+# choice: 0.80 is cleared by a 1.5 Sharpe in 52.5% of draws against 0.90's 30%.
+#
+# Pre-written, the honest reading of a miss: unlike H26's, a miss here is NOT dominated by
+# the selection count. At 384 observations this test resolves a true annualised Sharpe of
+# 2.0 or better, so a miss is evidence against an effect of that size in the overnight
+# arm. It stays uninformative below roughly 1.0.
+deflated_sharpe = { at_least = 0.90 }
+
+# INHERITED FROM H26's 3.0, and inheritance is correct because every input to that
+# derivation is unchanged: four spread-bearing legs per session against M1's two, a
+# modelled stack that loses the settlement components M1 carries, and a buy-back landing
+# at the open decision where the true spread is widest. Sample length does not touch this
+# number. M1's 2.0 would be the wrong bar here for exactly the reasons H26 set out.
+cost_breakeven_multiple = { at_least = 3.0 }
+
+# KEPT AT 0.10, on M1's reasoning, which applies here unchanged and is not restated: it is
+# a bound on the LOSS, not on the drawdown-to-margin ratio, and it is now a strictly
+# harder bar because maximum drawdown is monotone in window length. Relaxing a ruin bar
+# because the window grew would be the move this apparatus exists to prevent.
+max_drawdown = { at_most = 0.10 }
+
+# CONDITIONALLY TOOTHLESS, exactly as H26 disclosed, and the disclosure is repeated rather
+# than referenced because it is the kind that stops being read. The benchmark is the
+# INTRADAY arm, not an always-on straddle — a deliberate substitution, because M2's null
+# is written about exactly this contrast. It CAN fail, unlike M1's. But the mechanism
+# under test predicts the intraday arm loses money, so under the hypothesis's own prior an
+# increment above zero is close to implied. A pass here means "the arms differ in the
+# predicted direction", not "the hypothesis was independently corroborated". The deflated
+# Sharpe is the threshold doing the real work.
+risk_matched_increment = { at_least = 0.0 }
+
+# NOT GATED, deliberately: `pbo` (one configuration), `annualised_sharpe` (subsumed by
+# deflated_sharpe), `expected_shortfall` (max_drawdown carries the tail criterion).
+
+# =======================================================================================
+# HOLDOUT THRESHOLDS — recorded now, at the same moment as the others.
+#
+# The holdout is 64 sessions, 63 return observations. At holdout grading the family will
+# hold ELEVEN trials: the eight below, plus the touch row the read itself writes, plus
+# M2's two holdout runs.
+#
+#   true ann. Sharpe:    0.0    0.5    1.0    1.5    2.0    2.5    3.0
+#   median DSR (63,11): 0.066  0.099  0.143  0.199  0.278  0.368  0.465
+#   share >= 0.50:       7.5%  10.0%  17.5%  25.0%  35.0%  37.5%  45.0%
+#
+# 0.50 is the minimal confirmatory statement and is not a non-gate at 7.5% noise
+# clearance. It is weak, and that is stated: 63 observations against eleven trials can
+# fail to contradict an edge, not establish one.
+# =======================================================================================
+
+[holdout_thresholds]
+deflated_sharpe = { at_least = 0.50 }
+cost_breakeven_multiple = { at_least = 3.0 }
+max_drawdown = { at_most = 0.10 }
+risk_matched_increment = { at_least = 0.0 }
+
+# =======================================================================================
+# NOT-EVALUABLE RULES — left at C6's defaults, not set after looking at a run.
+#
+# `max_infeasible_fraction` has real bite here in a way it does not for M1. H26 issued 190
+# in-sample intents on 80 sessions and had 2 infeasible; M2 issues roughly five times that
+# on 385 sessions and includes buy-backs at the open. A NOT_EVALUABLE verdict on
+# infeasibility would be the correct behaviour, not a problem to tune around, and it is a
+# successful deliverable.
+# =======================================================================================
+
+[not_evaluable]
+max_infeasible_fraction = 0.10
+max_stale_fraction = 0.20
+optimistic_costs_below = 1.0
+
+# =======================================================================================
+# THE PRE-REGISTERED TRIAL INVENTORY.
+#
+# The canonical log holds FIVE rows before either model runs (H1's replayed row, two
+# outcome=error rows against H26 v1, and H26 v2's candidate and benchmark). M1 runs first
+# and adds ONE. M2 runs second and adds TWO — its arms are genuinely different portfolios,
+# each burning its own single-use token, and the benchmark is logged in the family because
+# it IS in the family.
+#
+#   AT M2's IN-SAMPLE GRADING THE FAMILY SHOULD HOLD EIGHT ROWS. N = 8.
+#
+# The M1-then-M2 ordering is pre-registered because it sets both bars. Running them in the
+# other order would grade M2 at N=7 and M1 at N=8, against bars calibrated for the
+# opposite, and the disagreement would be invisible without this line.
+#
+# EVERY RE-RUN APPENDS MORE TRIALS AND MOVES N. Run once against the canonical log.
+# =======================================================================================
+
+# =======================================================================================
+# THE DESCRIPTIVE ANALYSES, pre-registered so neither can become a narrative escape hatch.
+# Both are UNGRADED and incapable of changing the outcome. No threshold reads either.
+#
+# 1. PER-EPOCH BREAKDOWN. Same form as M1's: the in-sample daily net return series
+#    partitioned by the six epoch boundaries, with session count, net P&L, annualised
+#    Sharpe, maximum drawdown and cost-breakeven multiple per partition.
+#    PREDICTED SIGN: the two-clocks mechanism is a property of how options are priced, not
+#    of any regulatory regime, so a positive mean overnight return is predicted in EVERY
+#    epoch. The exception to watch is nse_expiry_tuesday_2025, which changes WHICH
+#    weekdays are tradeable at all (see cross_epoch_justification) and so changes the mix
+#    of weekend and weekday gaps in the sample.
+#
+# 2. THE CALENDAR-DAY DOSE-RESPONSE, carried over from H26's gate unchanged in form and
+#    in predicted sign: the candidate's per-gap net return regressed on the number of
+#    CALENDAR DAYS the gap spans, each gap attributed to the session it ENDS on, gap-level
+#    returns netted consistently so the entry cost of the next gap is not charged to this
+#    one. PREDICTED SIGN: POSITIVE — a three-calendar-day gap should earn more than a
+#    one-day gap, because it charges more decay against the same zero trading time.
+#    Reported whichever way it points.
+#
+# 3. THE DECOMPOSITION H26 §9.2 DEMANDS. On the prior run more than half of P&L came from
+#    straddles that never closed and cash-settled — i.e. from M1's path, not M2's. The
+#    settlement count and the share of P&L attributable to settled positions are reported.
+#    Also re-checked: skew and kurtosis, which on the prior sample (+1.19, 12.59) indicated
+#    the position captured DECAY rather than payment for insuring a gap event, and which
+#    H26 recorded as the sharpest evidence against its own mechanism.
+# =======================================================================================
