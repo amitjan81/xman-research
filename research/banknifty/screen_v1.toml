@@ -1,0 +1,174 @@
+underlying = "BANKNIFTY"
+trial_log = "research/banknifty/screen_v1.db"
+decision_time = "14:50"
+
+# Every block below — the benchmark and all 21 candidate blocks — pins
+# `target_notional = 5_000_000`. The loader reads `grid` per row and there is no
+# top-level default that flows down, so a block that omits it sizes at the
+# template default of 1,500,000 and stops being risk-comparable to the benchmark
+# without saying so.
+#
+# Why 5,000,000 rather than the 1,500,000 a NIFTY screen uses: BANKNIFTY's lot is
+# large enough that a 15-lakh target quantises to one lot, and one lot is where
+# every continuous sizing multiplier collapses. The binding case is the 35-lot
+# epoch at the in-sample spot peak — 35 x ~62,000 ~= 21.7 lakh of exposure per
+# lot — which at 50 lakh still buys 2.3 lots. Below that, a conditioner that
+# sizes with its strength (ema_atr_band) would round every strength between 0 and
+# 1 to the same single lot, and the screen would be comparing sizing rules that
+# cannot express themselves.
+
+gaps_reason = """
+BN-M1 benchmark over BANKNIFTY 2024-10-01..2026-05-29. The NSE calendar expects 407 sessions; 353 are on disk and 54 are absent. 53 of the 54 are sessions the producer captured and QUARANTINED, so no parquet was ever published: 42 for premium-below-intrinsic candles alongside a rolling-spot vs index divergence above 0.5% (clustered Apr-Jul 2025), 1 (2026-03-09) for the premium check alone with no divergence component, and 10 for expiry-day convergence failure — 2024-10-09, 2024-11-13, 2025-01-30, 2025-02-27, 2025-04-24, 2025-05-29, 2025-08-28, 2025-12-30, 2026-03-30 and 2026-05-26. The 54th, 2024-11-20, is in no manifest at all: NSE did not hold a session (Maharashtra state election) and the calendar this store uses expects one.
+
+THE TEN MATTER FAR MORE THAN THE FORTY-THREE, and not because of their number. Every one of them is a front-contract EXPIRY session, so for ten of the window's 27 expiry cycles the session at which the position would have cash-settled does not exist. The engine refuses to open a position it can never settle, which is correct and is not softened here: those cycles are declined at entry and counted as UNSETTLEABLE. This run therefore measures the premium over the cycles the corpus can settle — 17 whose expiry session exists, of which the last expires past the window edge, so 16 are openable and fewer still settle inside the run — not over 27. The population is quarantine-selected rather than random: expiry-day convergence failure is most likely on the expiries where the ATM straddle held the most residual value, which is not independent of what a short straddle earns there.
+
+The window is NOT narrowed to avoid the holes. Narrowing to a hole-free sub-range would fragment one benchmark into a dozen and would discard the 2024-11-13 weekly-to-monthly regime change, the 15/30/35 lot-size boundaries and the April-July 2025 cluster, all of which are the conditions a BANKNIFTY strategy would actually have traded through. Quarantined sessions are excluded, not read: accept_gaps is called without include_quarantined, so nothing the producer marked untrustworthy enters the P&L.
+"""
+
+[window]
+start = 2024-10-01
+end = 2026-05-29
+
+[hypothesis]
+name = "BANKNIFTY stage-1 screen: does a wider structure or a conditioner beat the short ATM straddle"
+mechanism = """
+BANKNIFTY index-option implied variance sits above subsequently realised variance
+for the same reason NIFTY's does: index hedgers and structured-product desks buy
+convexity with price insensitivity and somebody must warehouse it. BANKNIFTY
+prices that warehousing differently — its constituents are one sector, its
+realised volatility is higher, and since 2024-11-13 its front contract expires
+monthly rather than weekly, which lengthens the decay window a short-variance
+book sits inside. Whether the premium is best collected at the money, across a
+band of strikes, with a bought tail, or only on sessions a conditioner selects,
+is an empirical question about this corpus and not about the mechanism.
+"""
+null_hypothesis = """
+No screened structure or conditioner produces a positive risk-matched spread over
+the unconditional short at-the-money BANKNIFTY straddle held for the same number
+of sessions.
+"""
+predictors = [
+    "atm_iv_minus_rv20",
+    "ema20_z_abs",
+    "overnight_gap_sigmas",
+    "sessions_to_nearest_expiry",
+    "day_of_week",
+]
+notes = """
+Holds are capped at five sessions by the owner's 1-5 day mandate. The corpus
+window is entirely in-sample: BANKNIFTY sessions from 2026-06-01 are sealed and
+no instance here may read one.
+"""
+thresholds = {alpha_to_advance = 0.5}
+
+# ---------------------------------------------------------------- benchmark
+
+[benchmark]
+template = "short_atm_straddle_hold_n"
+grid = {hold_sessions = [3], target_notional = [5_000_000]}
+
+# ------------------------------------------------- unconditional structures
+
+[[candidates]]
+template = "short_atm_straddle_hold_n"
+grid = {hold_sessions = [1, 3, 5], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "short_atm_strangle_hold_n"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [0.5, 1.0], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "iron_condor_hold_n"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], wing_atr_multiple = [1.0], target_notional = [5_000_000]}
+
+# --------------------------------------------- conditioner: implied - realised
+# Conditional strangles pin `atr_multiple` to 1.0 rather than crossing {0.5, 1.0}.
+# Crossing it everywhere puts the grid at 132 instances; the claim under test in a
+# conditional block is about the conditioner, and it is tested against the
+# unconditional strangle, which does carry both k values.
+
+[[candidates]]
+template = "short_atm_straddle_iv_rv"
+grid = {hold_sessions = [1, 3, 5], iv_rv_threshold = [0.02, 0.04], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "short_atm_strangle_iv_rv"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], iv_rv_threshold = [0.02, 0.04], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "iron_condor_iv_rv"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], wing_atr_multiple = [1.0], iv_rv_threshold = [0.02, 0.04], target_notional = [5_000_000]}
+
+# ------------------------------------ conditioner: distance from the 20-EMA
+
+[[candidates]]
+template = "short_atm_straddle_ema_atr_band"
+grid = {hold_sessions = [1, 3, 5], ema_band_threshold = [0.5, 1.0], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "short_atm_strangle_ema_atr_band"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], ema_band_threshold = [0.5, 1.0], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "iron_condor_ema_atr_band"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], wing_atr_multiple = [1.0], ema_band_threshold = [0.5, 1.0], target_notional = [5_000_000]}
+
+# ------------------------------------------ conditioner: overnight gap size
+
+[[candidates]]
+template = "short_atm_straddle_post_gap"
+grid = {hold_sessions = [1, 3, 5], gap_sigmas = [1.0, 1.5], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "short_atm_strangle_post_gap"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], gap_sigmas = [1.0, 1.5], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "iron_condor_post_gap"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], wing_atr_multiple = [1.0], gap_sigmas = [1.0, 1.5], target_notional = [5_000_000]}
+
+# --------------------------------------- conditioner: sessions-to-expiry band
+# The band is a pair of parameters, so the two points are two blocks per
+# structure rather than two values on one axis: a single block crossing
+# low = [1, 6] with high = [5, 15] would also expand the incoherent [1, 15] and
+# the empty [6, 5].
+
+[[candidates]]
+template = "short_atm_straddle_expiry_distance"
+grid = {hold_sessions = [1, 3, 5], expiry_distance_low = [1.0], expiry_distance_high = [5.0], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "short_atm_straddle_expiry_distance"
+grid = {hold_sessions = [1, 3, 5], expiry_distance_low = [6.0], expiry_distance_high = [15.0], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "short_atm_strangle_expiry_distance"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], expiry_distance_low = [1.0], expiry_distance_high = [5.0], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "short_atm_strangle_expiry_distance"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], expiry_distance_low = [6.0], expiry_distance_high = [15.0], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "iron_condor_expiry_distance"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], wing_atr_multiple = [1.0], expiry_distance_low = [1.0], expiry_distance_high = [5.0], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "iron_condor_expiry_distance"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], wing_atr_multiple = [1.0], expiry_distance_low = [6.0], expiry_distance_high = [15.0], target_notional = [5_000_000]}
+
+# ------------------------------------------------ conditioner: weekday
+# `weekday` selects one day (a WITHIN band whose edges are the same value), so the
+# two points are Tuesday (1) and Thursday (3).
+
+[[candidates]]
+template = "short_atm_straddle_day_of_week"
+grid = {hold_sessions = [1, 3, 5], weekday = [1.0, 3.0], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "short_atm_strangle_day_of_week"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], weekday = [1.0, 3.0], target_notional = [5_000_000]}
+
+[[candidates]]
+template = "iron_condor_day_of_week"
+grid = {hold_sessions = [1, 3, 5], atr_multiple = [1.0], wing_atr_multiple = [1.0], weekday = [1.0, 3.0], target_notional = [5_000_000]}
