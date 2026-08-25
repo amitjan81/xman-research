@@ -1094,7 +1094,12 @@ def apply_demotions(
     Points already demoted are left alone — the rule keeps breaching after it has fired, and
     a second demotion entry every night would bury the one that mattered.
     """
-    live = {record.identity for record in library.admitted()}
+    # A drift report aggregates the ideas at one (template, parameter point) whatever
+    # product they were proposed on, so it is matched against the library on that pair. The
+    # demotion below names no product for the same reason, and `demote` refuses outright
+    # when one point is admitted on two products — an aggregate report cannot say which of
+    # them drifted.
+    live = {(record.template_id, record.parameter_key) for record in library.admitted()}
     demoted: list[DriftReport] = []
     for report in reports:
         if not report.breached or report.identity not in live:

@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import logging
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -230,6 +231,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="file a template's evidence from an existing decision record",
     )
     seed.add_argument("--template", required=True, help="registered template id")
+    seed.add_argument(
+        "--underlying",
+        required=True,
+        help="the product this evidence is filed for; the ranker builds it only for that one",
+    )
     seed.add_argument("--decision", required=True, type=Path, help="path to decision.json")
     seed.add_argument(
         "--admit",
@@ -264,6 +270,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     admit = library_commands.add_parser("admit", help="admit a template the ranker may propose")
     admit.add_argument("--template", required=True)
+    admit.add_argument(
+        "--underlying",
+        required=True,
+        help="the product this admission covers; the ranker builds it only for that product",
+    )
     admit.add_argument("--decision", required=True, type=Path)
     admit.add_argument("--by", required=True)
     admit.add_argument("--reason", required=True)
@@ -383,6 +394,11 @@ def _add_drift_arguments(parser: argparse.ArgumentParser) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    # Progress goes to stderr so a long run says where it is while stdout stays the
+    # command's own result.
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
+    )
     if getattr(args, "min_settled", DEFAULT_MIN_SETTLED) < DEFAULT_MIN_SETTLED:
         parser.error(
             f"--min-settled {args.min_settled} is below the floor {DEFAULT_MIN_SETTLED}. The "
@@ -641,6 +657,7 @@ def _seed_from_screen(
     )
     entry = library.seed_from_screen(
         template=template,
+        underlying=sheet.underlying,
         evidence=card,
         sheet_path=args.sheet,
         by=args.by or "seed-from-screen",
@@ -742,6 +759,7 @@ def _library(args: argparse.Namespace) -> int:
 
     entry = library.admit(
         template=template,
+        underlying=args.underlying,
         decision_path=args.decision,
         by=by,
         reason=reason,

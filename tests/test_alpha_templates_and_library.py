@@ -91,7 +91,6 @@ def test_two_registries_do_not_share_state(registry: TemplateRegistry) -> None:
             template_id="extra",
             name="extra",
             thesis="a template registered by one caller only",
-            products=("NIFTY",),
             hold_sessions=1,
             parameters={},
             conditioner=None,
@@ -187,7 +186,6 @@ def test_a_template_with_no_thesis_is_refused() -> None:
             template_id="silent",
             name="silent",
             thesis="   ",
-            products=("NIFTY",),
             hold_sessions=1,
             parameters={},
             conditioner=None,
@@ -254,6 +252,7 @@ def test_admit_refuses_a_decision_record_that_does_not_exist(
 ) -> None:
     with pytest.raises(DecisionRecordError, match="no decision record at"):
         library.admit(
+        underlying="NIFTY",
             override_reason=OVERRIDE,
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=tmp_path / "absent.json",
@@ -269,6 +268,7 @@ def test_admit_refuses_a_decision_record_that_does_not_parse(
     broken.write_text("{not json")
     with pytest.raises(DecisionRecordError, match="does not parse"):
         library.admit(
+        underlying="NIFTY",
             override_reason=OVERRIDE,
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=broken,
@@ -284,6 +284,7 @@ def test_admit_refuses_json_that_is_not_a_decision_record(
     wrong.write_text(json.dumps({"hello": "world"}))
     with pytest.raises(DecisionRecordError, match="no `in_sample` verdict"):
         library.admit(
+        underlying="NIFTY",
             override_reason=OVERRIDE,
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=wrong,
@@ -298,6 +299,7 @@ def test_admit_demands_a_name_and_a_reason(
     template = registry.get("short_atm_straddle_hold_n")
     with pytest.raises(ValueError, match="requires `by`"):
         library.admit(
+        underlying="NIFTY",
             override_reason=OVERRIDE,
             template=template,
             decision_path=DECISION_RECORD,
@@ -306,6 +308,7 @@ def test_admit_demands_a_name_and_a_reason(
         )
     with pytest.raises(ValueError, match="requires a written `reason`"):
         library.admit(
+        underlying="NIFTY",
             override_reason=OVERRIDE,
             template=template,
             decision_path=DECISION_RECORD,
@@ -320,6 +323,7 @@ def test_admitting_unpassed_evidence_is_refused_without_a_written_override(
     """The shipped H1 record FAILED its gate, and the ranker proposes real trades."""
     with pytest.raises(UnpassedEvidenceError, match="not a pass"):
         library.admit(
+        underlying="NIFTY",
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=DECISION_RECORD,
             by="tester",
@@ -333,6 +337,7 @@ def test_unpassed_evidence_may_be_filed_as_a_candidate_with_no_override(
 ) -> None:
     """Recording what was measured is not the same act as letting the ranker trade it."""
     entry = library.admit(
+        underlying="NIFTY",
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="tester",
@@ -348,6 +353,7 @@ def test_an_override_is_recorded_on_the_entry_and_carries_the_verdict_verbatim(
 ) -> None:
     """An admission over a failed gate is somebody's decision, and the entry shows it."""
     entry = library.admit(
+        underlying="NIFTY",
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="tester",
@@ -370,6 +376,7 @@ def test_the_evidence_card_takes_the_mean_return_net_of_costs(
     payload = json.loads(DECISION_RECORD.read_text())
     metrics = payload["in_sample"]["metrics"]
     entry = library.admit(
+        underlying="NIFTY",
         override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
@@ -388,6 +395,7 @@ def test_the_evidence_card_reports_no_hit_rate_rather_than_inventing_one(
     library: TemplateLibrary, registry: TemplateRegistry
 ) -> None:
     entry = library.admit(
+        underlying="NIFTY",
         override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
@@ -403,6 +411,7 @@ def test_the_cost_epoch_list_is_not_read_as_a_volatility_regime_table(
 ) -> None:
     """``epochs.regimes`` partitions the window by statutory cost changes, not by volatility."""
     entry = library.admit(
+        underlying="NIFTY",
         override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
@@ -442,6 +451,7 @@ def test_every_card_number_names_the_field_it_came_from(
     library: TemplateLibrary, registry: TemplateRegistry
 ) -> None:
     entry = library.admit(
+        underlying="NIFTY",
         override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
@@ -470,6 +480,7 @@ def test_status_is_the_latest_entry_and_history_keeps_every_one(
 ) -> None:
     template = registry.get("short_atm_straddle_hold_n")
     library.admit(
+        underlying="NIFTY",
         template=template,
         decision_path=DECISION_RECORD,
         by="tester",
@@ -480,6 +491,7 @@ def test_status_is_the_latest_entry_and_history_keeps_every_one(
     assert library.admitted() == ()
 
     library.admit(
+        underlying="NIFTY",
         override_reason=OVERRIDE,
         template=template,
         decision_path=DECISION_RECORD,
@@ -500,6 +512,7 @@ def test_a_demotion_carries_the_evidence_forward_rather_than_clearing_it(
 ) -> None:
     template = registry.get("short_atm_straddle_hold_n")
     admitted = library.admit(
+        underlying="NIFTY",
         override_reason=OVERRIDE,
         template=template,
         decision_path=DECISION_RECORD,
@@ -523,6 +536,7 @@ def test_demote_refuses_to_demote_twice(
 ) -> None:
     template = registry.get("short_atm_straddle_hold_n")
     library.admit(
+        underlying="NIFTY",
         override_reason=OVERRIDE,
         template=template,
         decision_path=DECISION_RECORD,
@@ -539,6 +553,7 @@ def test_admit_refuses_to_record_a_demotion_that_would_carry_no_reason(
 ) -> None:
     with pytest.raises(ValueError, match="use demote"):
         library.admit(
+        underlying="NIFTY",
             override_reason=OVERRIDE,
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=DECISION_RECORD,
@@ -553,6 +568,7 @@ def test_the_library_round_trips_through_json_unchanged(
 ) -> None:
     template = registry.get("short_atm_straddle_hold_n")
     library.admit(
+        underlying="NIFTY",
         override_reason=OVERRIDE,
         template=template,
         decision_path=DECISION_RECORD,
@@ -592,6 +608,7 @@ def test_the_evidence_card_names_the_strategy_the_record_measured(
 ) -> None:
     """Admitting on evidence from a different trade is a human's call — and must be visible."""
     entry = library.admit(
+        underlying="NIFTY",
         override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
@@ -612,6 +629,7 @@ def test_saving_over_entries_another_writer_added_is_refused(
 
     first = TemplateLibrary(path, clock=clock)
     first.admit(
+        underlying="NIFTY",
         template=template,
         decision_path=DECISION_RECORD,
         by="first",
@@ -620,6 +638,7 @@ def test_saving_over_entries_another_writer_added_is_refused(
     )
     second = TemplateLibrary(path, clock=clock)
     second.admit(
+        underlying="NIFTY",
         template=template,
         decision_path=DECISION_RECORD,
         by="second",
@@ -636,6 +655,7 @@ def test_an_admission_record_round_trips_through_its_dict(
     library: TemplateLibrary, registry: TemplateRegistry
 ) -> None:
     entry = library.admit(
+        underlying="NIFTY",
         override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
@@ -652,6 +672,7 @@ def test_the_admission_timestamp_comes_from_the_injected_clock(
     """Nothing in this package reads the wall clock; a stored time is evidence of when."""
     del clock
     entry = library.admit(
+        underlying="NIFTY",
         override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
@@ -987,6 +1008,7 @@ def test_saving_over_entries_written_before_an_optional_field_existed_still_appe
     path = tmp_path / "older.json"
     library = TemplateLibrary(path, clock=clock)
     library.admit(
+        underlying="NIFTY",
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="first",
@@ -1003,6 +1025,7 @@ def test_saving_over_entries_written_before_an_optional_field_existed_still_appe
 
     reloaded = TemplateLibrary.load(path, clock=clock)
     reloaded.admit(
+        underlying="NIFTY",
         template=registry.get("short_atm_strangle_hold_n"),
         decision_path=DECISION_RECORD,
         by="second",
@@ -1028,6 +1051,7 @@ def test_admit_refuses_a_record_measuring_a_hold_the_ranker_will_not_trade(
     """A hold-3 record's numbers describe a different trade from the hold-1 the ranker builds."""
     with pytest.raises(AdmittedParametersMismatchError, match="two different trades"):
         library.admit(
+        underlying="NIFTY",
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=_record_measuring_hold(tmp_path, 3),
             by="tester",
@@ -1041,6 +1065,7 @@ def test_the_card_carries_the_hold_the_record_measured_when_the_two_agree(
     library: TemplateLibrary, registry: TemplateRegistry, tmp_path: Path
 ) -> None:
     entry = library.admit(
+        underlying="NIFTY",
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=_record_measuring_hold(tmp_path, 1),
         by="tester",
@@ -1056,6 +1081,7 @@ def test_a_record_reporting_no_hold_at_all_falls_back_to_the_template(
 ) -> None:
     """H1 measured a straddle held to cash settlement, which reports no hold to compare."""
     entry = library.admit(
+        underlying="NIFTY",
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="tester",
@@ -1115,6 +1141,7 @@ def test_an_admission_carries_the_point_the_record_measured(tmp_path: Path) -> N
     record = _decision_record(tmp_path, template_parameters=point)
     library = TemplateLibrary(tmp_path / "library.json")
     entry = library.admit(
+        underlying="NIFTY",
         template=template,
         decision_path=record,
         by="tester",
@@ -1136,6 +1163,7 @@ def test_admitting_a_point_the_record_did_not_measure_is_refused(tmp_path: Path)
     library = TemplateLibrary(tmp_path / "library.json")
     with pytest.raises(AdmittedParametersMismatchError, match="two different trades"):
         library.admit(
+        underlying="NIFTY",
             template=template,
             decision_path=record,
             by="tester",
@@ -1152,6 +1180,7 @@ def test_a_record_with_no_point_still_has_its_hold_checked(tmp_path: Path) -> No
     library = TemplateLibrary(tmp_path / "library.json")
     with pytest.raises(AdmittedParametersMismatchError, match="names no template"):
         library.admit(
+        underlying="NIFTY",
             template=template,
             decision_path=record,
             by="tester",
@@ -1168,6 +1197,7 @@ def test_one_template_admitted_at_two_points_is_two_admissions(tmp_path: Path) -
     for hold in (1, 3):
         point = template.resolve({"hold_sessions": hold})
         library.admit(
+        underlying="NIFTY",
             template=template,
             decision_path=_decision_record(
                 tmp_path / f"h{hold}", template_parameters=point, hold_sessions=hold
@@ -1224,6 +1254,7 @@ def test_history_selects_on_the_same_normalisation_the_key_is_built_from(
     template = registry.get("short_atm_straddle_hold_n")
     point = template.resolve({"hold_sessions": 3.0, "target_notional": 1_234_567.0})
     library.seed_from_screen(
+        underlying="NIFTY",
         template=template,
         evidence=EvidenceCard(
             n_observations=100,

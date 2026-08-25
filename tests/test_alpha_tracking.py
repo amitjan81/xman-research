@@ -681,6 +681,7 @@ def test_a_scanned_sheet_is_recorded_settled_and_reported(
     store = synthetic_store()
     library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
     library.admit(
+        underlying="NIFTY",
         override_reason=ADMIT_OVERRIDE,
         template=default_registry().get(TEMPLATE),
         decision_path=DECISION_RECORD,
@@ -738,6 +739,7 @@ def _admitted_library(tmp_path: Path, clock: ManualClock) -> tuple[TemplateLibra
     """A library holding one admitted point, and the parameter key that names it."""
     library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
     library.admit(
+        underlying="NIFTY",
         override_reason=ADMIT_OVERRIDE,
         template=default_registry().get(TEMPLATE),
         decision_path=DECISION_RECORD,

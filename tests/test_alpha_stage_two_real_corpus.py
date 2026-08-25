@@ -382,6 +382,7 @@ def test_the_scan_builds_an_admitted_template_at_the_hold_it_was_admitted_at(
     assert template.hold_sessions == 1, "this test is only meaningful against a hold-1 default"
     point = template.resolve({"hold_sessions": HOLD})
     library.admit(
+        underlying="NIFTY",
         template=template,
         decision_path=decision,
         parameters=point,

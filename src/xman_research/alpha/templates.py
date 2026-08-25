@@ -753,10 +753,12 @@ TemplateBuilder = Callable[[Mapping[str, float], str, FeatureSeries | None], Str
 class StrategyTemplate:
     """One trade shape the scan may instantiate, with the range it was measured over.
 
-    ``products`` lists the underlyings the template is valid for, and :meth:`build` refuses
-    any other. A template measured on NIFTY says nothing about BANKNIFTY, and letting the
-    scan instantiate it there would attach NIFTY's admission evidence to a product that
-    never appeared in it.
+    A template is a trade *shape*, and carries no claim about any product: :meth:`build`
+    instantiates it for whatever underlying the corpus can supply, which is what lets a
+    stage-1 screen measure the shape on a product no evidence covers yet. Evidence scope
+    belongs to an admission instead — an
+    :class:`~xman_research.alpha.library.AdmissionRecord` names the product its evidence was
+    measured on, and the ranker builds only the (template, product) pairs it admits.
 
     :attr:`hold_sessions` is the hold this template trades **at its declared defaults**. A
     template that lets the hold vary declares it as a parameter as well, and
@@ -768,7 +770,6 @@ class StrategyTemplate:
     template_id: str
     name: str
     thesis: str
-    products: tuple[str, ...]
     hold_sessions: int
     parameters: Mapping[str, ParameterRange]
     conditioner: ConditionerSpec | None
@@ -777,11 +778,6 @@ class StrategyTemplate:
     def __post_init__(self) -> None:
         if not self.template_id.strip():
             raise ValueError("template_id must be non-empty")
-        if not self.products:
-            raise ValueError(
-                f"template {self.template_id} lists no products; a template valid for "
-                "nothing can only ever produce ideas with no evidence behind them"
-            )
         if not self.thesis.strip():
             raise ValueError(
                 f"template {self.template_id} states no thesis. The mechanism is what an "
@@ -835,21 +831,19 @@ class StrategyTemplate:
         A template whose shape or conditioner spans sessions refuses to enter without it;
         see :class:`HoldNSpread` for why the series is supplied rather than computed.
         """
-        product = underlying if underlying is not None else self.products[0]
-        if product not in self.products:
+        if underlying is None:
             raise ValueError(
-                f"template {self.template_id} is valid for {list(self.products)} and was "
-                f"asked to build for {product}; its admission evidence was measured on the "
-                "former and says nothing about the latter"
+                f"template {self.template_id} was asked to build without an underlying. A "
+                "template names no default product — the caller decides which product to "
+                "instantiate the shape for, and the corpus decides whether it exists."
             )
-        return self.builder(self.resolve(params), product, feature_series)
+        return self.builder(self.resolve(params), underlying, feature_series)
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "template_id": self.template_id,
             "name": self.name,
             "thesis": self.thesis,
-            "products": list(self.products),
             "hold_sessions": self.hold_sessions,
             "parameters": {name: declared.as_dict() for name, declared in self.parameters.items()},
             "conditioner": self.conditioner.as_dict() if self.conditioner else None,
@@ -898,8 +892,6 @@ class TemplateRegistry:
     def ids(self) -> tuple[str, ...]:
         return tuple(self._templates)
 
-    def for_product(self, underlying: str) -> tuple[StrategyTemplate, ...]:
-        return tuple(t for t in self._templates.values() if underlying in t.products)
 
 
 # ------------------------------------------------------------------- the shipped templates
@@ -1329,7 +1321,6 @@ def _template_for(shape: _Shape, kind: _ConditionerKind | None) -> StrategyTempl
                 "family, and every conditional version of the same structure has to beat it "
                 "on a risk-matched basis before its own evidence means anything."
             ),
-            products=("NIFTY",),
             hold_sessions=_DEFAULT_HOLD_SESSIONS,
             parameters=parameters,
             conditioner=None,
@@ -1345,7 +1336,6 @@ def _template_for(shape: _Shape, kind: _ConditionerKind | None) -> StrategyTempl
             "claim under test is therefore about the conditioner alone, and it is tested "
             "against the unconditional version of itself."
         ),
-        products=("NIFTY",),
         hold_sessions=_DEFAULT_HOLD_SESSIONS,
         parameters=parameters,
         # The spec is placed at the parameters' declared defaults. A build at other

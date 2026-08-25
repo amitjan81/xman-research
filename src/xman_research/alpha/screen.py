@@ -38,6 +38,7 @@ import dataclasses
 import datetime as dt
 import itertools
 import json
+import logging
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -104,6 +105,9 @@ NEVER_ENTERED = "never_entered"
 #: two observations a dispersion needs. Derived from that chain rather than written down, so
 #: the trial log's outcome and the sheet's row cannot disagree about which runs are judgeable.
 MIN_SESSIONS_FOR_A_RETURN_SERIES = 3
+
+
+_LOG = logging.getLogger(__name__)
 
 
 class ScreeningRunError(ValueError):
@@ -536,10 +540,20 @@ class ScreeningRun:
             regimes=regimes,
         )
         rows = []
-        for instance in instances:
+        for position, instance in enumerate(instances, start=1):
             result, evidence = self._backtest(instance, series)
             rows.append(
                 self._row(instance, result, evidence, benchmark=benchmark_evidence, regimes=regimes)
+            )
+            # A screen of a hundred instances runs for hours, and the sheet is written only
+            # at the end. Without a line per instance an operator watching the run cannot
+            # tell a slow instance from a hung one.
+            _LOG.info(
+                "screened %d/%d %s: n=%s entries",
+                position,
+                len(instances),
+                instance.instance_id,
+                rows[-1].n_observations,
             )
 
         return ScreenSheet(
@@ -949,6 +963,7 @@ def evidence_card_from_screen(
         mean_return_at_hold=row.mean_return_at_hold,
         mean_return_per_round_trip=row.mean_return_per_round_trip,
         round_trips=row.round_trips,
+        underlying=sheet.underlying,
         hold_sessions=row.instance.hold_sessions,
         gate_status=None,
         outcome=row.outcome,
@@ -966,6 +981,7 @@ def evidence_card_from_screen(
             ),
             "max_drawdown": f"{source}:instances[{instance_id}].max_drawdown",
             "hit_rate": "not reported by a screening sheet",
+            "underlying": f"{source}:underlying",
             "mean_return_per_session": (
                 f"{source}:instances[{instance_id}].mean_return_per_session, net of costs"
             ),

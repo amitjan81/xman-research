@@ -75,7 +75,7 @@ __all__ = [
     "SKIP_NO_FEATURES",
     "SKIP_NO_MARGIN",
     "SKIP_NO_SESSION_VIEW",
-    "SKIP_PRODUCT_NOT_SUPPORTED",
+    "SKIP_NO_ADMISSION_FOR_PRODUCT",
     "SKIP_TEMPLATE_NOT_REGISTERED",
     "SKIP_TRIGGER_DID_NOT_FIRE",
     "Idea",
@@ -89,7 +89,7 @@ IDEA_SHEET_SCHEMA_VERSION = 1
 #: How the ranker names each way a candidate can drop out. Stable strings, because a
 #: consumer counting "how often did open interest bind this month" needs them to be.
 SKIP_TEMPLATE_NOT_REGISTERED = "template_not_registered"
-SKIP_PRODUCT_NOT_SUPPORTED = "product_not_supported"
+SKIP_NO_ADMISSION_FOR_PRODUCT = "no_admission_for_product"
 SKIP_NO_EXPECTED_EDGE = "no_expected_edge"
 SKIP_TRIGGER_DID_NOT_FIRE = "trigger_did_not_fire"
 SKIP_NO_SESSION_VIEW = "no_session_view"
@@ -400,6 +400,17 @@ class NightlyScan:
         view: SessionView | None,
     ) -> Idea | SkippedCandidate:
         template_id = admission.template_id
+        if admission.underlying != underlying:
+            return _skipped(
+                admission,
+                underlying,
+                SKIP_NO_ADMISSION_FOR_PRODUCT,
+                (
+                    f"{template_id} is admitted for {admission.underlying!r} and this scan is "
+                    f"of {underlying!r}. The evidence behind the admission was measured on the "
+                    "former and says nothing about what the trade does on the latter."
+                ),
+            )
         if template_id not in self._registry:
             return _skipped(
                 admission,
@@ -411,16 +422,6 @@ class NightlyScan:
                 ),
             )
         template = self._registry.get(template_id)
-        if underlying not in template.products:
-            return _skipped(
-                admission,
-                underlying,
-                SKIP_PRODUCT_NOT_SUPPORTED,
-                (
-                    f"{template_id} declares products {list(template.products)}; its evidence "
-                    f"was not measured on {underlying}"
-                ),
-            )
 
         trigger = (
             TriggerExplanation.unconditional()

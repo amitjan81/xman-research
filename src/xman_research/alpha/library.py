@@ -64,6 +64,7 @@ __all__ = [
     "EvidenceCard",
     "LibraryFileError",
     "TemplateLibrary",
+    "CrossProductEvidenceError",
     "UnpassedEvidenceError",
 ]
 
@@ -116,6 +117,16 @@ class AmbiguousParameterPointError(ValueError):
     two points at once and a bare id then names two different trades. Refused rather than
     resolved to the most recent entry: demoting the wrong point would leave the ranker
     proposing exactly the idea somebody meant to stop.
+    """
+
+
+class CrossProductEvidenceError(ValueError):
+    """An admission for one product built on evidence measured on another.
+
+    A template is a shape any product can be screened on, so nothing upstream of the
+    admission ties a card to a product. This is where the two are compared, and the mismatch
+    is refused rather than noted: the ranker reads the admitted card's mean return, drawdown
+    and regime table as a description of the trade it is about to propose on this product.
     """
 
 
@@ -198,6 +209,14 @@ class EvidenceCard:
     """
     round_trips: int | None = None
     """How many positions the measured run opened. ``None`` where the source is silent."""
+    underlying: str | None = None
+    """The product this evidence was measured on, where the source names one.
+
+    ``None`` where it does not, and it stays ``None``: a source that is silent about its
+    product cannot corroborate the product an admission is for, and
+    :meth:`TemplateLibrary.admit` records that silence rather than reading the admission's
+    own product back as if the evidence had confirmed it.
+    """
     """The resolved template parameter point this evidence was measured at, if it names one.
 
     ``None`` means the source could not state a point — a decision record written by a
@@ -234,6 +253,7 @@ class EvidenceCard:
             "mean_return_at_hold": self.mean_return_at_hold,
             "mean_return_per_round_trip": self.mean_return_per_round_trip,
             "round_trips": self.round_trips,
+            "underlying": self.underlying,
             "hold_sessions": self.hold_sessions,
             "gate_status": self.gate_status,
             "outcome": self.outcome,
@@ -267,6 +287,7 @@ class EvidenceCard:
             mean_return_at_hold=payload.get("mean_return_at_hold"),
             mean_return_per_round_trip=_as_float(payload.get("mean_return_per_round_trip")),
             round_trips=_as_int(payload.get("round_trips")),
+            underlying=_as_str(payload.get("underlying")),
             hold_sessions=int(payload["hold_sessions"]),
             gate_status=payload.get("gate_status"),
             outcome=payload.get("outcome"),
@@ -369,6 +390,14 @@ class EvidenceCard:
                 if _as_int(run_metrics.get("round_trips")) is not None
                 else "absent: the source record does not say how many positions it opened"
             ),
+            "underlying": (
+                f"{source}:runs.in_sample.underlying"
+                if _as_str(measured.get("underlying")) is not None
+                else (
+                    "absent: the record names no product, so nothing here corroborates the "
+                    "product an admission built on it is for"
+                )
+            ),
             "gate_status": f"{source}:in_sample.metrics.gate_status",
             "outcome": f"{source}:outcome",
             "window": f"{source}:in_sample.window",
@@ -398,6 +427,7 @@ class EvidenceCard:
             mean_return_at_hold=at_hold,
             mean_return_per_round_trip=_as_float(run_metrics.get("mean_return_per_round_trip")),
             round_trips=_as_int(run_metrics.get("round_trips")),
+            underlying=_as_str(measured.get("underlying")),
             hold_sessions=hold_sessions,
             gate_status=_as_str(metrics.get("gate_status")),
             outcome=_as_str(payload.get("outcome")),
@@ -424,6 +454,13 @@ class AdmissionRecord:
     """
 
     template_id: str
+    underlying: str
+    """The product this admission is for.
+
+    Evidence scope lives here rather than on the template: a template is a trade shape any
+    product can be screened on, and what one admission's evidence covers is one product.
+    The ranker builds this template only when scanning this product.
+    """
     hypothesis_id: str | None
     decision_path: str
     decision_outcome: str | None
@@ -456,13 +493,18 @@ class AdmissionRecord:
         return parameter_key(self.parameters)
 
     @property
-    def identity(self) -> tuple[str, str]:
-        """``(template_id, parameter_key)``: what makes two entries the same admission."""
-        return (self.template_id, self.parameter_key)
+    def identity(self) -> tuple[str, str, str]:
+        """``(template_id, underlying, parameter_key)``: what makes two entries the same.
+
+        The product is part of the identity because the evidence is: one shape admitted on
+        NIFTY and on BANKNIFTY is two admissions carrying two different sets of numbers.
+        """
+        return (self.template_id, self.underlying, self.parameter_key)
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "template_id": self.template_id,
+            "underlying": self.underlying,
             "parameters": {name: float(value) for name, value in sorted(self.parameters.items())},
             "parameter_key": self.parameter_key,
             "hypothesis_id": self.hypothesis_id,
@@ -487,6 +529,7 @@ class AdmissionRecord:
         """
         return cls(
             template_id=str(payload["template_id"]),
+            underlying=str(payload["underlying"]),
             parameters=_parameter_point(payload.get("parameters")) or {},
             hypothesis_id=_as_str(payload.get("hypothesis_id")),
             decision_path=str(payload["decision_path"]),
@@ -555,9 +598,13 @@ class TemplateLibrary:
         return tuple(self._entries)
 
     def history(
-        self, template_id: str, *, parameters: Mapping[str, float] | None = None
+        self,
+        template_id: str,
+        *,
+        underlying: str | None = None,
+        parameters: Mapping[str, float] | None = None,
     ) -> tuple[AdmissionRecord, ...]:
-        """Every entry naming ``template_id``, narrowed by ``parameters`` when given.
+        """Every entry naming ``template_id``, narrowed by ``underlying`` and ``parameters``.
 
         **``parameters`` is a selector, not necessarily a whole point.** An entry matches
         when it carries every name and value supplied, so ``{"hold_sessions": 3}`` selects
@@ -573,7 +620,12 @@ class TemplateLibrary:
         ``parameter_key`` apart selects the entry that key was made from, for every value
         the range allows rather than only for the short ones.
         """
-        rows = tuple(entry for entry in self._entries if entry.template_id == template_id)
+        rows = tuple(
+            entry
+            for entry in self._entries
+            if entry.template_id == template_id
+            and (underlying is None or entry.underlying == underlying)
+        )
         if parameters is None:
             return rows
         wanted = {str(name): parameter_value_key(value) for name, value in parameters.items()}
@@ -594,7 +646,11 @@ class TemplateLibrary:
         return tuple(seen)
 
     def current(
-        self, template_id: str, *, parameters: Mapping[str, float] | None = None
+        self,
+        template_id: str,
+        *,
+        underlying: str | None = None,
+        parameters: Mapping[str, float] | None = None,
     ) -> AdmissionRecord | None:
         """The latest entry for one admission, or ``None`` if there is none.
 
@@ -602,12 +658,12 @@ class TemplateLibrary:
         too partial to separate two. A template live at two points is two admissions, and
         answering with the more recent would name a trade the caller did not ask about.
         """
-        history = self.history(template_id, parameters=parameters)
-        matched = {entry.parameter_key for entry in history}
+        history = self.history(template_id, underlying=underlying, parameters=parameters)
+        matched = {(entry.underlying, entry.parameter_key) for entry in history}
         if len(matched) > 1:
             raise AmbiguousParameterPointError(
-                f"template {template_id!r} has entries at {len(matched)} parameter points "
-                f"({sorted(matched)})"
+                f"template {template_id!r} has entries at {len(matched)} (product, parameter "
+                f"point) pairs ({sorted(matched)})"
                 + (f" matching [{parameter_key(parameters)}]" if parameters is not None else "")
                 + ". Name the point: this would otherwise answer about whichever was filed "
                 "last."
@@ -615,9 +671,13 @@ class TemplateLibrary:
         return history[-1] if history else None
 
     def status(
-        self, template_id: str, *, parameters: Mapping[str, float] | None = None
+        self,
+        template_id: str,
+        *,
+        underlying: str | None = None,
+        parameters: Mapping[str, float] | None = None,
     ) -> AdmissionStatus | None:
-        entry = self.current(template_id, parameters=parameters)
+        entry = self.current(template_id, underlying=underlying, parameters=parameters)
         return entry.status if entry else None
 
     def admitted(self) -> tuple[AdmissionRecord, ...]:
@@ -638,6 +698,7 @@ class TemplateLibrary:
         self,
         *,
         template: StrategyTemplate,
+        underlying: str,
         decision_path: Path | str,
         by: str,
         reason: str,
@@ -651,6 +712,11 @@ class TemplateLibrary:
         Refuses when the record does not exist or does not parse — those mean there is no
         evidence, and a template admitted without evidence would hand the ranker an
         expected edge it invented.
+
+        ``underlying`` is the product this admission covers. Where the record names its own
+        product and the two disagree the admission is refused; where the record is silent
+        the entry's card says so in its provenance, so a reader can see that the product was
+        asserted here rather than corroborated by the measurement.
 
         **An ADMITTED status on evidence that did not pass its gate needs
         ``override_reason``.** The ranker's ideas are real trade proposals, so admitting a
@@ -666,6 +732,11 @@ class TemplateLibrary:
             raise ValueError("admit requires `by`: an admission is somebody's decision")
         if not reason.strip():
             raise ValueError("admit requires a written `reason`")
+        if not underlying.strip():
+            raise ValueError(
+                "admit requires `underlying`: an admission's evidence covers one product, "
+                "and the ranker builds this template only when scanning that product"
+            )
 
         source = Path(decision_path)
         payload = _read_decision_record(source)
@@ -704,6 +775,13 @@ class TemplateLibrary:
             hold_sessions=measured_hold if measured_hold is not None else admitted_hold,
             source=str(source),
         )
+        if evidence.underlying is not None and evidence.underlying != underlying:
+            raise CrossProductEvidenceError(
+                f"{source} measured {template.template_id} on {evidence.underlying} and this "
+                f"admission is for {underlying}. The mean return at hold, the drawdown and "
+                "the regime table all describe the former market, and the ranker would read "
+                "them as a description of a trade on the latter."
+            )
         outcome = _as_str(payload.get("outcome"))
         recorded_override: str | None = None
         if status is AdmissionStatus.ADMITTED and not _passes(outcome, evidence):
@@ -719,6 +797,7 @@ class TemplateLibrary:
 
         entry = AdmissionRecord(
             template_id=template.template_id,
+            underlying=underlying,
             parameters=admitted_point,
             hypothesis_id=_as_str(payload.get("hypothesis_id")),
             decision_path=str(source),
@@ -739,6 +818,7 @@ class TemplateLibrary:
         self,
         *,
         template: StrategyTemplate,
+        underlying: str,
         evidence: EvidenceCard,
         sheet_path: Path | str,
         by: str,
@@ -763,8 +843,15 @@ class TemplateLibrary:
             raise ValueError("seed_from_screen requires `by`: filing evidence is somebody's act")
         if not reason.strip():
             raise ValueError("seed_from_screen requires a written `reason`")
+        if evidence.underlying is not None and evidence.underlying != underlying:
+            raise CrossProductEvidenceError(
+                f"{sheet_path} screened {template.template_id} on {evidence.underlying} and "
+                f"this candidate is filed for {underlying}; the row's numbers describe the "
+                "former market"
+            )
         entry = AdmissionRecord(
             template_id=template.template_id,
+            underlying=underlying,
             parameters=template.resolve(
                 parameters if parameters is not None else evidence.parameters
             ),
@@ -788,6 +875,7 @@ class TemplateLibrary:
         template_id: str,
         by: str,
         reason: str,
+        underlying: str | None = None,
         parameters: Mapping[str, float] | None = None,
     ) -> AdmissionRecord:
         """Record that one admission is no longer live, against a written reason.
@@ -802,7 +890,7 @@ class TemplateLibrary:
             raise ValueError("demote requires `by`: a demotion is somebody's decision")
         if not reason.strip():
             raise ValueError("demote requires a written `reason`")
-        previous = self.current(template_id, parameters=parameters)
+        previous = self.current(template_id, underlying=underlying, parameters=parameters)
         if previous is None:
             raise KeyError(
                 f"template {template_id!r} has no entry in this library"
@@ -815,6 +903,7 @@ class TemplateLibrary:
             )
         entry = AdmissionRecord(
             template_id=template_id,
+            underlying=previous.underlying,
             parameters=previous.parameters,
             hypothesis_id=previous.hypothesis_id,
             decision_path=previous.decision_path,

@@ -456,6 +456,7 @@ def test_a_screened_instance_seeds_the_library_as_a_candidate_and_never_as_admit
 
     library = TemplateLibrary(tmp_path / "library.json", clock=clock)
     entry = library.seed_from_screen(
+        underlying="NIFTY",
         template=default_registry().get(top.instance.template_id),
         evidence=card,
         sheet_path="sheet.json",

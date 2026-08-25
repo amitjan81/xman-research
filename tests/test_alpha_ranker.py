@@ -84,6 +84,7 @@ def _library(tmp_path: Path, clock: ManualClock, *template_ids: str) -> Template
     registry = default_registry()
     for template_id in template_ids:
         library.admit(
+        underlying="NIFTY",
             override_reason=RANKER_OVERRIDE,
             template=registry.get(template_id),
             decision_path=DECISION_RECORD,
@@ -131,7 +132,6 @@ def _two_templates_of_different_strength(
             template_id="a_weaker_sibling",
             name="a weaker sibling",
             thesis="the same trade, gated on a condition it clears without saturating",
-            products=("NIFTY",),
             hold_sessions=1,
             parameters={},
             conditioner=ConditionerSpec(
@@ -149,6 +149,7 @@ def _two_templates_of_different_strength(
     library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
     for template_id in ("short_atm_straddle_hold_n", "a_weaker_sibling"):
         library.admit(
+        underlying="NIFTY",
             override_reason=RANKER_OVERRIDE,
             template=registry.get(template_id),
             decision_path=DECISION_RECORD,
@@ -260,6 +261,7 @@ def test_a_tie_breaks_on_template_id_then_product(
     library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
     for template_id in ("short_atm_straddle_hold_n", "a_twin_of_the_benchmark"):
         library.admit(
+        underlying="NIFTY",
             override_reason=RANKER_OVERRIDE,
             template=registry.get(template_id),
             decision_path=DECISION_RECORD,
@@ -390,6 +392,7 @@ def test_a_candidate_that_was_never_admitted_is_not_proposed(
     store, sessions = corpus
     library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
     library.admit(
+        underlying="NIFTY",
         template=default_registry().get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="tester",

@@ -164,3 +164,37 @@ clause is left unedited rather than quietly reworded.
 directory, not a temp file, so the trial count persists across runs for stage-2
 deflation. The file itself is untracked: `.gitignore:18` ignores `*.db`
 repo-wide. The path is the durable part; the database is local state.
+
+## The guard, rescoped
+
+Option 3 of the three above, approved by the owner on 2026-08-25. **The
+specification changed**: evidence scope is a property of an admission, not of a
+template.
+
+- `StrategyTemplate` no longer has `products`. A template is a trade *shape* and
+  carries no claim about any product; `build(params, underlying)` instantiates it
+  for whatever underlying the corpus can supply and refuses only an absent one.
+  `TemplateRegistry.for_product` went with the field — it filtered on a claim the
+  template no longer makes.
+- `AdmissionRecord.underlying` names the product an admission covers, and is part
+  of the entry's identity: one shape admitted on NIFTY and on BANKNIFTY is two
+  admissions carrying two different sets of numbers. `history`, `current`,
+  `status` and `demote` take the product as a selector, and an ambiguous selector
+  is refused as it already was for parameter points.
+- `EvidenceCard.underlying` is the product the *evidence* was measured on, read
+  from `runs.in_sample.underlying` where the source names it. A decision record
+  that does not is silent, not corroborating: the card's provenance says so, and
+  the admission's product is then asserted by whoever filed it.
+- `TemplateLibrary.admit` refuses on a mismatch between the two
+  (`CrossProductEvidenceError`), as does `seed_from_screen`, where the sheet
+  always names its product. Every other refusal is unchanged.
+- The ranker's skip is now `no_admission_for_product`: a scan of a product a
+  template has no ADMITTED record for is a visible skip on the sheet, not a
+  silent instantiation of another product's evidence. `product_not_supported` is
+  gone with the field it read.
+
+A drift report aggregates the ideas at one (template, parameter point) whatever
+product they were proposed on, so `tracking` matches the library on that pair and
+demotes without naming a product; the library refuses outright once one point is
+admitted on two products, which is the honest answer to a report that cannot say
+which of them drifted.

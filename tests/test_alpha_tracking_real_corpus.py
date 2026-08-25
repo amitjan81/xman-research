@@ -59,6 +59,7 @@ ADMIT_OVERRIDE = (
 def library_path(tmp_path: Path) -> Path:
     library = TemplateLibrary(tmp_path / "templates.json")
     library.admit(
+        underlying="NIFTY",
         override_reason=ADMIT_OVERRIDE,
         template=default_registry().get(TEMPLATE),
         decision_path=DECISION_RECORD,
