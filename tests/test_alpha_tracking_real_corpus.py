@@ -161,7 +161,13 @@ def test_scan_record_settle_report_over_the_captured_corpus(
     assert re.search(r"admitted mean return at hold: [+-]", printed)
     report = IdeaLedger.load(ledger_path).drift(TemplateLibrary.load(library_path))[0]
     assert report.card_mean_return_at_hold is not None
-    assert report.card_mean_return_per_round_trip is not None
+    # This admission rests on a decision record whose run reports no per-position figure, so
+    # there is nothing to rescale the promised edge onto. The comparison stays on the
+    # per-session-scaled base at a scale of exactly one, and the report says which base it
+    # used rather than leaving a reader to assume the corrected one.
+    assert report.card_mean_return_per_round_trip is None
+    assert report.expected_scale == 1.0
+    assert "per-session" in report.reason or "unscaled" in report.reason
 
 
 def test_settling_before_the_hold_elapses_leaves_the_idea_open(

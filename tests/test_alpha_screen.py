@@ -80,10 +80,10 @@ def test_a_grid_expands_to_the_product_of_its_axes_in_a_deterministic_order(regi
     )
     instances = spec.expand(registry)
     assert [instance.instance_id for instance in instances] == [
-        "short_atm_strangle_hold_n@NIFTY[atr_multiple=0.5,hold_sessions=1]",
-        "short_atm_strangle_hold_n@NIFTY[atr_multiple=0.5,hold_sessions=3]",
-        "short_atm_strangle_hold_n@NIFTY[atr_multiple=1,hold_sessions=1]",
-        "short_atm_strangle_hold_n@NIFTY[atr_multiple=1,hold_sessions=3]",
+        "short_atm_strangle_hold_n@NIFTY[atr_multiple=0.5,hold_sessions=1.0]",
+        "short_atm_strangle_hold_n@NIFTY[atr_multiple=0.5,hold_sessions=3.0]",
+        "short_atm_strangle_hold_n@NIFTY[atr_multiple=1.0,hold_sessions=1.0]",
+        "short_atm_strangle_hold_n@NIFTY[atr_multiple=1.0,hold_sessions=3.0]",
     ]
     assert spec.expand(registry) == instances
     assert [instance.hold_sessions for instance in instances] == [1, 3, 1, 3]

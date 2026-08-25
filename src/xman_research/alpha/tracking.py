@@ -539,6 +539,11 @@ class DriftReport:
 
     ``1.0`` means the card carried no per-position figure to rescale onto and the comparison
     is the promised per-session-scaled one; :attr:`reason` says so when that happens.
+
+    :attr:`expected_mean` is therefore the *scaled* mean, while the ``expected_return`` on
+    each settlement row is the number the operator was promised that night, unscaled. The
+    row records what was said; the report records what it is being judged against, and this
+    field is the whole difference between them.
     """
 
     @property

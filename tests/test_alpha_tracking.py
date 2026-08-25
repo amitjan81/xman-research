@@ -40,6 +40,7 @@ from xman_research.alpha.tracking import (
     VERDICT_WITHIN_TOLERANCE,
     ConflictingSheetError,
     IdeaLedger,
+    Settlement,
     apply_demotions,
     cusum_low,
     one_sided_t_statistic,
@@ -170,7 +171,7 @@ def test_record_sheet_round_trips_through_disk(tmp_path: Path, clock: ManualCloc
 
     reloaded = IdeaLedger.load(tmp_path / "ledger.json")
     idea = reloaded.presented()[0]
-    assert idea.key == (as_of.isoformat(), TEMPLATE, "hold_sessions=1", UNDERLYING)
+    assert idea.key == (as_of.isoformat(), TEMPLATE, "hold_sessions=1.0", UNDERLYING)
     assert idea.expected_edge == pytest.approx(0.0012)
     assert idea.hold_sessions == 1
     assert idea.granted_lots == LOTS
@@ -796,3 +797,47 @@ def test_the_same_shortfalls_alternating_leave_the_admission_alone(
     assert reports[0].verdict == VERDICT_WITHIN_TOLERANCE
     assert apply_demotions(reports, library, by="tester") == ()
     assert [record.template_id for record in library.admitted()] == [TEMPLATE]
+
+
+class _RefusesAnEmptySelector:
+    """A library that fails the test if a selector matching every entry reaches it."""
+
+    def current(self, template_id: str, *, parameters):
+        assert parameters, "an empty parameter selector reached the library"
+        return None
+
+
+def test_a_settlement_with_no_parameter_key_never_selects_by_an_empty_point(
+    tmp_path: Path, clock: ManualClock
+) -> None:
+    """An empty key matches every entry, so it is treated as naming none.
+
+    ``history({})`` matches everything — ``all([])`` is true — so a hand-built row carrying
+    no point would make ``current()`` refuse a template admitted at two points, and the
+    refusal would come out of the middle of ``drift()`` and fail the whole nightly run over
+    that one row.
+    """
+    ledger = IdeaLedger(tmp_path / "ledger.json", clock=clock)
+    ledger._append(
+        Settlement(
+            as_of="2026-04-20",
+            template_id=TEMPLATE,
+            parameter_key="",
+            underlying=UNDERLYING,
+            status=STATUS_SETTLED,
+            exit_as_of="2026-04-21",
+            hold_sessions=1,
+            capital_base=DEFAULT_CAPITAL_BASE,
+            pnl=-100.0,
+            realised_return=-0.0001,
+            expected_return=0.001,
+            legs=(),
+            reason="a hand-built row carrying no point",
+            settled_at="2026-04-21T00:00:00+00:00",
+        )
+    )
+
+    reports = ledger.drift(_RefusesAnEmptySelector(), min_settled=1)
+
+    assert [report.parameter_key for report in reports] == [""]
+    assert reports[0].card_mean_return_at_hold is None
