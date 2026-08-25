@@ -71,12 +71,44 @@ is precisely what the confidence field exists to prevent; writing nothing is the
 reversible choice, and the runs are recorded here as evidence for whoever does read the
 circulars.
 
+**BANKNIFTY says the same thing louder.** Its refdata declares **30** on every one of the
+392 published sessions dated 2024-08-01..2026-05-29 — the corpus holds 509 sessions, but
+the 61 from 2026-06-01 are a sealed holdout and no bundle of theirs was opened, so the
+claim is made only over what was read — and the bars carry four regimes: 15 through the
+30/01/2025 expiry,
+30 through 26/06/2025, **35** through 30/12/2025, and 30 again from 27/01/2026. Measured
+over the 392 published in-sample sessions (2024-08-01..2026-05-29), **221 of them
+contradict their own declared lot size** — see :data:`BANKNIFTY_LOT_SIZE_EPOCHS` for the
+per-regime row counts and shares. Two things make this table encodable where NIFTY's runs
+were not: the boundaries were measured against front expiries rather than session dates,
+and each falls on an expiry handover with no contract observed under two multipliers.
+
+**The 35 regime is the reason :data:`CANDIDATE_LOT_SIZES` must contain 35.** Detection
+requires the true multiplier among the candidates: under a declared 30, a 35-lot regime
+yields a declared share of ~15% and a best alternative of 15 at ~32%, so with 35 absent
+neither the floor nor the ceiling fires,
+:attr:`LotSizeAudit.contradicts_declared` is False, and 102 sessions whose declared lot
+size does not describe their own bars run unstamped. That is the one failure mode this
+module exists to prevent.
+
 **A related defect, reported and not fixed here.** :func:`epoch_for` takes a parameter
 named ``expiry``, but its only production caller — :meth:`LotSizeAudit.contradiction_message`
 — passes ``self.session_date``. The two coincide for the December window (its sessions and
 its expiries share the 2025-12-16..12-30 range), which is why nothing has noticed. Deciding
 whether the epoch is session-keyed or expiry-keyed is a semantic change to a frozen
-dataclass and belongs in its own change, with the owner's call.
+dataclass and belongs in its own change, with the owner's call. **BANKNIFTY widens the
+window in which it is observable** — its post-2024 cycle is monthly, so a session sits up
+to 30 days before its front expiry rather than NIFTY's 7. Measured against the in-sample
+corpus the consequence is bounded and one-directional. The session-keyed lookup lands in
+the gap between two epochs on 48 in-sample sessions, but a message is only produced where
+the declared lot size is contradicted, which narrows it to **13**: 2024-08-01..2024-08-06
+(front contract the 15-lot 07/08/2024 expiry) and 2025-06-27 plus 2025-07-16..2025-07-30
+(front contract the 35-lot 31/07/2025 expiry). On those the "this is a recorded regime"
+line is dropped from :meth:`LotSizeAudit.contradiction_message`. The other 35 sessions sit
+before a 30-lot expiry, where the declared value is right and no message is generated at
+all. It never attaches the *wrong* epoch anywhere in the corpus — checked on all 392
+in-sample sessions, zero mismatches. A missing corroboration line is a
+weaker message, not a wrong number.
 
 The cause is publish-time dependence, the same class already fixed for symbols on the
 producer side: the sessions were published against the *then-current* scrip master rather
@@ -127,6 +159,7 @@ if TYPE_CHECKING:  # pragma: no cover - import cost is paid only by type checker
     from xman_research.session_store import RefData
 
 __all__ = [
+    "BANKNIFTY_LOT_SIZE_EPOCHS",
     "CANDIDATE_LOT_SIZES",
     "NIFTY_LOT_SIZE_EPOCHS",
     "LotSizeAudit",
@@ -135,11 +168,23 @@ __all__ = [
     "epoch_for",
 ]
 
-#: Lot sizes to test the bars against. NIFTY's own history (75, then 65) plus the two
-#: smaller values that appear in NSE index-option history, so that a future regime the
-#: corpus has not seen is still *detected* — reporting "no candidate explains this" is a
-#: better failure than silently accepting the declared value.
-CANDIDATE_LOT_SIZES: tuple[int, ...] = (15, 20, 25, 40, 50, 65, 75)
+#: Lot sizes to test the bars against. NIFTY's own history (75, then 65), BANKNIFTY's
+#: (15, 30, 35 — all three measured on this corpus, see the module docstring), plus the
+#: values that appear elsewhere in NSE index-option history, so that a regime the corpus
+#: has not seen is still *detected* — reporting "no candidate explains this" is a better
+#: failure than silently accepting the declared value.
+#:
+#: **35 is load-bearing.** BANKNIFTY's refdata declares 30 on every session, and across
+#: the 102 sessions whose front contract expires between 2025-07-31 and 2025-12-30 the
+#: bars divide by 35 alone. Drop 35 from this tuple and the declared value explains 15.5%
+#: of those rows — far under :data:`_DECLARED_FLOOR` — while the best remaining
+#: alternative (15, at 32%) is far under :data:`_ALTERNATIVE_CEILING`, so
+#: :attr:`LotSizeAudit.contradicts_declared` stays False and those sessions run
+#: **unstamped**. A candidate set that cannot name a regime cannot convict one.
+#:
+#: 45 was measured over the same corpus and explains at most 33% of any regime's rows, a
+#: chance rate rather than a signal, so it is not carried.
+CANDIDATE_LOT_SIZES: tuple[int, ...] = (15, 20, 25, 30, 35, 40, 50, 65, 75)
 
 #: Below this share of positive volume rows, the declared lot size is not describing the
 #: data. Chosen from the measured separation, which is not marginal: on the December
@@ -236,10 +281,111 @@ NIFTY_LOT_SIZE_EPOCHS: tuple[LotSizeEpoch, ...] = (
 )
 
 
+#: BANKNIFTY's lot-size regimes as this corpus evidences them, keyed on contract expiry.
+#:
+#: **Every session's refdata declares 30, and the bars disagree on 221 of the 392
+#: in-sample sessions.** That is the same publish-time-dependence defect the NIFTY table
+#: records, at a larger scale: the whole BANKNIFTY corpus was published in one batch
+#: against the then-current scrip master, so a single declared value is stamped onto four
+#: distinct regimes. Nothing in the corpus ever declares 15 or 35.
+#:
+#: **The evidence is per front expiry, which on this corpus means per contract.** All 392
+#: in-sample published sessions carry positive volume under exactly one expiry — zero
+#: exceptions — so a session maps to a contract without ambiguity, and each of the three
+#: boundaries below is an expiry handover rather than a mid-contract flip: no expiry is
+#: observed under two multipliers.
+#:
+#: The regimes are CORROBORATED, not CONFIRMED: this is a measurement over 5.8 million
+#: positive-volume option rows, not a citation. No NSE circular has been read for this
+#: module. The 15 -> 30 boundary is consistent with the November 2024 contract-size
+#: revision reaching BANKNIFTY through the monthly cycle, and the 35 excursion is
+#: consistent with the 2025 revision that was reported at the time, but this corpus cannot
+#: close either question: divisibility establishes only a *lower* bound on a lot size, and
+#: the refdata is contaminated on every session.
+#:
+#: **The table stops at the 2026-06-30 expiry and does not run open-ended.** Sessions from
+#: 2026-06-01 onward are a sealed holdout that this measurement did not open, so an
+#: ``expiries_through=None`` here would be claiming a regime over data nobody has read.
+#: Past that expiry :func:`epoch_for` returns ``None``, meaning "not established", which is
+#: the honest answer and the one :meth:`LotSizeAudit.contradiction_message` already
+#: handles.
+BANKNIFTY_LOT_SIZE_EPOCHS: tuple[LotSizeEpoch, ...] = (
+    LotSizeEpoch(
+        underlying="BANKNIFTY",
+        lot_size=15,
+        expiries_from=dt.date(2024, 8, 7),
+        expiries_through=dt.date(2025, 1, 30),
+        confidence=Confidence.CORROBORATED,
+        evidence=(
+            "Measured over the 119 published corpus sessions whose front contract expires "
+            "between 07/08/2024 and 30/01/2025 (18 expiries, 1,844,651 positive-volume "
+            "option rows): 100.00% of rows divide by 15, against 49.75% by 30 — the chance "
+            "rate, since a multiple of 15 is a multiple of 30 exactly when it is even — "
+            "13.97% by 35 and 32.93% by 45. Every one of those sessions' .refdata declares "
+            "30."
+        ),
+    ),
+    LotSizeEpoch(
+        underlying="BANKNIFTY",
+        lot_size=30,
+        expiries_from=dt.date(2025, 2, 27),
+        expiries_through=dt.date(2025, 6, 26),
+        confidence=Confidence.CORROBORATED,
+        evidence=(
+            "Measured over the 75 published corpus sessions whose front contract expires "
+            "between 27/02/2025 and 26/06/2025 (5 expiries, 1,119,017 positive-volume "
+            "option rows): 100.00% of rows divide by 30, and the declared value agrees "
+            "with the bars here. The preceding contract, 30/01/2025, reads 15 and the "
+            "following one, 31/07/2025, reads 35, so this run is bounded by measurement on "
+            "both sides rather than assumed to extend."
+        ),
+    ),
+    LotSizeEpoch(
+        underlying="BANKNIFTY",
+        lot_size=35,
+        expiries_from=dt.date(2025, 7, 31),
+        expiries_through=dt.date(2025, 12, 30),
+        confidence=Confidence.CORROBORATED,
+        evidence=(
+            "Measured over the 102 published corpus sessions whose front contract expires "
+            "between 31/07/2025 and 30/12/2025 (6 expiries, 1,469,277 positive-volume "
+            "option rows): 100.00% of rows divide by 35 and nothing else comes close — "
+            "32.11% by 15, 15.51% by the declared 30, 9.97% by 45. Detecting this regime "
+            "requires 35 among CANDIDATE_LOT_SIZES: under a declared 30 the declared share "
+            "sits below the floor while the best alternative without 35 — 15, at 32% — "
+            "sits below the ceiling, so neither test fires and the session runs unstamped."
+        ),
+    ),
+    LotSizeEpoch(
+        underlying="BANKNIFTY",
+        lot_size=30,
+        expiries_from=dt.date(2026, 1, 27),
+        expiries_through=dt.date(2026, 6, 30),
+        confidence=Confidence.CORROBORATED,
+        evidence=(
+            "Measured over the 96 published corpus sessions whose front contract expires "
+            "between 27/01/2026 and 30/06/2026 (6 expiries, 1,359,930 positive-volume "
+            "option rows): 100.00% of rows divide by 30, against 12.87% by 35. The "
+            "30/06/2026 expiry is evidenced by the two in-sample sessions 2026-05-28 and "
+            "2026-05-29 that carry it as their front contract; sessions from 2026-06-01 "
+            "onward are a sealed holdout and were not read, which is why this entry closes "
+            "at that expiry instead of running open-ended."
+        ),
+    ),
+)
+
+#: Every underlying whose regimes have been measured. :func:`epoch_for` walks this rather
+#: than one table, so adding an underlying is one entry here and not a new branch.
+_EPOCHS_BY_UNDERLYING: Mapping[str, tuple[LotSizeEpoch, ...]] = {
+    "NIFTY": NIFTY_LOT_SIZE_EPOCHS,
+    "BANKNIFTY": BANKNIFTY_LOT_SIZE_EPOCHS,
+}
+
+
 def epoch_for(expiry: dt.date, *, underlying: str = "NIFTY") -> LotSizeEpoch | None:
     """The recorded lot-size epoch covering ``expiry``, or ``None`` if none does."""
-    for epoch in NIFTY_LOT_SIZE_EPOCHS:
-        if epoch.underlying == underlying and epoch.covers_expiry(expiry):
+    for epoch in _EPOCHS_BY_UNDERLYING.get(underlying, ()):
+        if epoch.covers_expiry(expiry):
             return epoch
     return None
 
