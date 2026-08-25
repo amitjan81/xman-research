@@ -18,6 +18,7 @@ import pytest
 from xman_research import ManualClock
 from xman_research.alpha.library import (
     AdmissionRecord,
+    CrossProductEvidenceError,
     AdmissionStatus,
     AdmittedParametersMismatchError,
     AmbiguousParameterPointError,
@@ -150,7 +151,7 @@ def test_admit_refuses_evidence_measured_on_another_product(
     tmp_path: Path, library: TemplateLibrary, registry: TemplateRegistry
 ) -> None:
     """The card's product is the measurement's; the admission's is the caller's claim."""
-    path = _decision_record(tmp_path, template_parameters=None)
+    path = _decision_record(tmp_path, template_parameters=None, hold_sessions=1)
     payload = json.loads(path.read_text())
     payload["runs"]["in_sample"]["underlying"] = "NIFTY"
     path.write_text(json.dumps(payload))
@@ -171,7 +172,7 @@ def test_a_card_from_a_silent_record_says_it_corroborates_no_product(
     entry = library.admit(
         underlying="BANKNIFTY",
         template=registry.get("short_atm_straddle_hold_n"),
-        decision_path=_decision_record(tmp_path, template_parameters=None),
+        decision_path=_decision_record(tmp_path, template_parameters=None, hold_sessions=1),
         by="tester",
         reason="the record names no product, so the product here is asserted",
         status=AdmissionStatus.CANDIDATE,
