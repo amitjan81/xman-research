@@ -8,13 +8,16 @@ idea is copied out of the admission record rather than measured at scan time. Re
 nightly would be a fresh selection over the same corpus every evening, with the trial
 count nowhere recorded.
 
-**Admission is not a verdict.** :meth:`TemplateLibrary.admit` refuses a decision record
-that is missing or unparseable, because those mean there is no evidence to carry. It does
-not refuse a record whose gate *failed*: the verdict is a fact about the strategy, it is
-copied into the evidence card verbatim, and a human who admits a failed template against
-their own name has made a decision the record then shows. What the framework guarantees is
-that the decision is visible — :attr:`EvidenceCard.passed_gate` is false, and any idea
-sheet resting on such an admission says so on its face.
+**Filing evidence and admitting a template are two different acts, and only the second is
+gated.** :meth:`TemplateLibrary.admit` refuses a decision record that is missing or
+unparseable, because those mean there is no evidence to carry. Filing unpassed evidence as
+a CANDIDATE is always allowed: the ranker never proposes a candidate, so recording what was
+measured costs nothing. Admitting on unpassed evidence — a failed threshold, a failed
+holdout, a run that could not be evaluated — requires a written ``override_reason``, which
+is recorded on the entry. The ranker's ideas are real trade proposals, so that decision is
+somebody's to make in writing rather than a default. The verdict itself is copied onto the
+card verbatim either way, :attr:`EvidenceCard.passed_gate` is false, and any idea sheet
+resting on such an admission says so on its face.
 
 **Append-only, like the trial log.** Status changes are entries, not edits: the current
 status of a template is the last entry naming it, and nothing rewrites an entry once
@@ -48,6 +51,9 @@ from xman_research.clock import Clock, SystemClock
 __all__ = [
     "DEFAULT_LIBRARY_PATH",
     "LIBRARY_SCHEMA_VERSION",
+    "PASSING_GATE_STATUS",
+    "PASSING_OUTCOME",
+    "SCREENED_NOT_GATED",
     "AdmissionRecord",
     "AdmissionStatus",
     "AppendOnlyLibraryError",
@@ -55,6 +61,7 @@ __all__ = [
     "EvidenceCard",
     "LibraryFileError",
     "TemplateLibrary",
+    "UnpassedEvidenceError",
 ]
 
 #: Where the library lives, **relative to the working directory**, which in practice means
@@ -87,6 +94,30 @@ class LibraryFileError(ValueError):
 
 class AppendOnlyLibraryError(RuntimeError):
     """The stored library is not a prefix of what is about to be written."""
+
+
+class UnpassedEvidenceError(ValueError):
+    """An admission whose evidence did not clear its gate, with no written override.
+
+    Distinct from :class:`DecisionRecordError`: the record is present and readable, and what
+    it says is that the strategy failed. That is a refusal about the *decision* being made,
+    not about the artefact being read, and a caller that conflated the two would report a
+    corrupt file when the truth is a failed gate.
+    """
+
+
+#: What the sole passing outcome of a decision record is called. A record reporting anything
+#: else — a failed threshold, a failed holdout, a run that could not be evaluated — is not a
+#: pass, and there is no fifth value that quietly counts as one.
+PASSING_OUTCOME = "passes_survives_holdout"
+
+#: What the sole passing gate status is called, on the in-sample metrics of a decision record.
+PASSING_GATE_STATUS = "passed"
+
+#: The ``decision_outcome`` a screening-sheet entry carries. Spelled unlike any of the four
+#: outcomes a decision record can report, so a reader scanning statuses cannot mistake a
+#: stage-one point estimate for a graded verdict.
+SCREENED_NOT_GATED = "screened_stage_1_not_gated"
 
 
 class AdmissionStatus(StrEnum):
@@ -441,16 +472,21 @@ class TemplateLibrary:
         reason: str,
         status: AdmissionStatus = AdmissionStatus.ADMITTED,
         notes: str | None = None,
+        override_reason: str | None = None,
     ) -> AdmissionRecord:
         """File evidence for ``template`` from the decision record at ``decision_path``.
 
         Refuses when the record does not exist or does not parse — those mean there is no
         evidence, and a template admitted without evidence would hand the ranker an
-        expected edge it invented. Does **not** refuse a record whose gate failed; see the
-        module docstring for why that is a human's decision and how it stays visible.
+        expected edge it invented.
 
-        ``by`` and ``reason`` are mandatory and are not checked for truthfulness. Their job
-        is to make an admission an attributable act rather than an appearance in a file.
+        **An ADMITTED status on evidence that did not pass its gate needs
+        ``override_reason``.** The ranker's ideas are real trade proposals, so admitting a
+        template whose pre-registered gate failed is a decision somebody must make in
+        writing; the reason is recorded on the entry and travels onto every idea sheet that
+        rests on it. Filing the same evidence as a CANDIDATE needs no override — the ranker
+        never proposes a candidate, so recording what was measured costs nothing and hiding
+        it costs the next reader.
         """
         if status is AdmissionStatus.DEMOTED:
             raise ValueError("use demote() to record a demotion, so it carries its own reason")
@@ -464,14 +500,69 @@ class TemplateLibrary:
         evidence = EvidenceCard.from_decision_record(
             payload, hold_sessions=template.hold_sessions, source=str(source)
         )
+        outcome = _as_str(payload.get("outcome"))
+        if status is AdmissionStatus.ADMITTED and not _passes(outcome, evidence):
+            if override_reason is None or not override_reason.strip():
+                raise UnpassedEvidenceError(
+                    f"{source} reports outcome {outcome!r} and gate status "
+                    f"{evidence.gate_status!r}, which is not a pass. The ranker proposes "
+                    f"real trades, so admitting {template.template_id} on this evidence "
+                    "requires a written `override_reason`. File it as a CANDIDATE instead "
+                    "if the intent is to record what was measured."
+                )
+            notes = _with_override(notes, outcome, evidence.gate_status, override_reason)
+
         entry = AdmissionRecord(
             template_id=template.template_id,
             hypothesis_id=_as_str(payload.get("hypothesis_id")),
             decision_path=str(source),
-            decision_outcome=_as_str(payload.get("outcome")),
+            decision_outcome=outcome,
             trial_ids=_trial_ids(payload),
             evidence=evidence,
             status=status,
+            admitted_at=self._now(),
+            admitted_by=by,
+            reason=reason,
+            notes=notes,
+        )
+        self._entries.append(entry)
+        return entry
+
+    def seed_from_screen(
+        self,
+        *,
+        template: StrategyTemplate,
+        evidence: EvidenceCard,
+        sheet_path: Path | str,
+        by: str,
+        reason: str,
+        trial_ids: Sequence[str] = (),
+        notes: str | None = None,
+    ) -> AdmissionRecord:
+        """File a screened instance as a CANDIDATE, pointing at the sheet it came from.
+
+        **The status is not a parameter.** A screening sheet applies no threshold and
+        pre-registers none, so nothing in it can justify admission however good the number
+        looks; offering a status argument here would make the one thing this method must not
+        do a keyword away. Admission stays reachable only through :meth:`admit`, which reads
+        a decision record.
+
+        ``decision_path`` on the resulting entry holds the sheet's path. The field names
+        where the evidence came from, and for a candidate that is a screen rather than a
+        decision — which the entry's ``decision_outcome`` states in as many words.
+        """
+        if not by.strip():
+            raise ValueError("seed_from_screen requires `by`: filing evidence is somebody's act")
+        if not reason.strip():
+            raise ValueError("seed_from_screen requires a written `reason`")
+        entry = AdmissionRecord(
+            template_id=template.template_id,
+            hypothesis_id=None,
+            decision_path=str(sheet_path),
+            decision_outcome=SCREENED_NOT_GATED,
+            trial_ids=tuple(str(trial_id) for trial_id in trial_ids),
+            evidence=evidence,
+            status=AdmissionStatus.CANDIDATE,
             admitted_at=self._now(),
             admitted_by=by,
             reason=reason,
@@ -553,6 +644,27 @@ class TemplateLibrary:
 
     def _now(self) -> str:
         return self._clock.now().isoformat()
+
+
+def _passes(outcome: str | None, evidence: EvidenceCard) -> bool:
+    """Whether a decision record cleared everything it was graded against.
+
+    Both the record-level outcome and the in-sample gate status must say so. They are two
+    readings of the same run and normally agree; requiring both means a record that carries
+    only one of them — an older shape, a hand-edited file — is treated as not passing rather
+    than as passing on the strength of the field that happens to be present.
+    """
+    return outcome == PASSING_OUTCOME and evidence.gate_status == PASSING_GATE_STATUS
+
+
+def _with_override(
+    notes: str | None, outcome: str | None, gate_status: str | None, override_reason: str
+) -> str:
+    stated = (
+        f"ADMITTED OVER UNPASSED EVIDENCE (outcome={outcome!r}, gate={gate_status!r}): "
+        f"{override_reason}"
+    )
+    return stated if not notes else f"{notes}; {stated}"
 
 
 def _read_decision_record(source: Path) -> Mapping[str, Any]:

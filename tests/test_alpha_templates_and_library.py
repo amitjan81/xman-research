@@ -24,6 +24,7 @@ from xman_research.alpha.library import (
     EvidenceCard,
     LibraryFileError,
     TemplateLibrary,
+    UnpassedEvidenceError,
 )
 from xman_research.alpha.templates import (
     Comparator,
@@ -39,6 +40,10 @@ from xman_research.alpha.templates import (
 from xman_research.backtest.costs import Side
 from xman_research.backtest.engine import Strategy, TradeIntent
 from xman_research.backtest.market import Contract
+
+#: The written override every admission in this file needs: the shipped H1 decision record
+#: reports a failed gate, and `TemplateLibrary.admit` refuses to admit on it silently.
+OVERRIDE = "test fixture: the anchor record failed its gate and is admitted anyway"
 
 #: Anchored to the repository, not to the working directory: a test that only passes
 #: when pytest happens to be invoked from the repo root is a test with a hidden
@@ -65,9 +70,7 @@ def test_the_shipped_registry_holds_every_shape_unconditioned_and_conditioned(
     """Each structure ships as its own benchmark family plus one template per conditioner."""
     shapes = ("short_atm_straddle", "short_atm_strangle", "iron_condor")
     kinds = ("iv_rv", "ema_atr_band", "post_gap", "expiry_distance", "day_of_week")
-    expected = tuple(
-        f"{shape}_{suffix}" for shape in shapes for suffix in ("hold_n", *kinds)
-    )
+    expected = tuple(f"{shape}_{suffix}" for shape in shapes for suffix in ("hold_n", *kinds))
     assert registry.ids() == expected
     for shape in shapes:
         assert registry.get(f"{shape}_hold_n").conditioner is None
@@ -246,6 +249,7 @@ def test_admit_refuses_a_decision_record_that_does_not_exist(
 ) -> None:
     with pytest.raises(DecisionRecordError, match="no decision record at"):
         library.admit(
+            override_reason=OVERRIDE,
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=tmp_path / "absent.json",
             by="tester",
@@ -260,6 +264,7 @@ def test_admit_refuses_a_decision_record_that_does_not_parse(
     broken.write_text("{not json")
     with pytest.raises(DecisionRecordError, match="does not parse"):
         library.admit(
+            override_reason=OVERRIDE,
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=broken,
             by="tester",
@@ -274,6 +279,7 @@ def test_admit_refuses_json_that_is_not_a_decision_record(
     wrong.write_text(json.dumps({"hello": "world"}))
     with pytest.raises(DecisionRecordError, match="no `in_sample` verdict"):
         library.admit(
+            override_reason=OVERRIDE,
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=wrong,
             by="tester",
@@ -286,29 +292,70 @@ def test_admit_demands_a_name_and_a_reason(
 ) -> None:
     template = registry.get("short_atm_straddle_hold_n")
     with pytest.raises(ValueError, match="requires `by`"):
-        library.admit(template=template, decision_path=DECISION_RECORD, by="  ", reason="r")
+        library.admit(
+            override_reason=OVERRIDE,
+            template=template,
+            decision_path=DECISION_RECORD,
+            by="  ",
+            reason="r",
+        )
     with pytest.raises(ValueError, match="requires a written `reason`"):
-        library.admit(template=template, decision_path=DECISION_RECORD, by="t", reason="")
+        library.admit(
+            override_reason=OVERRIDE,
+            template=template,
+            decision_path=DECISION_RECORD,
+            by="t",
+            reason="",
+        )
 
 
-def test_admit_does_not_gate_on_the_verdict_and_carries_it_verbatim(
+def test_admitting_unpassed_evidence_is_refused_without_a_written_override(
     library: TemplateLibrary, registry: TemplateRegistry
 ) -> None:
-    """The shipped H1 record FAILED its gate, and admitting it is a human's call to make.
+    """The shipped H1 record FAILED its gate, and the ranker proposes real trades."""
+    with pytest.raises(UnpassedEvidenceError, match="not a pass"):
+        library.admit(
+            template=registry.get("short_atm_straddle_hold_n"),
+            decision_path=DECISION_RECORD,
+            by="tester",
+            reason="the anchor hypothesis's evidence, verdict and all",
+        )
+    assert library.entries() == ()
 
-    What the framework guarantees is that the call is visible: the verdict is on the card,
-    ``passed_gate`` is false, and the ranker flags any sheet resting on it.
-    """
+
+def test_unpassed_evidence_may_be_filed_as_a_candidate_with_no_override(
+    library: TemplateLibrary, registry: TemplateRegistry
+) -> None:
+    """Recording what was measured is not the same act as letting the ranker trade it."""
+    entry = library.admit(
+        template=registry.get("short_atm_straddle_hold_n"),
+        decision_path=DECISION_RECORD,
+        by="tester",
+        reason="filing the anchor hypothesis's evidence",
+        status=AdmissionStatus.CANDIDATE,
+    )
+    assert entry.status is AdmissionStatus.CANDIDATE
+    assert entry.evidence.passed_gate is False
+
+
+def test_an_override_is_recorded_on_the_entry_and_carries_the_verdict_verbatim(
+    library: TemplateLibrary, registry: TemplateRegistry
+) -> None:
+    """An admission over a failed gate is somebody's decision, and the entry shows it."""
     entry = library.admit(
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="tester",
         reason="the anchor hypothesis's evidence, verdict and all",
+        override_reason=OVERRIDE,
     )
     assert entry.decision_outcome == "fails_threshold"
     assert entry.evidence.gate_status == "failed"
     assert entry.evidence.passed_gate is False
     assert entry.status is AdmissionStatus.ADMITTED
+    assert entry.notes is not None
+    assert OVERRIDE in entry.notes
+    assert "ADMITTED OVER UNPASSED EVIDENCE" in entry.notes
 
 
 def test_the_evidence_card_takes_the_mean_return_net_of_costs(
@@ -317,6 +364,7 @@ def test_the_evidence_card_takes_the_mean_return_net_of_costs(
     payload = json.loads(DECISION_RECORD.read_text())
     metrics = payload["in_sample"]["metrics"]
     entry = library.admit(
+        override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="tester",
@@ -334,6 +382,7 @@ def test_the_evidence_card_reports_no_hit_rate_rather_than_inventing_one(
     library: TemplateLibrary, registry: TemplateRegistry
 ) -> None:
     entry = library.admit(
+        override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="tester",
@@ -348,6 +397,7 @@ def test_the_cost_epoch_list_is_not_read_as_a_volatility_regime_table(
 ) -> None:
     """``epochs.regimes`` partitions the window by statutory cost changes, not by volatility."""
     entry = library.admit(
+        override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="tester",
@@ -386,6 +436,7 @@ def test_every_card_number_names_the_field_it_came_from(
     library: TemplateLibrary, registry: TemplateRegistry
 ) -> None:
     entry = library.admit(
+        override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="tester",
@@ -423,6 +474,7 @@ def test_status_is_the_latest_entry_and_history_keeps_every_one(
     assert library.admitted() == ()
 
     library.admit(
+        override_reason=OVERRIDE,
         template=template,
         decision_path=DECISION_RECORD,
         by="tester",
@@ -442,7 +494,11 @@ def test_a_demotion_carries_the_evidence_forward_rather_than_clearing_it(
 ) -> None:
     template = registry.get("short_atm_straddle_hold_n")
     admitted = library.admit(
-        template=template, decision_path=DECISION_RECORD, by="tester", reason="admitting"
+        override_reason=OVERRIDE,
+        template=template,
+        decision_path=DECISION_RECORD,
+        by="tester",
+        reason="admitting",
     )
     demoted = library.demote(
         template_id=template.template_id, by="tester", reason="live outcomes disagree"
@@ -460,7 +516,13 @@ def test_demote_refuses_to_demote_twice(
     library: TemplateLibrary, registry: TemplateRegistry
 ) -> None:
     template = registry.get("short_atm_straddle_hold_n")
-    library.admit(template=template, decision_path=DECISION_RECORD, by="tester", reason="admitting")
+    library.admit(
+        override_reason=OVERRIDE,
+        template=template,
+        decision_path=DECISION_RECORD,
+        by="tester",
+        reason="admitting",
+    )
     library.demote(template_id=template.template_id, by="tester", reason="first")
     with pytest.raises(ValueError, match="already demoted"):
         library.demote(template_id=template.template_id, by="tester", reason="second")
@@ -471,6 +533,7 @@ def test_admit_refuses_to_record_a_demotion_that_would_carry_no_reason(
 ) -> None:
     with pytest.raises(ValueError, match="use demote"):
         library.admit(
+            override_reason=OVERRIDE,
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=DECISION_RECORD,
             by="tester",
@@ -483,7 +546,13 @@ def test_the_library_round_trips_through_json_unchanged(
     library: TemplateLibrary, registry: TemplateRegistry
 ) -> None:
     template = registry.get("short_atm_straddle_hold_n")
-    library.admit(template=template, decision_path=DECISION_RECORD, by="tester", reason="admitting")
+    library.admit(
+        override_reason=OVERRIDE,
+        template=template,
+        decision_path=DECISION_RECORD,
+        by="tester",
+        reason="admitting",
+    )
     library.demote(template_id=template.template_id, by="tester", reason="demoting")
     path = library.save()
 
@@ -517,6 +586,7 @@ def test_the_evidence_card_names_the_strategy_the_record_measured(
 ) -> None:
     """Admitting on evidence from a different trade is a human's call — and must be visible."""
     entry = library.admit(
+        override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="tester",
@@ -535,9 +605,21 @@ def test_saving_over_entries_another_writer_added_is_refused(
     template = registry.get("short_atm_straddle_hold_n")
 
     first = TemplateLibrary(path, clock=clock)
-    first.admit(template=template, decision_path=DECISION_RECORD, by="first", reason="one")
+    first.admit(
+        template=template,
+        decision_path=DECISION_RECORD,
+        by="first",
+        reason="one",
+        override_reason=OVERRIDE,
+    )
     second = TemplateLibrary(path, clock=clock)
-    second.admit(template=template, decision_path=DECISION_RECORD, by="second", reason="two")
+    second.admit(
+        template=template,
+        decision_path=DECISION_RECORD,
+        by="second",
+        reason="two",
+        override_reason=OVERRIDE,
+    )
     second.save()
 
     with pytest.raises(AppendOnlyLibraryError, match="not a prefix"):
@@ -548,6 +630,7 @@ def test_an_admission_record_round_trips_through_its_dict(
     library: TemplateLibrary, registry: TemplateRegistry
 ) -> None:
     entry = library.admit(
+        override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="tester",
@@ -563,6 +646,7 @@ def test_the_admission_timestamp_comes_from_the_injected_clock(
     """Nothing in this package reads the wall clock; a stored time is evidence of when."""
     del clock
     entry = library.admit(
+        override_reason=OVERRIDE,
         template=registry.get("short_atm_straddle_hold_n"),
         decision_path=DECISION_RECORD,
         by="tester",
