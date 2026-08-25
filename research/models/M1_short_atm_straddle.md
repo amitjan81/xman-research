@@ -70,7 +70,13 @@ Sizing is by **notional, not lots**, so that $\text{Sharpe}$, $\text{MDD}$ and t
 
 **The $n_t = 0$ branch is the one place sizing could re-introduce a dependence on $L_t$** — *which* sessions trade would become a function of the contract multiplier. §12's check is what removes it, by verifying no session reaches the branch, rather than assuming so.
 
-**Realised scale, and why a conditional model cannot inherit it.** At the graded $N^*$, peak margin was ₹4,76,378.63 against $\rho_{\text{span}} + \rho_{\text{exp}} = 0.12$ over two legs, i.e. $n_t = 1$ lot per leg on essentially every entry (178 legs / 385 sessions = 89 straddles). At one lot, any continuous sizing multiplier $f \in [0,1]$ quantises to $\lfloor f + 1/2 \rfloor \in \{0,1\}$ — a switch. **M1's $N^*$ is therefore unusable for any model that sizes continuously** (M3 §12.1(b)).
+**Realised scale, and why a conditional model cannot inherit it.** The graded value is $N^{*} = ₹15{,}00{,}000$ of index notional. Against a lot of 75 units and NIFTY in the 20,000–26,500 range the window spans,
+
+$$n_{\text{base}} \;=\; \frac{N^{*}}{S_{t,\tau} L_t} \;\in\; [0.75,\ 1.00] \;\Rightarrow\; n_t = \left\lfloor n_{\text{base}} + \tfrac12 \right\rfloor = 1 \ \text{ lot per leg, every entry}$$
+
+Corroborated by the margin: peak ₹4,76,378.63 against $\rho_{\text{span}} + \rho_{\text{exp}} = 0.12$ over two legs implies $q S \approx ₹19.8$ lakh, i.e. $q = 75$ units. And by the counts — 178 legs / 385 sessions = 89 straddles, one per weekly cycle.
+
+**$n_{\text{base}} < 1$ is the problem for any conditional model.** A continuous multiplier $f \in [0,1]$ gives $n_t = \lfloor n_{\text{base}} f + 1/2 \rfloor \in \{0,1\}$: not a size, a **switch**, tripping at $f^{*} = 0.5 / n_{\text{base}} \in [0.50,\ 0.67]$. **M1's $N^*$ is therefore unusable for any model that sizes continuously** (M3 §12.1(b)).
 
 ## 6. Exit
 

@@ -237,7 +237,9 @@ M1 §14 applies in full, plus:
 
 ## 12. Pre-registration gates ▲
 
-M1 carries one (§12.1). M3 carries four, because continuous sizing puts three new quantities at risk. **Each must actually be run and pass before the validation run. None is an assumption.** Each is computed from **prices and contract metadata only** — never from strategy returns — so running them spends no evidence and appends no trial.
+M1 carries one (§12.1). M3 carries four, because continuous sizing puts three new quantities at risk. **Each must actually be run and pass before the validation run. None is an assumption.**
+
+Each is computed from **prices and contract metadata only** — no option prices, no strategy returns, no verdict — so none appends a trial to the family log or deflates anything. But (a), (b) and (e) do read spot, which is opening the envelope rather than counting the days in it. They therefore inherit `sizing_floor`'s discipline exactly: **run over the graded in-sample window alone, never over the sealed holdout.** If the holdout is ever spent, they re-execute over it at that moment and not before.
 
 ### 12.1(a) State-scale gate — is $k$ right for this window?
 
@@ -255,7 +257,13 @@ $$\left|\left\{ \left\lfloor n_{\text{base}}\, f(z_t) + \tfrac12 \right\rfloor :
 
 **Bound on the realised $f$ distribution, not on $n_{\text{base}}$ alone.** A bare $n_{\text{base}} \geq R$ is not sufficient: at the bottom of the realised $f$ range, $\lfloor 20 \times 0.05 \rceil = 1$, and the quantisation is worst exactly where graceful degradation is the claim.
 
-**M1's $N^{*}$ fails this by inspection.** At M1's parameterisation $n_{\text{base}} = 1$ (M1 §5), so the realised set is $\{0, 1\}$ and $R = 2$: $f$ collapses to a switch and M3 becomes the regime model §2 rejects. **The remedy is to raise $N^{*}$ at pre-registration, with the capital base raised in lockstep** so that Sharpe, drawdown and the increment stay scale-free and comparable to M1's. It is not to lower $R$.
+**M1's $N^{*}$ fails this, and the failure is worse than a rounding nuisance.** M1 sizes at $N^{*} = ₹15{,}00{,}000$, giving $n_{\text{base}} \in [0.75, 1.00]$ across the window's spot range (M1 §5). Then
+
+$$n_t = \left\lfloor n_{\text{base}} f(z_t) + \tfrac12 \right\rfloor = \begin{cases} 1, & f(z_t) \geq f^{*} \\ 0, & \text{otherwise}\end{cases}, \qquad f^{*} = \frac{0.5}{n_{\text{base}}} \in [0.50,\ 0.67]$$
+
+The realised set is $\{0,1\}$, so $R = 2$. **At M1's notional, M3 *is* a threshold rule** — $\tanh(|z|) \geq f^{*}$, i.e. $|z| \geq \operatorname{artanh}(f^{*}) \approx 0.55$ to $0.81$ — which is precisely the regime switch §2 rejects, arrived at by arithmetic rather than by choice. Worse, the threshold $f^{*}$ drifts with spot, so the switch point is a function of the index level: the model would silently condition on where NIFTY happens to trade.
+
+**The remedy is to raise $N^{*}$ at pre-registration, with the capital base raised in lockstep** so that Sharpe, drawdown and the increment stay scale-free and comparable to M1's. It is not to lower $R$. Indicatively, $R = 10$ needs $n_{\text{base}} \gtrsim 10/(f_{q90} - f_{q10})$, an order of magnitude above M1's — which is exactly what (c) then has to clear.
 
 ### 12.1(c) Feasibility-slack gate — does the larger $N^{*}$ still fit?
 
