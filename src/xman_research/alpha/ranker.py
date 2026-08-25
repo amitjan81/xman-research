@@ -27,7 +27,8 @@ the code version — are injected. A test pins them and compares the whole docum
 where ``expected_edge`` is the admission card's mean return at the template's hold length
 (scaled by a regime factor only where the card carries a table measured over the same
 partition), ``signal_strength`` is the conditioner's saturating distance past its threshold,
-and ``margin_ratio`` is the approximated margin as a fraction of the sized exposure. It is
+and ``margin_ratio`` is the approximated margin as a fraction of the summed notional of
+the position's short legs. It is
 **an ordering over the ideas on one sheet**, not a forecast: the numerator's denominator is
 the capital base of the offline run that measured it, the margin model underneath it is an
 unverified flat-percentage approximation, and the strength curve is a convention. Two ideas
@@ -123,6 +124,16 @@ class Idea:
     feasibility: tuple[Mapping[str, Any], ...]
     rationale: Rationale
 
+    @property
+    def breached_invalidators(self) -> tuple[str, ...]:
+        """Names of this idea's invalidators that are already breached on the as-of session.
+
+        Surfaced beside the idea rather than left inside the rationale because it changes
+        whether the idea should be acted on at all, and a reader scanning a ranked list
+        should not have to open each rationale to find out.
+        """
+        return tuple(rule.name for rule in self.rationale.invalidators if rule.breached)
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "rank": self.rank,
@@ -136,6 +147,7 @@ class Idea:
             "margin_ratio": self.margin_ratio,
             "requested_lots": self.requested_lots,
             "granted_lots": self.granted_lots,
+            "breached_invalidators": list(self.breached_invalidators),
             "feasibility": [dict(verdict) for verdict in self.feasibility],
             "rationale": self.rationale.as_dict(),
         }
