@@ -27,8 +27,8 @@ import pytest
 from xman_research.alpha.cli import main
 from xman_research.alpha.library import AdmissionStatus, TemplateLibrary
 from xman_research.alpha.screen import load_screen_sheet
+from xman_research.evaluation import open_session
 from xman_research.session_store import DEFAULT_CORPUS_ROOT
-from xman_research.trial_log import TrialLog
 
 CORPUS_ROOT = Path(os.environ.get("XMAN_RESEARCH_CORPUS_ROOT") or DEFAULT_CORPUS_ROOT)
 UNDERLYING = "NIFTY"
@@ -119,11 +119,11 @@ def test_the_cli_screens_the_real_corpus_ranks_it_and_seeds_a_candidate(
     assert len(sheet.instances) == 3
     assert sheet.n_trials_logged == 4
     assert len(set(sheet.trial_ids)) == 4
-    log = TrialLog(tmp_path / "screen.db")
+    research = open_session(tmp_path / "screen.db")
     try:
-        rows = log.family_trials(document["provenance"]["hypothesis_id"])
+        rows = research.family_trials(document["provenance"]["hypothesis_id"])
     finally:
-        log.close()
+        research.close()
     assert {row.trial_id for row in rows} == set(sheet.trial_ids)
 
     # Every instance either measured a population or says in words why it did not.
