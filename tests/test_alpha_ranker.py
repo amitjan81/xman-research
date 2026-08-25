@@ -28,7 +28,7 @@ from xman_research.alpha.explain import (
     TriggerExplanation,
     invalidators_for,
 )
-from xman_research.alpha.features import FeatureBuilder
+from xman_research.alpha.features import FeatureBuilder, InsufficientHistoryError
 from xman_research.alpha.library import AdmissionStatus, TemplateLibrary
 from xman_research.alpha.ranker import (
     SKIP_INFEASIBLE,
@@ -49,7 +49,10 @@ from xman_research.alpha.templates import (
 )
 from xman_research.session_store import SessionStore
 
-DECISION_RECORD = Path("research/h1/decision.json")
+#: Anchored to the repository, not to the working directory: a test that only passes
+#: when pytest happens to be invoked from the repo root is a test with a hidden
+#: precondition.
+DECISION_RECORD = Path(__file__).resolve().parents[1] / "research" / "h1" / "decision.json"
 SESSION_COUNT = 30
 LAST_SESSION = dt.date(2026, 4, 24)
 
@@ -102,6 +105,46 @@ def _scan(
         code_version=StaticCodeVersion("0" * 40, dirty=False),
         **kwargs,
     ).run()
+
+
+def _two_templates_of_different_strength(
+    tmp_path: Path, clock: ManualClock
+) -> tuple[TemplateRegistry, TemplateLibrary]:
+    """The benchmark family plus a sibling that fires at less than full strength.
+
+    The sibling reads the implied level rather than the spread, so its strength is the
+    fixture's own implied volatility and does not depend on the price path the test chooses.
+    """
+    registry = default_registry()
+    registry.register(
+        StrategyTemplate(
+            template_id="a_weaker_sibling",
+            name="a weaker sibling",
+            thesis="the same trade, gated on a condition it clears without saturating",
+            products=("NIFTY",),
+            hold_sessions=1,
+            parameters={},
+            conditioner=ConditionerSpec(
+                feature="atm_iv",
+                comparator=Comparator.AT_LEAST,
+                threshold=0.0,
+                saturation_span=1.0,
+                lookback_sessions=1,
+            ),
+            builder=lambda params, underlying, signal: HoldNShortStraddle(
+                min_calendar_days_to_expiry=4
+            ),
+        )
+    )
+    library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
+    for template_id in ("short_atm_straddle_hold_n", "a_weaker_sibling"):
+        library.admit(
+            template=registry.get(template_id),
+            decision_path=DECISION_RECORD,
+            by="tester",
+            reason="two templates so the ordering has something to order",
+        )
+    return registry, library
 
 
 # ------------------------------------------------------------------------ end to end
@@ -168,43 +211,12 @@ def test_the_sheet_stamps_the_injected_clock_and_code_version(
 # ------------------------------------------------------------------------- ordering
 
 
-def test_ideas_are_ordered_by_score_and_ties_break_deterministically(
+def test_ideas_are_ordered_by_score(
     corpus: tuple[SessionStore, list[dt.date]], tmp_path: Path, clock: ManualClock
 ) -> None:
-    """A second template on the same trade, firing at less than full strength, ranks below."""
+    """A template firing at less than full strength ranks below one firing at full."""
     store, sessions = corpus
-    registry = default_registry()
-    registry.register(
-        StrategyTemplate(
-            template_id="a_weaker_sibling",
-            name="a weaker sibling",
-            thesis="the same trade, gated on a condition it barely clears today",
-            products=("NIFTY",),
-            hold_sessions=1,
-            parameters={},
-            # Reads the implied level rather than the spread, so the strength is the
-            # fixture's own implied volatility and does not depend on the price path.
-            conditioner=ConditionerSpec(
-                feature="atm_iv",
-                comparator=Comparator.AT_LEAST,
-                threshold=0.0,
-                saturation_span=1.0,
-                lookback_sessions=1,
-            ),
-            builder=lambda params, underlying, signal: HoldNShortStraddle(
-                min_calendar_days_to_expiry=4
-            ),
-        )
-    )
-    library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
-    for template_id in ("short_atm_straddle_hold_n", "a_weaker_sibling"):
-        library.admit(
-            template=registry.get(template_id),
-            decision_path=DECISION_RECORD,
-            by="tester",
-            reason="two templates so the ordering has something to order",
-        )
-
+    registry, library = _two_templates_of_different_strength(tmp_path, clock)
     sheet = _scan(store, library, sessions[-1], registry=registry)
     assert [idea.template_id for idea in sheet.ideas] == [
         "short_atm_straddle_hold_n",
@@ -212,17 +224,60 @@ def test_ideas_are_ordered_by_score_and_ties_break_deterministically(
     ]
     assert [idea.rank for idea in sheet.ideas] == [1, 2]
     assert sheet.ideas[0].signal_strength == 1.0
-    assert sheet.ideas[1].signal_strength < 1.0
+    assert 0.0 < sheet.ideas[1].signal_strength < 1.0
+
+
+def test_a_tie_breaks_on_template_id_then_product(
+    corpus: tuple[SessionStore, list[dt.date]], tmp_path: Path, clock: ManualClock
+) -> None:
+    """Two templates identical in every input score identically; the order must still be fixed."""
+    store, sessions = corpus
+    registry = default_registry()
+    original = registry.get("short_atm_straddle_hold_n")
+    registry.register(
+        StrategyTemplate(
+            template_id="a_twin_of_the_benchmark",
+            name="a twin",
+            thesis="the same trade under a second id, so two ideas score exactly alike",
+            products=original.products,
+            hold_sessions=original.hold_sessions,
+            parameters=original.parameters,
+            conditioner=None,
+            builder=original.builder,
+        )
+    )
+    library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
+    for template_id in ("short_atm_straddle_hold_n", "a_twin_of_the_benchmark"):
+        library.admit(
+            template=registry.get(template_id),
+            decision_path=DECISION_RECORD,
+            by="tester",
+            reason="two identical templates so a tie exists to break",
+        )
+
+    sheet = _scan(store, library, sessions[-1], registry=registry)
+    assert len(sheet.ideas) == 2
+    assert sheet.ideas[0].score == sheet.ideas[1].score
+    assert [idea.template_id for idea in sheet.ideas] == [
+        "a_twin_of_the_benchmark",
+        "short_atm_straddle_hold_n",
+    ]
 
 
 def test_top_n_truncates_after_ranking_not_before(
     corpus: tuple[SessionStore, list[dt.date]], tmp_path: Path, clock: ManualClock
 ) -> None:
     store, sessions = corpus
-    sheet = _scan(
-        store, _library(tmp_path, clock, "short_atm_straddle_hold_n"), sessions[-1], top_n=1
-    )
-    assert len(sheet.ideas) == 1
+    registry, library = _two_templates_of_different_strength(tmp_path, clock)
+    full = _scan(store, library, sessions[-1], registry=registry)
+    assert len(full.ideas) == 2
+    assert full.ideas[0].score > full.ideas[1].score
+
+    truncated = _scan(store, library, sessions[-1], registry=registry, top_n=1)
+    assert len(truncated.ideas) == 1
+    # The survivor is the higher-scoring idea, not whichever was evaluated first.
+    assert truncated.ideas[0].template_id == full.ideas[0].template_id
+    assert truncated.ideas[0].score == full.ideas[0].score
 
 
 # ---------------------------------------------------------------------------- skips
@@ -549,7 +604,7 @@ def test_a_scan_whose_every_product_is_unreadable_refuses_rather_than_reporting_
     corpus: tuple[SessionStore, list[dt.date]], tmp_path: Path, clock: ManualClock
 ) -> None:
     store, sessions = corpus
-    with pytest.raises(Exception, match=r"BANKNIFTY|not a supported underlying"):
+    with pytest.raises(InsufficientHistoryError, match="BANKNIFTY"):
         NightlyScan(
             store=store,
             registry=default_registry(),

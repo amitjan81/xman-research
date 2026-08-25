@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -21,6 +22,7 @@ from xman_research.alpha.library import (
     AppendOnlyLibraryError,
     DecisionRecordError,
     EvidenceCard,
+    LibraryFileError,
     TemplateLibrary,
 )
 from xman_research.alpha.templates import (
@@ -32,11 +34,17 @@ from xman_research.alpha.templates import (
     StrategyTemplate,
     TemplateRegistry,
     UnknownTemplateError,
+    _exit_intents,
     default_registry,
 )
-from xman_research.backtest.engine import Strategy
+from xman_research.backtest.costs import Side
+from xman_research.backtest.engine import Strategy, TradeIntent
+from xman_research.backtest.market import Contract
 
-DECISION_RECORD = Path("research/h1/decision.json")
+#: Anchored to the repository, not to the working directory: a test that only passes
+#: when pytest happens to be invoked from the repo root is a test with a hidden
+#: precondition.
+DECISION_RECORD = Path(__file__).resolve().parents[1] / "research" / "h1" / "decision.json"
 
 
 @pytest.fixture
@@ -211,13 +219,6 @@ def test_a_conditioned_strategy_with_no_signal_series_declines_to_enter() -> Non
     assert strategy._may_enter(session=_FakeSession(dt.date(2026, 4, 24)), minute=None) is True
 
 
-class _FakeSession:
-    """The one attribute the conditioner gate reads. A whole SessionView is not needed."""
-
-    def __init__(self, session_date: dt.date) -> None:
-        self.session_date = session_date
-
-
 # -------------------------------------------------------------------------------- library
 
 
@@ -351,6 +352,8 @@ def test_a_card_with_a_regime_table_scales_only_the_regimes_it_names() -> None:
         gate_status="passed",
         outcome="passes",
         window="2026-01-01..2026-04-30",
+        measured_strategy="short_atm_straddle",
+        measured_strategy_parameters={"target_notional": 1_500_000.0},
         cost_stamps=(),
         regime_table={"iv_rv_high": 1.5},
         provenance={},
@@ -479,8 +482,30 @@ def test_a_missing_library_file_loads_as_an_empty_library(tmp_path: Path) -> Non
 def test_a_library_from_an_unknown_schema_version_is_refused(tmp_path: Path) -> None:
     path = tmp_path / "future.json"
     path.write_text(json.dumps({"schema_version": 99, "entries": []}))
-    with pytest.raises(DecisionRecordError, match="schema_version"):
+    with pytest.raises(LibraryFileError, match="schema_version"):
         TemplateLibrary.load(path)
+
+
+def test_a_library_that_is_not_a_json_object_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "a-list.json"
+    path.write_text(json.dumps([{"template_id": "x"}]))
+    with pytest.raises(LibraryFileError, match="not a JSON object"):
+        TemplateLibrary.load(path)
+
+
+def test_the_evidence_card_names_the_strategy_the_record_measured(
+    library: TemplateLibrary, registry: TemplateRegistry
+) -> None:
+    """Admitting on evidence from a different trade is a human's call — and must be visible."""
+    entry = library.admit(
+        template=registry.get("short_atm_straddle_hold_n"),
+        decision_path=DECISION_RECORD,
+        by="tester",
+        reason="the mismatch must be inspectable",
+    )
+    assert entry.evidence.measured_strategy == "short_atm_straddle"
+    assert entry.evidence.measured_strategy_parameters
+    assert "runs.in_sample.strategy" in entry.evidence.provenance["measured_strategy"]
 
 
 def test_saving_over_entries_another_writer_added_is_refused(
@@ -525,3 +550,192 @@ def test_the_admission_timestamp_comes_from_the_injected_clock(
         reason="pinned time",
     )
     assert entry.admitted_at.startswith("2026-08-12T09:15")
+
+
+# ------------------------------------------------------- the hold-N state machine
+
+
+def _short_position(symbol: str, expiry: dt.date):
+    """One short leg, as `_exit_intents` reads it: a contract, signed units, and the flag."""
+    contract = Contract(
+        trading_symbol=symbol,
+        underlying="NIFTY",
+        expiry=expiry,
+        strike=23_000.0,
+        option_type="CE" if symbol.endswith("CE") else "PE",
+        lot_size=65,
+        tick_size=0.05,
+    )
+    return SimpleNamespace(contract=contract, units=-65, is_short=True)
+
+
+#: A short whose contract outlives any hold this file walks, so the exit is always
+#: expressible and the walk reports the counter's decision rather than a settlement.
+_LIVE_SHORT = (_short_position("NIFTY-WALK-CE", dt.date(2026, 12, 31)),)
+
+
+class _FakeBook:
+    """The two members :meth:`HoldNShortStraddle.decide` reads of its book.
+
+    A whole :class:`~xman_research.backtest.engine.BookView` needs `Position` objects with
+    contracts; what the counter's behaviour actually depends on is whether the book is flat
+    and, at exit, which shorts it holds. Both are supplied directly so each step of the walk
+    below says plainly what state the strategy was handed.
+    """
+
+    def __init__(self, positions: tuple = ()) -> None:
+        self._positions = positions
+
+    @property
+    def is_flat(self) -> bool:
+        return not self._positions
+
+    def positions(self) -> tuple:
+        return self._positions
+
+
+class _FakeSession:
+    """The one attribute the conditioner gate and the hold counter read."""
+
+    def __init__(self, session_date: dt.date) -> None:
+        self.session_date = session_date
+
+
+def _walk(strategy, days, holding_after_entry: bool = True) -> list[str]:
+    """Drive ``decide`` across ``days``, reporting what it asked for on each.
+
+    ``entry`` and ``exit`` are reported from the intent tags; ``hold`` means the strategy
+    was holding and asked for nothing. The book is faked from the walk's own history rather
+    than from a running engine, which is the point: the counter is what is under test, and
+    an engine would decide the same question the counter is supposed to answer.
+    """
+    seen: list[str] = []
+    holding = False
+    for day, entered in days:
+        book = _FakeBook(() if not holding else _LIVE_SHORT)
+        intents = strategy.decide(session=_FakeSession(day), minute=None, book=book)
+        tags = {intent.tag for intent in intents}
+        if "entry" in tags:
+            seen.append("entry")
+            holding = holding_after_entry and entered
+        elif "exit" in tags:
+            seen.append("exit")
+            holding = False
+        else:
+            seen.append("hold" if holding else "no_entry")
+    return seen
+
+
+class _AlwaysEnters(HoldNShortStraddle):
+    """A hold-N straddle whose market-side refusals are removed, so only the clock is left.
+
+    The entry rules — a listed expiry far enough out, a positive spot, both legs present, a
+    size above half a contract — are exercised against real sessions elsewhere. Removing
+    them here isolates the one thing this test is about: when the counter says to exit.
+    """
+
+    def _entry(self, *, session, minute):
+        del session, minute
+        return (
+            TradeIntent(
+                trading_symbol="NIFTY-TEST-CE",
+                side=Side.SELL,
+                lots=1,
+                tag="entry",
+                leg_group="g",
+            ),
+        )
+
+
+def _sessions(count: int) -> list[dt.date]:
+    start = dt.date(2026, 4, 6)
+    return [start + dt.timedelta(days=index) for index in range(count)]
+
+
+def test_a_one_session_hold_enters_and_exits_on_the_next_session() -> None:
+    days = _sessions(4)
+    walk = _walk(_AlwaysEnters(hold_sessions=1), [(day, True) for day in days])
+    assert walk == ["entry", "exit", "entry", "exit"]
+
+
+def test_a_three_session_hold_waits_three_sessions_before_exiting() -> None:
+    days = _sessions(6)
+    walk = _walk(_AlwaysEnters(hold_sessions=3), [(day, True) for day in days])
+    assert walk == ["entry", "hold", "hold", "exit", "entry", "hold"]
+
+
+def test_a_second_decision_minute_on_the_entry_session_does_not_age_the_position() -> None:
+    """The counter advances on a change of session date, not on a call."""
+    strategy = _AlwaysEnters(hold_sessions=1)
+    first, second = _sessions(2)
+    walk = _walk(strategy, [(first, True), (first, True), (second, True)])
+    assert walk == ["entry", "hold", "exit"]
+
+
+def test_an_entry_the_market_refused_leaves_the_strategy_flat_and_ready_to_re_enter() -> None:
+    """A refused entry must not start the clock on a position that was never opened."""
+    days = _sessions(3)
+    walk = _walk(
+        _AlwaysEnters(hold_sessions=1), [(day, True) for day in days], holding_after_entry=False
+    )
+    assert walk == ["entry", "entry", "entry"]
+
+
+def test_a_position_that_settled_inside_the_hold_leaves_the_strategy_ready_to_re_enter() -> None:
+    """A contract expiring inside the hold cash-settles; the next session is flat again."""
+    strategy = _AlwaysEnters(hold_sessions=3)
+    first, second, third = _sessions(3)
+    assert [
+        intent.tag
+        for intent in strategy.decide(session=_FakeSession(first), minute=None, book=_FakeBook())
+    ] == ["entry"]
+    # The engine settles the contract, so the strategy next sees a flat book mid-hold.
+    intents = strategy.decide(session=_FakeSession(second), minute=None, book=_FakeBook())
+    assert [intent.tag for intent in intents] == ["entry"]
+    # ...and the counter restarted with it, rather than carrying the dead position's age.
+    assert (
+        strategy.decide(session=_FakeSession(third), minute=None, book=_FakeBook(_LIVE_SHORT)) == ()
+    )
+
+
+def test_a_strategy_first_handed_a_book_it_did_not_open_still_exits() -> None:
+    """Unreachable through the engine, which always starts flat, but the invariant holds."""
+    strategy = _AlwaysEnters(hold_sessions=1)
+    first, second = _sessions(2)
+    assert (
+        strategy.decide(session=_FakeSession(first), minute=None, book=_FakeBook(_LIVE_SHORT)) == ()
+    )
+    intents = strategy.decide(
+        session=_FakeSession(second), minute=None, book=_FakeBook(_LIVE_SHORT)
+    )
+    assert [intent.tag for intent in intents] == ["exit"]
+
+
+def test_the_exit_buys_back_every_short_as_one_group_and_skips_a_contract_expiring_today() -> None:
+    """Closing one leg of a straddle and not the other would leave a naked short."""
+    from xman_research.backtest.market import Contract
+
+    def position(symbol: str, expiry: dt.date):
+        contract = Contract(
+            trading_symbol=symbol,
+            underlying="NIFTY",
+            expiry=expiry,
+            strike=23_000.0,
+            option_type="CE" if symbol.endswith("CE") else "PE",
+            lot_size=65,
+            tick_size=0.05,
+        )
+        return SimpleNamespace(contract=contract, units=-65, is_short=True)
+
+    exit_day = dt.date(2026, 4, 9)
+    book = _FakeBook(
+        (
+            position("NIFTY-A-CE", exit_day + dt.timedelta(days=7)),
+            position("NIFTY-A-PE", exit_day + dt.timedelta(days=7)),
+            position("NIFTY-B-CE", exit_day),
+        )
+    )
+    intents = _exit_intents(book, exit_day, "g")
+    assert {intent.trading_symbol for intent in intents} == {"NIFTY-A-CE", "NIFTY-A-PE"}
+    assert len({intent.leg_group for intent in intents}) == 1
+    assert all(intent.side is Side.BUY for intent in intents)

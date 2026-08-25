@@ -58,7 +58,7 @@ from xman_research.alpha.features import (
 from xman_research.alpha.library import AdmissionRecord, TemplateLibrary
 from xman_research.alpha.templates import StrategyTemplate, TemplateRegistry
 from xman_research.backtest.costs import Side
-from xman_research.backtest.engine import TradeIntent
+from xman_research.backtest.engine import BookView, TradeIntent
 from xman_research.backtest.execution import ParticipationLimits, apply_participation_caps
 from xman_research.backtest.margin import MarginRequirement, ShortLeg, SimplifiedMarginModel
 from xman_research.backtest.market import SessionView
@@ -68,6 +68,16 @@ from xman_research.session_store import CalendarCoverageError, SessionStore, Ses
 
 __all__ = [
     "IDEA_SHEET_SCHEMA_VERSION",
+    "SKIP_INFEASIBLE",
+    "SKIP_NON_POSITIVE_EDGE",
+    "SKIP_NO_ENTRY",
+    "SKIP_NO_EXPECTED_EDGE",
+    "SKIP_NO_FEATURES",
+    "SKIP_NO_MARGIN",
+    "SKIP_NO_SESSION_VIEW",
+    "SKIP_PRODUCT_NOT_SUPPORTED",
+    "SKIP_TEMPLATE_NOT_REGISTERED",
+    "SKIP_TRIGGER_DID_NOT_FIRE",
     "Idea",
     "IdeaSheet",
     "NightlyScan",
@@ -87,6 +97,7 @@ SKIP_NO_ENTRY = "no_entry_at_decision_minute"
 SKIP_INFEASIBLE = "infeasible"
 SKIP_NO_MARGIN = "no_margin_estimate"
 SKIP_NO_FEATURES = "no_features_for_product"
+SKIP_NON_POSITIVE_EDGE = "non_positive_expected_edge"
 
 
 #: Reading one product's session can fail for reasons that are about that product's corpus
@@ -139,6 +150,7 @@ class Idea:
     requested_lots: int
     granted_lots: int
     feasibility: tuple[Mapping[str, Any], ...]
+    as_of_inside_evidence_window: bool
     rationale: Rationale
 
     @property
@@ -165,6 +177,7 @@ class Idea:
             "requested_lots": self.requested_lots,
             "granted_lots": self.granted_lots,
             "breached_invalidators": list(self.breached_invalidators),
+            "as_of_inside_evidence_window": self.as_of_inside_evidence_window,
             "feasibility": [dict(verdict) for verdict in self.feasibility],
             "rationale": self.rationale.as_dict(),
         }
@@ -193,6 +206,15 @@ class IdeaSheet:
     ideas: tuple[Idea, ...]
     skipped: tuple[SkippedCandidate, ...]
     rests_on_unpassed_evidence: bool
+    rests_on_in_sample_evidence: bool
+    """Whether any ranked idea's as-of session lies inside the window its edge was measured on.
+
+    Not a look-ahead leak — every number came from sessions at or before the as-of — but a
+    statistical one: an in-sample mean applied to a session that was part of the sample is
+    describing data it has already seen. It sits beside the gate flag because it changes how
+    the whole sheet should be read, and because a nightly scan run inside a research window
+    is the normal way to be caught by it.
+    """
     no_ideas_reason: str | None
 
     def as_dict(self) -> dict[str, Any]:
@@ -208,6 +230,7 @@ class IdeaSheet:
             "ideas": [idea.as_dict() for idea in self.ideas],
             "skipped": [skip.as_dict() for skip in self.skipped],
             "rests_on_unpassed_evidence": self.rests_on_unpassed_evidence,
+            "rests_on_in_sample_evidence": self.rests_on_in_sample_evidence,
             "no_ideas_reason": self.no_ideas_reason,
         }
 
@@ -235,6 +258,12 @@ class NightlyScan:
             raise ValueError(f"top_n must be at least 1, got {top_n}")
         if not universe:
             raise ValueError("universe must name at least one underlying")
+        if len(set(universe)) != len(universe):
+            duplicates = sorted({name for name in universe if list(universe).count(name) > 1})
+            raise ValueError(
+                f"universe names {duplicates} more than once; each product is scanned once "
+                "and a repeat would put the same idea on the sheet twice"
+            )
         self._store = store
         self._registry = registry
         self._library = library
@@ -310,8 +339,9 @@ class NightlyScan:
             ideas=ranked,
             skipped=tuple(sorted(skipped, key=lambda skip: (skip.underlying, skip.template_id))),
             rests_on_unpassed_evidence=any(
-                idea.rationale.evidence.get("gate_status") != "passed" for idea in ranked
+                idea.rationale.gate_status != "passed" for idea in ranked
             ),
+            rests_on_in_sample_evidence=any(idea.as_of_inside_evidence_window for idea in ranked),
             no_ideas_reason=_no_ideas_reason(admitted, ranked, skipped),
         )
 
@@ -374,6 +404,20 @@ class NightlyScan:
                 ),
             )
         expected_edge = base_edge * regime_factor
+        if expected_edge <= 0:
+            # Ranking it would put a trade at the top of a sheet that its own admission
+            # evidence says loses money. The score is a ratio, so a negative numerator also
+            # inverts the ordering: the worst candidate would sort best among the negatives.
+            return SkippedCandidate(
+                template_id,
+                underlying,
+                SKIP_NON_POSITIVE_EDGE,
+                (
+                    f"the admission record for {template_id} measures a mean return at hold "
+                    f"of {base_edge:.6g} (regime factor {regime_factor:g}), which is not a "
+                    "positive edge to rank"
+                ),
+            )
 
         if view is None:
             return SkippedCandidate(
@@ -462,7 +506,7 @@ class NightlyScan:
                 "first cash-settles instead"
             ),
             hold_sessions=template.hold_sessions,
-            target_notional=float(self._parameters(template).get("target_notional", 0.0)),
+            target_notional=_as_float(strategy.parameters().get("target_notional")),
             notional=notional,
             premium_received=premium,
             margin=requirement.as_dict(),
@@ -519,6 +563,7 @@ class NightlyScan:
             requested_lots=max(intent.lots for intent in intents),
             granted_lots=granted,
             feasibility=tuple(verdict for verdict in verdicts),
+            as_of_inside_evidence_window=_inside_window(self._as_of, card.window),
             rationale=rationale,
         )
 
@@ -598,32 +643,14 @@ class NightlyScan:
         return legs, notional, (premium if premium_known else None), requirement
 
 
-class _EmptyBook:
-    """A flat book, which is what the scan proposes an entry against.
-
-    The scan asks a template what it would open tonight, so the only book that question can
-    be asked against is an empty one. Handing it the operator's real positions would make the
-    sheet a portfolio decision rather than a list of candidates, and position sizing against
-    an existing book is a different problem with a different owner.
-    """
-
-    @property
-    def cash(self) -> float:
-        return 0.0
-
-    @property
-    def is_flat(self) -> bool:
-        return True
-
-    def positions(self) -> tuple[Any, ...]:
-        return ()
-
-    def position(self, trading_symbol: str) -> None:
-        del trading_symbol
-        return None
-
-
-_EMPTY_BOOK = _EmptyBook()
+#: The book a scan proposes an entry against.
+#:
+#: **Empty, and that is the question being asked.** The scan asks each template what it
+#: would open tonight, and the only book that question can be posed against is a flat one.
+#: Handing a template the operator's real positions would make the sheet a portfolio
+#: decision rather than a list of candidates, and sizing against an existing book is a
+#: different problem with a different owner.
+_EMPTY_BOOK = BookView({}, 0.0)
 
 
 def _feasibility(
@@ -702,3 +729,34 @@ def _no_ideas_reason(
         counts[skip.reason] = counts.get(skip.reason, 0) + 1
     breakdown = ", ".join(f"{reason}: {count}" for reason, count in sorted(counts.items()))
     return f"no admitted template produced a rankable idea on this session ({breakdown})"
+
+
+def _as_float(value: Any) -> float | None:
+    """A declared parameter as a number, or ``None`` when the strategy does not carry one.
+
+    ``None`` rather than a zero: a template that does not size by notional has no target to
+    report, and writing ``0.0`` would put a number on the sheet that contradicts the size
+    the legs were actually built at.
+    """
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _inside_window(as_of: dt.date, window: str | None) -> bool:
+    """Whether ``as_of`` falls inside a decision record's ``start..end`` window.
+
+    A window this cannot parse answers ``False``. The flag exists to raise a caveat when one
+    is known to apply, and inventing one from an unreadable string would put a warning on a
+    sheet that nothing supports.
+    """
+    if not window or ".." not in window:
+        return False
+    start, _, end = window.partition("..")
+    try:
+        return dt.date.fromisoformat(start) <= as_of <= dt.date.fromisoformat(end)
+    except ValueError:
+        return False

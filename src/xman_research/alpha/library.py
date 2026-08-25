@@ -17,14 +17,25 @@ that the decision is visible — :attr:`EvidenceCard.passed_gate` is false, and 
 sheet resting on such an admission says so on its face.
 
 **Append-only, like the trial log.** Status changes are entries, not edits: the current
-status of a template is the last entry naming it. A file whose stored entries are not a
-prefix of what is about to be written is refused rather than overwritten, so a second
-process's admissions cannot be silently dropped by a first process's save.
+status of a template is the last entry naming it, and nothing rewrites an entry once
+written.
+
+**What the save-time check does and does not hold.** A file whose stored entries are not a
+prefix of what is about to be written is refused rather than overwritten, which catches the
+case this tool actually produces: a process that loaded the library, sat while somebody
+else admitted a template, and then saved. It is **not** a lock. Two processes that check at
+the same instant both pass, and the second write wins. The write itself is atomic — a temp
+file and a rename — so a concurrent reader sees one whole version or the other and never a
+half-written file, but a genuine race still loses one process's entries. The library is
+maintained by a human at a command line, so the exposure is a person running two terminals;
+anything stronger would need a lock file and is not worth its complexity until something
+other than a person writes here.
 """
 
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -42,12 +53,19 @@ __all__ = [
     "AppendOnlyLibraryError",
     "DecisionRecordError",
     "EvidenceCard",
+    "LibraryFileError",
     "TemplateLibrary",
 ]
 
-#: Where the library lives relative to the repository root. The path is a research artefact
-#: and is expected to be committed: an idea sheet is only reproducible if the admissions it
-#: rested on are recoverable.
+#: Where the library lives, **relative to the working directory**, which in practice means
+#: the repository root. The path is a research artefact and is expected to be committed: an
+#: idea sheet is only reproducible if the admissions it rested on are recoverable.
+#:
+#: Relative rather than anchored because the repository root is not discoverable from an
+#: installed package, and guessing it would be worse than this. The cost is real and is the
+#: caller's to avoid: run from somewhere else and a missing file reads as an empty library,
+#: so a scan reports that nothing is admitted rather than that it looked in the wrong place.
+#: Pass ``--library`` with an absolute path from anywhere that is not the repository root.
 DEFAULT_LIBRARY_PATH = Path("research/library/templates.json")
 
 LIBRARY_SCHEMA_VERSION = 1
@@ -55,6 +73,16 @@ LIBRARY_SCHEMA_VERSION = 1
 
 class DecisionRecordError(ValueError):
     """A decision record that is missing, unreadable, or not a decision record."""
+
+
+class LibraryFileError(ValueError):
+    """A library file that is missing a schema this reader understands, or is not one.
+
+    Distinct from :class:`DecisionRecordError` because the two name different artefacts:
+    one is the research output being read *into* the library, the other is the library
+    itself. A nightly wrapper reading "decision record does not parse" when the library is
+    what is corrupt would look in the wrong place.
+    """
 
 
 class AppendOnlyLibraryError(RuntimeError):
@@ -96,6 +124,8 @@ class EvidenceCard:
     gate_status: str | None
     outcome: str | None
     window: str | None
+    measured_strategy: str | None
+    measured_strategy_parameters: Mapping[str, Any] | None
     cost_stamps: tuple[str, ...]
     regime_table: Mapping[str, float] | None
     provenance: Mapping[str, str]
@@ -130,6 +160,12 @@ class EvidenceCard:
             "gate_status": self.gate_status,
             "outcome": self.outcome,
             "window": self.window,
+            "measured_strategy": self.measured_strategy,
+            "measured_strategy_parameters": (
+                dict(self.measured_strategy_parameters)
+                if self.measured_strategy_parameters
+                else None
+            ),
             "cost_stamps": list(self.cost_stamps),
             "regime_table": dict(self.regime_table) if self.regime_table else None,
             "provenance": dict(self.provenance),
@@ -150,6 +186,8 @@ class EvidenceCard:
             gate_status=payload.get("gate_status"),
             outcome=payload.get("outcome"),
             window=payload.get("window"),
+            measured_strategy=payload.get("measured_strategy"),
+            measured_strategy_parameters=payload.get("measured_strategy_parameters"),
             cost_stamps=tuple(payload.get("cost_stamps") or ()),
             regime_table={str(k): float(v) for k, v in table.items()} if table else None,
             provenance=dict(payload.get("provenance") or {}),
@@ -181,12 +219,23 @@ class EvidenceCard:
         instead would leave the ranker with nothing to order ideas by, and inventing an
         unnamed number would be worse than either.
 
+        **The card names the strategy the record measured, and does not check it.** A
+        decision record is evidence about one strategy at one parameter point; whether that
+        strategy is the template being admitted is a judgement, and the library's design is
+        that a human makes it against their own name. What the card guarantees is that the
+        judgement is *inspectable*: ``measured_strategy`` and its parameters travel onto
+        every rationale, so a reader can see that, say, evidence from a straddle held to
+        cash settlement is being attached to one bought back after N sessions.
+
         **The cost-epoch list is not a regime table.** A decision record's ``epochs.regimes``
         holds statutory-cost epoch boundaries — the dates a tax rate changed — and the
         ranker's regime tag is a volatility tercile. They are different partitions that
         share a word, so nothing here maps one onto the other and the table is ``None``
         until a per-regime measurement exists to fill it.
         """
+        run = payload.get("runs")
+        in_sample_run = run.get("in_sample") if isinstance(run, Mapping) else None
+        measured = in_sample_run if isinstance(in_sample_run, Mapping) else {}
         in_sample = payload.get("in_sample")
         if not isinstance(in_sample, Mapping):
             raise DecisionRecordError(
@@ -199,7 +248,10 @@ class EvidenceCard:
 
         gross = _as_float(metrics.get("mean_gross_return"))
         drag = _as_float(metrics.get("mean_cost_drag"))
-        net = None if gross is None else gross - (drag or 0.0)
+        # Both inputs are required. Treating an absent drag as zero would produce a "net"
+        # figure that is the gross one, under a provenance string promising a subtraction
+        # that never happened — the silent default this class exists to refuse.
+        net = None if gross is None or drag is None else gross - drag
         at_hold = None if net is None else net * hold_sessions
 
         provenance = {
@@ -220,6 +272,8 @@ class EvidenceCard:
             "gate_status": f"{source}:in_sample.metrics.gate_status",
             "outcome": f"{source}:outcome",
             "window": f"{source}:in_sample.window",
+            "measured_strategy": f"{source}:runs.in_sample.strategy",
+            "measured_strategy_parameters": f"{source}:runs.in_sample.strategy_parameters",
             "cost_stamps": f"{source}:in_sample.metrics.unverified_inputs",
             "regime_table": (
                 "absent: the source record's epoch list partitions the window by statutory "
@@ -238,6 +292,12 @@ class EvidenceCard:
             gate_status=_as_str(metrics.get("gate_status")),
             outcome=_as_str(payload.get("outcome")),
             window=_as_str(in_sample.get("window")),
+            measured_strategy=_as_str(measured.get("strategy")),
+            measured_strategy_parameters=(
+                dict(measured["strategy_parameters"])
+                if isinstance(measured.get("strategy_parameters"), Mapping)
+                else None
+            ),
             cost_stamps=tuple(str(stamp) for stamp in metrics.get("unverified_inputs") or ()),
             regime_table=None,
             provenance=provenance,
@@ -309,7 +369,6 @@ class TemplateLibrary:
         self._path = Path(path)
         self._clock = clock if clock is not None else SystemClock()
         self._entries: list[AdmissionRecord] = list(entries)
-        self._persisted = len(self._entries)
 
     @classmethod
     def load(
@@ -326,19 +385,20 @@ class TemplateLibrary:
         try:
             payload = json.loads(target.read_text())
         except (OSError, json.JSONDecodeError) as error:
-            raise DecisionRecordError(
-                f"library at {target} is not readable JSON: {error}"
-            ) from error
+            raise LibraryFileError(f"library at {target} is not readable JSON: {error}") from error
+        if not isinstance(payload, Mapping):
+            raise LibraryFileError(
+                f"library at {target} is not a JSON object; a list or scalar is not a "
+                "library this reader can append to"
+            )
         version = payload.get("schema_version")
         if version != LIBRARY_SCHEMA_VERSION:
-            raise DecisionRecordError(
+            raise LibraryFileError(
                 f"library at {target} declares schema_version {version!r}; this reader "
                 f"understands {LIBRARY_SCHEMA_VERSION}"
             )
         entries = [AdmissionRecord.from_dict(row) for row in payload.get("entries") or ()]
-        library = cls(target, clock=clock, entries=entries)
-        library._persisted = len(entries)
-        return library
+        return cls(target, clock=clock, entries=entries)
 
     @property
     def path(self) -> Path:
@@ -458,10 +518,12 @@ class TemplateLibrary:
     def save(self) -> Path:
         """Write the library, refusing to drop entries another writer added.
 
-        The stored entries must be a prefix of the in-memory ones. That check is what makes
-        "append-only" a property of the file rather than of this object's manners: two
-        processes that both loaded the file and both admitted a template would otherwise
-        leave whichever saved last as the only survivor.
+        The stored entries must be a prefix of the in-memory ones, which catches a save
+        made against a version somebody else has since added to. It is a check, not a lock —
+        see the module docstring for exactly what that leaves open.
+
+        The write goes to a temp file and is renamed into place, so a reader never observes
+        a partially written library.
         """
         if self._path.exists():
             stored = json.loads(self._path.read_text()).get("entries") or []
@@ -473,7 +535,7 @@ class TemplateLibrary:
                     "changed it since this one loaded. Reload and re-apply."
                 )
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
+        document = (
             json.dumps(
                 {
                     "schema_version": LIBRARY_SCHEMA_VERSION,
@@ -484,7 +546,9 @@ class TemplateLibrary:
             )
             + "\n"
         )
-        self._persisted = len(self._entries)
+        temporary = self._path.with_name(f"{self._path.name}.{os.getpid()}.tmp")
+        temporary.write_text(document)
+        os.replace(temporary, self._path)
         return self._path
 
     def _now(self) -> str:

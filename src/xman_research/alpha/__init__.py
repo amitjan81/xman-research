@@ -1,6 +1,6 @@
 """Systematic alpha exploration: two loops, on two clocks.
 
-**The offline discovery loop** runs on a research clock and is the rest of this package: a
+**The offline discovery loop** runs on a research clock and is the rest of ``xman_research``: a
 :class:`~xman_research.hypothesis.HypothesisRecord`, trials counted in an append-only
 :class:`~xman_research.trial_log.TrialLog`, a pre-registered gate, a sealed holdout, and a
 decision record at the end. Its output for this subpackage is an **admitted strategy

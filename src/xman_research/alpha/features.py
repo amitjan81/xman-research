@@ -60,10 +60,19 @@ __all__ = [
 #: an implied-minus-realised spread is a comparison between two different years.
 ANNUALISATION_SESSIONS = 252
 
-#: The minute a nightly scan evaluates. Late enough that the session's information is in
-#: the price, early enough to sit outside the 15:00-15:30 settlement window, whose prints
-#: are an artefact of the closing auction rather than a tradable quote.
-DEFAULT_DECISION_TIME = dt.time(15, 20)
+#: The minute a nightly scan evaluates. Late enough that most of the session's information
+#: is in the price, and **strictly before 15:00**, which is the constraint that fixes it.
+#:
+#: From 3 August 2026 the index feed inside the 15:00-15:30 window degrades: a session's
+#: thirty window bars carry 15-17 distinct closes rather than 25-30, the feed freezing for
+#: ten-plus minutes and then catching up in one jump
+#: (:mod:`xman_research.backtest.settlement` measures this on the captured sessions). A
+#: decision minute inside that window would take its spot from a print that may be several
+#: minutes stale — and that spot picks the at-the-money strike, sizes the position, and is
+#: every trailing session's close for realised volatility and the overnight gap. Ten
+#: minutes of clearance costs the last half hour of information and buys a price that was
+#: actually observed at the minute it is stamped with.
+DEFAULT_DECISION_TIME = dt.time(14, 50)
 
 #: How many trailing sessions the volatility-regime tercile is measured over. Long enough
 #: to span more than one volatility episode, short enough that the tercile still describes
@@ -129,10 +138,17 @@ class RegimeTag:
     where an admission record carries a per-regime table measured over the same partition.
     None does today, so nothing is scaled — see
     :meth:`~xman_research.alpha.library.EvidenceCard.regime_factor`.
+
+    ``lookback_observations`` is the number of **computable** spreads the tercile was asked
+    for, and :attr:`observations` is how many it got. Neither is a count of sessions: the
+    implied reading is withheld on every expiry session and needs a twenty-session warm-up
+    behind it, so a window of a hundred and twenty observations spans meaningfully more
+    than a hundred and twenty sessions. Calling the field ``sessions`` would put a number on
+    a rationale that means something else.
     """
 
     tag: str | None
-    lookback_sessions: int
+    lookback_observations: int
     observations: int
     lower_tercile: float | None
     upper_tercile: float | None
@@ -141,7 +157,7 @@ class RegimeTag:
     def as_dict(self) -> dict[str, Any]:
         return {
             "tag": self.tag,
-            "lookback_sessions": self.lookback_sessions,
+            "lookback_observations": self.lookback_observations,
             "observations": self.observations,
             "lower_tercile": self.lower_tercile,
             "upper_tercile": self.upper_tercile,
@@ -176,6 +192,13 @@ class FeatureFrame:
     decision_minute: dt.datetime | None
     features: Mapping[str, FeatureValue]
     regime: RegimeTag
+    nearest_expiry: dt.date | None
+    """The expiry ``sessions_to_nearest_expiry`` counts to, and the one an entry would sell.
+
+    Carried as a date as well as a count so a consumer can check that a rule it is about to
+    apply concerns the same contract the count describes, rather than relying on the two
+    being derived from the same place.
+    """
     sessions_loaded: int
     sessions_missing: int
 
@@ -196,6 +219,7 @@ class FeatureFrame:
                 name: feature.as_dict() for name, feature in sorted(self.features.items())
             },
             "regime": self.regime.as_dict(),
+            "nearest_expiry": (self.nearest_expiry.isoformat() if self.nearest_expiry else None),
             "sessions_loaded": self.sessions_loaded,
             "sessions_missing": self.sessions_missing,
         }
@@ -265,6 +289,7 @@ class FeatureBuilder:
             decision_minute=minute,
             features=features,
             regime=regime,
+            nearest_expiry=summaries[-1].nearest_expiry,
             sessions_loaded=len(summaries),
             sessions_missing=missing,
         )
@@ -323,7 +348,12 @@ class FeatureBuilder:
             raise InsufficientHistoryError(
                 f"{underlying} has no session at or before {as_of} in {start}..{as_of}"
             )
-        return kept[-needed:], resolution.missing_count
+        # Only holes INSIDE the window are gaps. A resolved range that begins before the
+        # corpus does reports every day of that prehistory as expected-and-absent, which is
+        # a fact about when capture started rather than about a hole in what was captured;
+        # counting it would put dozens of phantom gaps on the frame of any early as-of date.
+        missing = sum(1 for day in resolution.missing if day >= kept[0].session_date)
+        return kept[-needed:], missing
 
     def _max_lookback(self) -> int:
         """Sessions to load: the longest trailing window, plus what it needs to warm up."""
@@ -363,36 +393,48 @@ class FeatureBuilder:
         return summary
 
     def _regime(self, summaries: Sequence[SessionSummary]) -> RegimeTag:
+        """Where the as-of session's implied-minus-realised spread sits in its own history.
+
+        **The as-of session must have contributed a spread of its own.** Cutting terciles
+        from the trailing distribution and then reading off the most recent *computable*
+        observation would stamp the previous session's regime on today's frame — every
+        expiry session, since the implied reading is withheld there. A tag that describes a
+        different session than the one it is filed under is worse than no tag, so the
+        absence is reported instead.
+        """
+        current = _iv_minus_rv(summaries, _RV_LONG_SESSIONS)
         spreads: list[float] = []
         for index in range(len(summaries)):
-            window = summaries[: index + 1]
-            spread = _iv_minus_rv(window, _RV_LONG_SESSIONS)
+            spread = _iv_minus_rv(summaries[: index + 1], _RV_LONG_SESSIONS)
             if spread is not None:
                 spreads.append(spread)
         trailing = spreads[-self._regime_lookback :]
-        if len(trailing) < 3 or trailing[-1] != spreads[-1]:
+        if current is None or len(trailing) < 3:
             return RegimeTag(
                 tag=None,
-                lookback_sessions=self._regime_lookback,
+                lookback_observations=self._regime_lookback,
                 observations=len(trailing),
                 lower_tercile=None,
                 upper_tercile=None,
                 reason=(
-                    f"{len(trailing)} computable implied-minus-realised observations in the "
-                    f"trailing {self._regime_lookback} sessions, and a tercile needs at "
-                    "least three including the as-of session"
+                    "the as-of session has no computable implied-minus-realised spread, so "
+                    "no tercile of the trailing distribution describes it"
+                    if current is None
+                    else (
+                        f"{len(trailing)} computable implied-minus-realised observations "
+                        "behind the as-of session, and a tercile needs at least three"
+                    )
                 ),
             )
         ordered = sorted(trailing)
         lower = _quantile(ordered, 1 / 3)
         upper = _quantile(ordered, 2 / 3)
-        current = trailing[-1]
         tag = (
             "iv_rv_low" if current <= lower else ("iv_rv_high" if current >= upper else "iv_rv_mid")
         )
         return RegimeTag(
             tag=tag,
-            lookback_sessions=self._regime_lookback,
+            lookback_observations=self._regime_lookback,
             observations=len(trailing),
             lower_tercile=lower,
             upper_tercile=upper,
@@ -408,13 +450,18 @@ def _summarise(view: SessionView) -> SessionSummary:
         return SessionSummary(view.session_date, None, None, None, None, None, None)
     expiry = view.universe.nearest_expiry(view.session_date)
     close = bars[-1].close
+    # The view is truncated at the decision minute, so its last minute over ALL symbols is
+    # the minute the frame reports. Reading implied volatility at the underlying's own last
+    # bar instead would take it from an earlier minute on any session where the index did
+    # not print at the decision minute and an option did.
+    minutes = view.minutes()
     return SessionSummary(
         session_date=view.session_date,
         open=bars[0].open,
         high=max(bar.high for bar in bars),
         low=min(bar.low for bar in bars),
         close=close,
-        atm_iv=_atm_iv(view, bars[-1].minute, close, expiry),
+        atm_iv=_atm_iv(view, minutes[-1] if minutes else bars[-1].minute, close, expiry),
         nearest_expiry=expiry,
     )
 
@@ -467,6 +514,13 @@ def _realised_vol(summaries: Sequence[SessionSummary], sessions: int) -> float |
     Sample standard deviation, so the estimator is unbiased for the variance of the
     returns; ``sessions`` returns require ``sessions + 1`` closes and fewer than that
     returns ``None`` rather than a shorter-window figure wearing the long window's label.
+
+    **The closes must be contiguous for the window to mean what it says.** A session whose
+    file or refdata is unreadable contributes no close, and the return either side of it
+    then spans two nights, so a "twenty-session" volatility is measured over more calendar
+    ground than its name claims and its variance is inflated. Nothing here can repair that,
+    and inventing the missing close would be worse; :attr:`FeatureFrame.sessions_missing`
+    counts the holes in the window so a reader can see when the label is approximate.
     """
     closes = _closes(summaries)
     if len(closes) < sessions + 1:
@@ -508,24 +562,25 @@ def _atr(summaries: Sequence[SessionSummary], sessions: int) -> float | None:
     return sum(ranges) / len(ranges)
 
 
-def _ema(summaries: Sequence[SessionSummary], span: int) -> float | None:
-    """Exponential moving average of closes, seeded on a fixed warm-up.
+def _ema(summaries: Sequence[SessionSummary], span: int) -> tuple[float | None, int]:
+    """Exponential average of closes, and the number of closes it was warmed up over.
 
-    The seed is the simple average of the ``span`` closes that begin a fixed warm-up window
-    ending at the as-of session, so the answer depends on the as-of date and the span, and
-    not on how much history the caller happened to resolve.
+    The seed is the simple average of the ``span`` closes that begin a warm-up window ending
+    at the as-of session. The window is capped at :data:`_EMA_WARMUP_SESSIONS` so that
+    resolving more history than that cannot change the answer — but a corpus holding fewer
+    closes than the cap warms up over fewer, and the length is returned rather than assumed
+    so the reported lookback is the one actually used. A value warmed up over twenty-two
+    closes carrying a lookback of sixty would be a measurement wearing another's label.
     """
     closes = _closes(summaries)
-    if len(closes) < span:
-        return None
     window = closes[-_EMA_WARMUP_SESSIONS:]
     if len(window) < span:
-        return None
+        return None, len(window)
     average = sum(window[:span]) / span
     weight = 2.0 / (span + 1)
     for close in window[span:]:
         average = weight * close + (1 - weight) * average
-    return average
+    return average, len(window)
 
 
 def _quantile(ordered: Sequence[float], fraction: float) -> float:
@@ -569,7 +624,7 @@ def _compute(
     previous = summaries[-2] if len(summaries) > 1 else None
 
     atr = _atr(summaries, _ATR_SESSIONS)
-    ema = _ema(summaries, _EMA_SPAN)
+    ema, ema_warmup = _ema(summaries, _EMA_SPAN)
     rv_short = _realised_vol(summaries, _RV_SHORT_SESSIONS)
     rv_long = _realised_vol(summaries, _RV_LONG_SESSIONS)
 
@@ -581,6 +636,7 @@ def _compute(
     if latest.close is not None and ema is not None and atr is not None and atr > 0:
         z = (latest.close - ema) / (2.0 * atr)
 
+    sessions_to_expiry = _sessions_to_expiry(calendar, as_of, latest.nearest_expiry)
     values: list[FeatureValue] = [
         FeatureValue(
             name="atm_iv",
@@ -653,25 +709,28 @@ def _compute(
             unit="index points",
             description=(
                 "Mean true range over fourteen sessions, counting overnight gaps against "
-                "the previous close as well as each session's own range."
+                "the previous close as well as each session's own range. Each session's "
+                "high, low and close are taken at or before the decision minute, so this is "
+                "not comparable with a published full-session ATR."
             ),
             reason=None if atr is not None else _missing(f"{_ATR_SESSIONS + 1} session ranges"),
         ),
         FeatureValue(
             name="ema_20",
             value=ema,
-            lookback_sessions=_EMA_WARMUP_SESSIONS,
+            lookback_sessions=ema_warmup,
             unit="index points",
             description=(
-                "Twenty-session exponential moving average of the index, warmed up over a "
-                "fixed sixty-session window so the value depends only on the as-of date."
+                "Twenty-session exponential moving average of the index, warmed up over the "
+                "closes this feature's own lookback names — capped at sixty, so resolving "
+                "more history than that cannot change the value."
             ),
             reason=None if ema is not None else _missing(f"{_EMA_SPAN} session closes"),
         ),
         FeatureValue(
             name="ema20_z",
             value=z,
-            lookback_sessions=_EMA_WARMUP_SESSIONS,
+            lookback_sessions=max(ema_warmup, _ATR_SESSIONS),
             unit="ATR multiples",
             description=(
                 "Distance of the index from its twenty-session exponential average, in "
@@ -696,17 +755,25 @@ def _compute(
         ),
         FeatureValue(
             name="sessions_to_nearest_expiry",
-            value=_sessions_to_expiry(calendar, as_of, latest.nearest_expiry),
+            value=sessions_to_expiry,
             lookback_sessions=1,
             unit="sessions",
             description=(
                 "Exchange trading days from the as-of session to the nearest listed expiry, "
                 "the as-of session excluded."
             ),
+            # Derived from the outcome, not from the input: the count is also absent when
+            # the exchange calendar's published table stops before the expiry, and a reason
+            # read off `nearest_expiry` alone would leave that case with a null value and no
+            # explanation — the one shape a FeatureValue must never take.
             reason=(
                 None
-                if latest.nearest_expiry is not None
-                else _missing("a listed expiry at or after the as-of session")
+                if sessions_to_expiry is not None
+                else (
+                    _missing("a listed expiry at or after the as-of session")
+                    if latest.nearest_expiry is None
+                    else "not computable: the exchange calendar does not cover the expiry"
+                )
             ),
         ),
     ]

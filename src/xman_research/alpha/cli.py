@@ -37,6 +37,7 @@ from xman_research.alpha.library import (
     DEFAULT_LIBRARY_PATH,
     AdmissionStatus,
     DecisionRecordError,
+    LibraryFileError,
     TemplateLibrary,
 )
 from xman_research.alpha.ranker import NightlyScan
@@ -146,11 +147,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "scan":
             return _scan(args)
-        return _library(args, parser)
+        return _library(args)
     except (
         CalendarCoverageError,
         DecisionRecordError,
-        KeyError,
+        LibraryFileError,
         SessionStoreError,
         UnknownTemplateError,
         ValueError,
@@ -160,7 +161,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         # from "the scan crashed" without parsing a traceback. The tuple covers every refusal
         # reachable from an argument: a date the corpus has no session for, a range the
         # exchange calendar does not cover, a corpus with a hole in it, a template id nothing
-        # registers, and a decision record that is missing or unreadable.
+        # registers, a decision record that is missing or unreadable, and a library file this
+        # reader does not understand. `KeyError` is deliberately absent — a missing key while
+        # deserialising a library entry is a corrupt file, not a refusal, and printing it as
+        # one would hide a crash behind an orderly exit code.
         print(f"refused: {error}", file=sys.stderr)
         return _EXIT_REFUSED
 
@@ -200,20 +204,26 @@ def _scan(args: argparse.Namespace) -> int:
     return _EXIT_OK
 
 
-def _library(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+def _library(args: argparse.Namespace) -> int:
     registry = default_registry()
     library = TemplateLibrary.load(args.library)
 
     if args.library_command == "list":
-        for template in registry:
-            entry = library.current(template.template_id)
+        # The union, not just the registry: a library entry whose template id is no longer
+        # registered is exactly the case the ranker reports as `template_not_registered`, and
+        # listing only registered ids would make the one entry a reader needs to find
+        # invisible in the command that exists to find it.
+        filed = {entry.template_id for entry in library.entries()}
+        for template_id in sorted(set(registry.ids()) | filed):
+            entry = library.current(template_id)
             status = str(entry.status) if entry else "unfiled"
             suffix = (
                 f" — {entry.admitted_by} at {entry.admitted_at}: {entry.reason}"
                 if entry
                 else " — no entry in this library"
             )
-            print(f"{template.template_id}: {status}{suffix}")
+            unregistered = "" if template_id in registry else " [NOT REGISTERED]"
+            print(f"{template_id}: {status}{unregistered}{suffix}")
         return _EXIT_OK
 
     if args.library_command == "demote":
@@ -225,7 +235,7 @@ def _library(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     template = registry.get(args.template)
     if args.library_command == "seed-from-decision":
         if args.admit and not args.by:
-            parser.error("--admit requires --by: an admission is somebody's decision")
+            raise ValueError("--admit requires --by: an admission is somebody's decision")
         status = AdmissionStatus.ADMITTED if args.admit else AdmissionStatus.CANDIDATE
         by = args.by or "seed-from-decision"
         reason = args.reason or f"evidence filed from {args.decision}"

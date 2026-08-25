@@ -32,7 +32,10 @@ from xman_research.session_store import DEFAULT_CORPUS_ROOT
 
 CORPUS_ROOT = Path(os.environ.get("XMAN_RESEARCH_CORPUS_ROOT") or DEFAULT_CORPUS_ROOT)
 UNDERLYING = "NIFTY"
-DECISION_RECORD = Path("research/h1/decision.json")
+#: Anchored to the repository, not to the working directory: a test that only passes
+#: when pytest happens to be invoked from the repo root is a test with a hidden
+#: precondition.
+DECISION_RECORD = Path(__file__).resolve().parents[1] / "research" / "h1" / "decision.json"
 
 #: A Friday: the front weekly contract expires the following Tuesday, far enough out for a
 #: one-session hold to be opened and closed inside its life.

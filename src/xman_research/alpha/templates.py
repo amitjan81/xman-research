@@ -184,7 +184,11 @@ def _entry_intents(
     min_calendar_days_to_expiry: int,
     group_prefix: str,
 ) -> Sequence[TradeIntent]:
-    """A short ATM straddle of the nearest survivable expiry, or nothing.
+    """A short ATM straddle of the nearest listed expiry if it survives the hold, else nothing.
+
+    The expiry is never rolled forward. A later contract would be a different trade with a
+    different variance exposure, and on this corpus it carries no bars at all, so rolling
+    would swap a stated refusal for a position priced from nothing.
 
     Every refusal below is a refusal to trade rather than a substitution, and each one is
     a fact about the session: no listed expiry far enough out, a broken underlying series,
@@ -269,6 +273,11 @@ class HoldNShortStraddle:
     measures the premium over a window a nightly scan can actually promise an operator,
     and the two are different populations with different tails.
 
+    **One decision minute per session is assumed.** The counter advances on a change of
+    session date, so a second decision minute in the same session neither ages the position
+    nor, after an exit, prevents a re-entry that same day. Configure the engine with a single
+    decision time for this strategy.
+
     **The hold counter is per-instance run state**, so an instance belongs to exactly one
     run. :meth:`StrategyTemplate.build` mints a fresh one per call, which is what keeps a
     second run from inheriting the first's position age.
@@ -320,7 +329,12 @@ class HoldNShortStraddle:
             if intents:
                 self._last_counted = session.session_date
             return intents
-        if self._last_counted is not None and session.session_date > self._last_counted:
+        if self._last_counted is None:
+            # First sight of a book this instance did not open. The engine always starts a
+            # run flat so this is unreachable through it, but anchoring the counter here
+            # keeps "a held position is eventually exited" true for any caller.
+            self._last_counted = session.session_date
+        elif session.session_date > self._last_counted:
             self._sessions_held += 1
             self._last_counted = session.session_date
         if self._sessions_held < self.hold_sessions:

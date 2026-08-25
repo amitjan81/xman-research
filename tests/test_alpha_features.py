@@ -169,12 +169,23 @@ def test_the_overnight_gap_is_the_move_against_the_previous_session_close(
 def test_the_regime_tag_is_a_tercile_of_the_trailing_spread(
     alternating_corpus: tuple[SessionStore, list[dt.date], dt.date],
 ) -> None:
+    """On this path every trailing spread is the same number, so the terciles are exact.
+
+    Implied volatility is the fixture's constant and the twenty-session realised volatility
+    is identical on every session of an alternating path, so the whole trailing distribution
+    collapses to one value. Both terciles must equal it, and the tag must be the one the
+    ``<=`` boundary rule selects — a wrong quantile implementation moves at least one of the
+    three.
+    """
     store, sessions, _ = alternating_corpus
-    regime = _build(store, sessions[-1], regime_lookback=8).regime
-    assert regime.tag in {"iv_rv_low", "iv_rv_mid", "iv_rv_high"}
-    assert regime.lookback_sessions == 8
-    assert regime.lower_tercile is not None and regime.upper_tercile is not None
-    assert regime.lower_tercile <= regime.upper_tercile
+    frame = _build(store, sessions[-1], regime_lookback=8)
+    spread = frame.value("iv_minus_rv_20")
+    regime = frame.regime
+    assert spread is not None
+    assert regime.lower_tercile == pytest.approx(spread)
+    assert regime.upper_tercile == pytest.approx(spread)
+    assert regime.tag == "iv_rv_low"
+    assert regime.lookback_observations == 8
 
 
 def test_a_regime_tercile_over_too_few_observations_is_absent_with_a_reason(
@@ -294,8 +305,37 @@ def test_the_implied_reading_is_withheld_on_a_session_that_is_its_own_expiry(
     assert frame.value("iv_minus_rv_20") is None
 
 
-def test_the_calendar_used_is_the_exchange_one(
+def test_the_regime_tag_is_withheld_on_a_session_with_no_spread_of_its_own(
+    synthetic_store,
+) -> None:
+    """A tag cut from the trailing distribution must still describe the as-of session.
+
+    On an expiry session the implied reading is withheld, so the session contributes no
+    spread. Reading the most recent *computable* observation instead would stamp the
+    previous session's regime under today's date on every expiry Tuesday.
+    """
+    sessions = _trading_days(30, ending=dt.date(2026, 4, 24))
+    _write_corpus(
+        synthetic_store.root,
+        sessions=sessions,
+        spot_for=lambda index: FLAT_SPOT + (STEP if index % 2 else 0.0),
+        expiry=sessions[-1],
+    )
+    regime = _build(synthetic_store(), sessions[-1], regime_lookback=8).regime
+    assert regime.tag is None
+    assert regime.observations > 0
+    assert "as-of session" in (regime.reason or "")
+
+
+def test_the_builder_counts_expiry_distance_against_the_exchange_calendar(
     flat_corpus: tuple[SessionStore, list[dt.date], dt.date],
 ) -> None:
-    del flat_corpus
-    assert TradingCalendar().name == NSE_CALENDAR
+    """The count is a published schedule read forward, not corpus files counted forward."""
+    store, sessions, expiry = flat_corpus
+    frame = _build(store, sessions[-1])
+    assert frame.nearest_expiry == expiry
+    calendar = TradingCalendar()
+    assert calendar.name == NSE_CALENDAR
+    assert frame.value("sessions_to_nearest_expiry") == pytest.approx(
+        len(calendar.trading_days(sessions[-1], expiry)) - 1
+    )

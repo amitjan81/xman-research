@@ -281,22 +281,28 @@ def invalidators_for(
             )
         )
 
+    # The count is measured to the frame's nearest listed expiry. That is the contract the
+    # entry rule sells, so the two normally agree — but the rule below is about the leg on
+    # THIS sheet, so the count is used only once it is confirmed to describe that leg rather
+    # than relying on the agreement holding.
     sessions_left = frame.value("sessions_to_nearest_expiry")
+    if expiry is not None and expiry != frame.nearest_expiry:
+        sessions_left = None
     found.append(
         Invalidator(
             name="contract_expires_inside_hold",
             rule=(
-                f"the contract sold expires before the {template.hold_sessions}-session "
-                "hold elapses; the position then cash-settles instead of being bought back, "
-                "and the observation stops being the hold the evidence measured"
+                "the contract sold reaches its expiry on or before the exit minute of a "
+                f"{template.hold_sessions}-session hold; a contract is dropped from the "
+                "instrument master on its own expiry date, so the buy-back cannot be "
+                "expressed, the position cash-settles instead, and the observation stops "
+                "being the hold the evidence measured"
             ),
             observed=sessions_left,
             threshold=float(template.hold_sessions),
-            breached=(
-                expiry is not None
-                and sessions_left is not None
-                and sessions_left < template.hold_sessions
-            ),
+            # `<=`, not `<`: a contract expiring ON the exit session cannot be bought back
+            # at all, which is exactly the outcome this invalidator warns about.
+            breached=sessions_left is not None and sessions_left <= template.hold_sessions,
         )
     )
     return tuple(found)
@@ -370,7 +376,7 @@ class Rationale:
             "evidence": f"admission record for {template.template_id} <- {admission.decision_path}",
             "regime": (
                 f"feature layer, implied-minus-realised tercile over "
-                f"{regime.lookback_sessions} trailing sessions"
+                f"{regime.observations} trailing observations"
             ),
             "trade.legs": (
                 f"contract universe of the {frame.underlying} session dated {frame.as_of}, "

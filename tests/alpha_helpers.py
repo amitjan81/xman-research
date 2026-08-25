@@ -13,6 +13,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from conftest import SyntheticContract, write_synthetic_session
+from xman_research.alpha.features import DEFAULT_DECISION_TIME
 from xman_research.session_store import TradingCalendar
 
 FLAT_SPOT = 23_000.0
@@ -20,9 +21,14 @@ STEP = 230.0
 FIXTURE_IV = 0.13
 LOT_SIZE = 65
 
-#: 15:20 IST is 365 minutes after the 09:15 open, so this is the index of the decision
-#: minute in the fixture's per-minute series and everything above it is the future.
-DECISION_MINUTE_INDEX = 365
+#: The default decision time is 335 minutes after the 09:15 open, so this is the index of
+#: the decision minute in the fixture's per-minute series and everything above it is the
+#: future. Derived rather than written down, so moving the decision time cannot leave the
+#: look-ahead tests quietly rewriting bars the scan already reads.
+DECISION_MINUTE_INDEX = (
+    dt.datetime.combine(dt.date(2000, 1, 1), DEFAULT_DECISION_TIME)
+    - dt.datetime.combine(dt.date(2000, 1, 1), dt.time(9, 15))
+).seconds // 60
 
 
 def trading_days(count: int, *, ending: dt.date) -> list[dt.date]:
