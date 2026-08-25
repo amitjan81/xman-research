@@ -22,7 +22,7 @@ import pytest
 from alpha_helpers import FLAT_SPOT, STEP, trading_days, write_corpus
 from conftest import ManualClock, SyntheticContract, synthetic_symbol, write_synthetic_session
 from xman_research.alpha.features import DEFAULT_DECISION_TIME, FeatureBuilder
-from xman_research.alpha.library import TemplateLibrary
+from xman_research.alpha.library import AdmissionStatus, TemplateLibrary
 from xman_research.alpha.ranker import NightlyScan
 from xman_research.alpha.templates import default_registry
 from xman_research.alpha.tracking import (
@@ -456,7 +456,7 @@ def test_one_sided_t_statistic_matches_the_hand_computation() -> None:
 
 
 def _ledger_of_drifts(
-    path: Path, drifts: list[float], *, expected: float = EXPECTED_EDGE
+    path: Path, drifts: list[float], *, expected: float = EXPECTED_EDGE, key: str = ""
 ) -> IdeaLedger:
     """A ledger holding one settled idea per drift, written and read back through disk.
 
@@ -467,10 +467,10 @@ def _ledger_of_drifts(
     entries = []
     for index, drift in enumerate(drifts):
         as_of = (dt.date(2026, 1, 1) + dt.timedelta(days=index)).isoformat()
-        key = {
+        identity = {
             "as_of": as_of,
             "template_id": TEMPLATE,
-            "parameter_key": "",
+            "parameter_key": key,
             "underlying": UNDERLYING,
         }
         entries.append(
@@ -485,7 +485,7 @@ def _ledger_of_drifts(
                 "legs": [],
                 "generated_at": GENERATED_AT,
                 "code_version": CODE_VERSION,
-                **key,
+                **identity,
             }
         )
         entries.append(
@@ -501,7 +501,7 @@ def _ledger_of_drifts(
                 "legs": [],
                 "reason": "fixture",
                 "settled_at": "2026-04-30T18:00:00+00:00",
-                **key,
+                **identity,
             }
         )
     path.write_text(
@@ -730,3 +730,69 @@ def test_a_scanned_sheet_is_recorded_settled_and_reported(
     assert report.realised_mean is not None
     assert apply_demotions(reports, library, by="tester") == ()
     assert {record.template_id for record in library.admitted()} == {TEMPLATE}
+
+
+def _admitted_library(tmp_path: Path, clock: ManualClock) -> tuple[TemplateLibrary, str]:
+    """A library holding one admitted point, and the parameter key that names it."""
+    library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
+    library.admit(
+        override_reason=ADMIT_OVERRIDE,
+        template=default_registry().get(TEMPLATE),
+        decision_path=DECISION_RECORD,
+        by="tester",
+        reason="a live admission for the demotion rule to act on",
+    )
+    admitted = library.admitted()
+    assert len(admitted) == 1
+    return library, admitted[0].parameter_key
+
+
+def test_a_breach_demotes_the_admitted_point_with_the_numbers_in_the_reason(
+    tmp_path: Path, clock: ManualClock
+) -> None:
+    """The rule's hand on the lever: a CUSUM breach takes the template off the ranker.
+
+    The ledger is written at the *admitted* parameter key rather than a bare template id.
+    A template can be filed at several points and only one of them may be drifting, so a
+    demotion that could not name the point would take a healthy trade down with a broken one.
+    """
+    library, key = _admitted_library(tmp_path, clock)
+    ledger = _ledger_of_drifts(tmp_path / "ledger.json", _SUSTAINED, key=key)
+    reports = ledger.drift(library, window=20, min_settled=10)
+
+    assert len(reports) == 1
+    assert reports[0].parameter_key == key
+    assert reports[0].card_mean_return_at_hold is not None
+    assert reports[0].verdict == VERDICT_CUSUM_BREACH
+
+    demoted = apply_demotions(reports, library, by="tester")
+    assert [report.identity for report in demoted] == [(TEMPLATE, key)]
+    assert library.admitted() == ()
+
+    point = dict(library.history(TEMPLATE)[0].parameters)
+    current = library.current(TEMPLATE, parameters=point)
+    assert current is not None
+    assert current.status == AdmissionStatus.DEMOTED
+    assert current.admitted_by == "tester"
+    # The evidence the point was admitted on is carried forward, not cleared: what the
+    # offline loop measured is still true, and the demotion is a statement about now.
+    assert current.evidence.mean_return_at_hold == reports[0].card_mean_return_at_hold
+    # The reason has to stand on its own in the library, without the ledger beside it.
+    assert "CUSUM" in current.reason
+    assert f"{CUSUM_K:g} sigma" in current.reason
+
+    # The rule keeps breaching after it has fired; a second pass must not file a second
+    # demotion entry on top of the one that mattered.
+    assert apply_demotions(ledger.drift(library, window=20, min_settled=10), library, by="x") == ()
+
+
+def test_the_same_shortfalls_alternating_leave_the_admission_alone(
+    tmp_path: Path, clock: ManualClock
+) -> None:
+    library, key = _admitted_library(tmp_path, clock)
+    ledger = _ledger_of_drifts(tmp_path / "ledger.json", _ALTERNATING, key=key)
+    reports = ledger.drift(library, window=20, min_settled=10)
+
+    assert reports[0].verdict == VERDICT_WITHIN_TOLERANCE
+    assert apply_demotions(reports, library, by="tester") == ()
+    assert [record.template_id for record in library.admitted()] == [TEMPLATE]
