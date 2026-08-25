@@ -34,9 +34,11 @@ from __future__ import annotations
 
 import datetime as dt
 import itertools
+import json
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from xman_research.adapter import evidence_from_result
@@ -74,6 +76,7 @@ __all__ = [
     "ScreeningRun",
     "ScreeningRunError",
     "evidence_card_from_screen",
+    "load_screen_sheet",
 ]
 
 SCREEN_SHEET_SCHEMA_VERSION = 1
@@ -149,6 +152,17 @@ class CandidateSpec:
             "grid": {name: list(values) for name, values in sorted(self.grid.items())},
         }
 
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> CandidateSpec:
+        return cls(
+            template_id=str(payload["template_id"]),
+            grid={
+                str(name): tuple(float(value) for value in values)
+                for name, values in (payload.get("grid") or {}).items()
+            },
+            underlying=str(payload["underlying"]),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class CandidateInstance:
@@ -178,6 +192,15 @@ class CandidateInstance:
             "params": {name: value for name, value in sorted(self.params.items())},
             "hold_sessions": self.hold_sessions,
         }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> CandidateInstance:
+        return cls(
+            template_id=str(payload["template_id"]),
+            underlying=str(payload["underlying"]),
+            params={str(name): float(value) for name, value in payload["params"].items()},
+            hold_sessions=int(payload["hold_sessions"]),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,6 +261,38 @@ class ScreenedInstance:
             },
             "reason": self.reason,
         }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> ScreenedInstance:
+        return cls(
+            instance=CandidateInstance.from_dict(payload["instance"]),
+            trial_id=str(payload["trial_id"]),
+            outcome=str(payload["outcome"]),
+            strategy_name=str(payload["strategy_name"]),
+            strategy_parameters=dict(payload["strategy_parameters"]),
+            fingerprint=str(payload["fingerprint"]),
+            alpha=_optional_float(payload.get("alpha")),
+            annualised_sharpe=_optional_float(payload.get("annualised_sharpe")),
+            mean_return_per_session=_optional_float(payload.get("mean_return_per_session")),
+            mean_return_at_hold=_optional_float(payload.get("mean_return_at_hold")),
+            max_drawdown=_optional_float(payload.get("max_drawdown")),
+            n_observations=(
+                None if payload.get("n_observations") is None else int(payload["n_observations"])
+            ),
+            sessions_entered=int(payload["sessions_entered"]),
+            feasibility={str(k): int(v) for k, v in (payload.get("feasibility") or {}).items()},
+            cost_stamps=tuple(str(stamp) for stamp in payload.get("cost_stamps") or ()),
+            risk_matched=(dict(payload["risk_matched"]) if payload.get("risk_matched") else None),
+            regime_breakdown={
+                str(regime): dict(facts)
+                for regime, facts in (payload.get("regime_breakdown") or {}).items()
+            },
+            reason=(None if payload.get("reason") is None else str(payload["reason"])),
+        )
+
+
+def _optional_float(value: Any) -> float | None:
+    return None if value is None else float(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,6 +360,52 @@ class ScreenSheet:
             "n_trials_logged": self.n_trials_logged,
             "provenance": dict(self.provenance),
         }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> ScreenSheet:
+        """Read a sheet back, refusing a schema this reader does not understand.
+
+        ``trial_ids`` and ``n_trials_logged`` in the document are **not** read back into
+        fields: both are derived from the rows, so reading them would create a second copy
+        of a count that could disagree with the rows it describes.
+        """
+        version = payload.get("schema_version")
+        if version != SCREEN_SHEET_SCHEMA_VERSION:
+            raise ScreeningRunError(
+                f"screen sheet declares schema_version {version!r}; this reader understands "
+                f"{SCREEN_SHEET_SCHEMA_VERSION}"
+            )
+        start, _, end = str(payload["window"]).partition("..")
+        return cls(
+            underlying=str(payload["underlying"]),
+            window=DataWindow(dt.date.fromisoformat(start), dt.date.fromisoformat(end)),
+            benchmark=ScreenedInstance.from_dict(payload["benchmark"]),
+            instances=tuple(ScreenedInstance.from_dict(row) for row in payload["instances"]),
+            specs=tuple(CandidateSpec.from_dict(spec) for spec in payload.get("specs") or ()),
+            gaps_reason=(
+                None if payload.get("gaps_reason") is None else str(payload["gaps_reason"])
+            ),
+            sessions_without_features=tuple(
+                dt.date.fromisoformat(day) for day in payload.get("sessions_without_features") or ()
+            ),
+            provenance=dict(payload.get("provenance") or {}),
+            generated_at=str(payload["generated_at"]),
+            schema_version=int(version),
+        )
+
+
+def load_screen_sheet(path: Path | str) -> ScreenSheet:
+    """Read a screen sheet from disk."""
+    source = Path(path)
+    if not source.exists():
+        raise ScreeningRunError(f"no screen sheet at {source}")
+    try:
+        payload = json.loads(source.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise ScreeningRunError(f"screen sheet at {source} does not parse: {error}") from error
+    if not isinstance(payload, Mapping):
+        raise ScreeningRunError(f"screen sheet at {source} is not a JSON object")
+    return ScreenSheet.from_dict(payload)
 
 
 class ScreeningRun:
@@ -535,16 +636,34 @@ class ScreeningRun:
         mean_per_session = math.fsum(returns.net) / len(returns)
         facts = drawdown(returns)
         excess = _excess_series(returns, benchmark.returns) if benchmark is not None else None
-        alpha = None if excess is None else annualised_sharpe_ratio(excess)
-        reason = (
-            None
-            if excess is not None
-            else "no benchmark series was measurable, so there is no spread to take"
+        if excess is None:
+            alpha, reason = (
+                None,
+                ("no benchmark series was measurable, so there is no spread to take"),
+            )
+        else:
+            alpha, reason = _sharpe_or_none(
+                excess,
+                undefined=(
+                    "the spread over the benchmark is identically flat, so it has no "
+                    "dispersion to form a ratio from. This is what an instance that "
+                    "reproduces the benchmark exactly looks like, and it is not an alpha "
+                    "of zero: there is no number here at all."
+                ),
+            )
+        own_sharpe, own_reason = _sharpe_or_none(
+            returns,
+            undefined=(
+                "the run's own return series never moved, so its Sharpe is undefined "
+                "rather than zero"
+            ),
         )
+        if own_reason is not None:
+            reason = own_reason if reason is None else f"{reason}; {own_reason}"
         return ScreenedInstance(
             outcome=SCREENED,
             alpha=alpha,
-            annualised_sharpe=annualised_sharpe_ratio(returns),
+            annualised_sharpe=own_sharpe,
             mean_return_per_session=mean_per_session,
             mean_return_at_hold=mean_per_session * instance.hold_sessions,
             max_drawdown=facts.max_drawdown,
@@ -610,7 +729,7 @@ def replace_gap_reason(config: BacktestConfig, gaps_reason: str | None) -> Backt
     )
 
 
-def _excess_series(candidate: ReturnSeries, benchmark: ReturnSeries) -> ReturnSeries | None:
+def _excess_series(candidate: ReturnSeries, benchmark: ReturnSeries) -> ReturnSeries:
     """The candidate's per-session return minus the benchmark's, aligned on both.
 
     A session present in one series and not the other is a session that series was not in
@@ -622,8 +741,6 @@ def _excess_series(candidate: ReturnSeries, benchmark: ReturnSeries) -> ReturnSe
     cost-multiple counterfactual that means nothing on a spread.
     """
     days = sorted(set(candidate.dates) | set(benchmark.dates))
-    if len(days) < 2:
-        return None
     left = dict(zip(candidate.dates, candidate.net, strict=True))
     right = dict(zip(benchmark.dates, benchmark.net, strict=True))
     return ReturnSeries(
@@ -633,6 +750,21 @@ def _excess_series(candidate: ReturnSeries, benchmark: ReturnSeries) -> ReturnSe
         label=f"{candidate.label} minus {benchmark.label}",
         periods_per_year=candidate.periods_per_year,
     )
+
+
+def _sharpe_or_none(series: ReturnSeries, *, undefined: str) -> tuple[float | None, str | None]:
+    """The annualised Sharpe of ``series``, or ``None`` with the reason there is not one.
+
+    A series with no dispersion has no Sharpe — the ratio is zero over zero, not zero — and
+    :mod:`xman_research.validation.statistics` refuses it rather than returning a number.
+    A screen meets that case routinely: an instance that reproduces its benchmark exactly
+    has an identically flat spread. Reporting ``None`` keeps such a row out of the ranking
+    instead of seating it in the middle at a fabricated zero.
+    """
+    try:
+        return annualised_sharpe_ratio(series), None
+    except ValueError:
+        return None, undefined
 
 
 def _risk_matched(candidate: RunEvidence, benchmark: RunEvidence | None) -> dict[str, Any] | None:

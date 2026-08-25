@@ -12,6 +12,16 @@ decision and the command demands their name for it.
     python -m xman_research.alpha.cli library list
     python -m xman_research.alpha.cli library demote --template <id> --by <name> \\
         --reason "<why>"
+    python -m xman_research.alpha.cli screen --spec research/screen/spec.toml \\
+        --out research/screen/sheet.json
+    python -m xman_research.alpha.cli library seed-from-screen \\
+        --sheet research/screen/sheet.json --rank 1 --by <name>
+
+``screen`` is the offline loop's stage one: it runs every instance a TOML spec names over an
+in-sample window, appends each as a trial, and writes a ranked sheet. It grades nothing —
+``seed-from-screen`` can therefore only file a template as a **candidate**, and admission
+stays with ``admit``, which reads a decision record and refuses an unpassed one without a
+written override.
 
 ``seed-from-decision`` files a template as a **candidate** unless ``--admit`` is given with
 ``--by``. The default is the conservative one: filing evidence and letting the ranker trade
@@ -39,11 +49,21 @@ from xman_research.alpha.library import (
     DecisionRecordError,
     LibraryFileError,
     TemplateLibrary,
+    UnpassedEvidenceError,
 )
 from xman_research.alpha.ranker import NightlyScan
+from xman_research.alpha.screen import (
+    ScreeningRun,
+    ScreeningRunError,
+    evidence_card_from_screen,
+    load_screen_sheet,
+)
+from xman_research.alpha.spec import ScreenSpecError, load_screen_spec
 from xman_research.alpha.templates import UnknownTemplateError, default_registry
+from xman_research.backtest.engine import BacktestConfig
 from xman_research.backtest.execution import ParticipationLimits
 from xman_research.session_store import CalendarCoverageError, SessionStore, SessionStoreError
+from xman_research.trial_log import TrialLog
 
 __all__ = ["build_parser", "main"]
 
@@ -107,6 +127,22 @@ def build_parser() -> argparse.ArgumentParser:
         default=ParticipationLimits().max_pct_of_open_interest,
     )
 
+    screen = commands.add_parser(
+        "screen", help="run one stage-one screen and write its ranked sheet"
+    )
+    screen.add_argument("--spec", required=True, type=Path, help="path to the screen spec TOML")
+    screen.add_argument("--out", required=True, type=Path, help="where to write the sheet JSON")
+    screen.add_argument("--corpus-root", type=Path, help="override the session store's corpus root")
+    screen.add_argument(
+        "--trial-log",
+        type=Path,
+        help=(
+            "where to append this screen's trials; defaults to the path the spec names. "
+            "Every instance is logged before its number is read, so a stage-two gate filed "
+            "against the same hypothesis deflates against the whole screen."
+        ),
+    )
+
     library = commands.add_parser("library", help="inspect and change template admissions")
     library_commands = library.add_subparsers(dest="library_command", required=True)
 
@@ -127,12 +163,34 @@ def build_parser() -> argparse.ArgumentParser:
     seed.add_argument("--reason", help="why; defaults to a description of the source record")
     seed.add_argument("--notes", help="free text carried on the entry")
 
+    seed_screen = library_commands.add_parser(
+        "seed-from-screen",
+        help="file a screened instance as a candidate, from a screen sheet",
+    )
+    seed_screen.add_argument("--sheet", required=True, type=Path, help="path to a screen sheet")
+    seed_screen.add_argument(
+        "--rank",
+        type=int,
+        default=1,
+        help="which ranked instance to file, one-based (default: the top one)",
+    )
+    seed_screen.add_argument("--by", help="who is filing this evidence")
+    seed_screen.add_argument("--reason", help="why; defaults to a description of the sheet")
+    seed_screen.add_argument("--notes")
+
     admit = library_commands.add_parser("admit", help="admit a template the ranker may propose")
     admit.add_argument("--template", required=True)
     admit.add_argument("--decision", required=True, type=Path)
     admit.add_argument("--by", required=True)
     admit.add_argument("--reason", required=True)
     admit.add_argument("--notes")
+    admit.add_argument(
+        "--override-reason",
+        help=(
+            "required to admit on a decision record that did not pass its gate; recorded "
+            "verbatim on the entry"
+        ),
+    )
 
     demote = library_commands.add_parser("demote", help="stop the ranker proposing a template")
     demote.add_argument("--template", required=True)
@@ -147,13 +205,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "scan":
             return _scan(args)
+        if args.command == "screen":
+            return _screen(args)
         return _library(args)
     except (
         CalendarCoverageError,
         DecisionRecordError,
         LibraryFileError,
+        ScreenSpecError,
+        ScreeningRunError,
         SessionStoreError,
         UnknownTemplateError,
+        UnpassedEvidenceError,
         ValueError,
     ) as error:
         # Refusals are the interesting outcome of this tool and are printed as one line on
@@ -204,6 +267,71 @@ def _scan(args: argparse.Namespace) -> int:
     return _EXIT_OK
 
 
+def _screen(args: argparse.Namespace) -> int:
+    spec = load_screen_spec(args.spec)
+    store = SessionStore(root=args.corpus_root) if args.corpus_root else SessionStore()
+    log_path = args.trial_log if args.trial_log else spec.trial_log_path
+    builder = FeatureBuilder(store, decision_time=spec.decision_time)
+    log = TrialLog(log_path)
+    try:
+        sheet = ScreeningRun(
+            store=store,
+            registry=default_registry(),
+            trial_log=log,
+            hypothesis=spec.hypothesis,
+            window=spec.window,
+            benchmark=spec.benchmark,
+            candidates=spec.candidates,
+            config=BacktestConfig(underlying=spec.underlying, decision_time=spec.decision_time),
+            gaps_reason=spec.gaps_reason,
+            feature_builder=builder,
+        ).run()
+    finally:
+        log.close()
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(sheet.as_dict(), indent=2, sort_keys=True) + "\n")
+    print(
+        f"{args.out}: {len(sheet.instances)} instance(s) over {sheet.window}, "
+        f"{sheet.n_trials_logged} trial(s) logged to {log_path}"
+    )
+    for rank, row in enumerate(sheet.instances[:5], start=1):
+        alpha = "unmeasured" if row.alpha is None else f"{row.alpha:+.3f}"
+        print(f"  {rank}. {row.instance.instance_id}: alpha={alpha} n={row.n_observations}")
+    return _EXIT_OK
+
+
+def _seed_from_screen(args: argparse.Namespace, library: TemplateLibrary, registry) -> int:
+    sheet = load_screen_sheet(args.sheet)
+    if args.rank < 1 or args.rank > len(sheet.instances):
+        raise ValueError(
+            f"--rank {args.rank} names no instance: the sheet at {args.sheet} ranks "
+            f"{len(sheet.instances)} of them"
+        )
+    row = sheet.instances[args.rank - 1]
+    card = evidence_card_from_screen(sheet, row.instance.instance_id, source=str(args.sheet))
+    entry = library.seed_from_screen(
+        template=registry.get(row.instance.template_id),
+        evidence=card,
+        sheet_path=args.sheet,
+        by=args.by or "seed-from-screen",
+        reason=args.reason or f"rank {args.rank} of the screen at {args.sheet}",
+        trial_ids=(row.trial_id,),
+        notes=args.notes,
+    )
+    library.save()
+    print(
+        f"{entry.template_id}: {entry.status} from {entry.decision_path} "
+        f"(instance={row.instance.instance_id}, alpha={row.alpha}, n={row.n_observations})"
+    )
+    print(
+        "note: a screening sheet applies no threshold and pre-registers none. This "
+        "instance is a CANDIDATE and the ranker will not propose it; admission needs a "
+        "decision record.",
+        file=sys.stderr,
+    )
+    return _EXIT_OK
+
+
 def _library(args: argparse.Namespace) -> int:
     registry = default_registry()
     library = TemplateLibrary.load(args.library)
@@ -225,6 +353,9 @@ def _library(args: argparse.Namespace) -> int:
             unregistered = "" if template_id in registry else " [NOT REGISTERED]"
             print(f"{template_id}: {status}{unregistered}{suffix}")
         return _EXIT_OK
+
+    if args.library_command == "seed-from-screen":
+        return _seed_from_screen(args, library, registry)
 
     if args.library_command == "demote":
         entry = library.demote(template_id=args.template, by=args.by, reason=args.reason)
@@ -251,6 +382,7 @@ def _library(args: argparse.Namespace) -> int:
         reason=reason,
         status=status,
         notes=args.notes,
+        override_reason=getattr(args, "override_reason", None),
     )
     library.save()
     card = entry.evidence
