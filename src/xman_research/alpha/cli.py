@@ -42,7 +42,7 @@ from xman_research.alpha.library import (
 from xman_research.alpha.ranker import NightlyScan
 from xman_research.alpha.templates import UnknownTemplateError, default_registry
 from xman_research.backtest.execution import ParticipationLimits
-from xman_research.session_store import SessionStore
+from xman_research.session_store import CalendarCoverageError, SessionStore, SessionStoreError
 
 __all__ = ["build_parser", "main"]
 
@@ -147,10 +147,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "scan":
             return _scan(args)
         return _library(args, parser)
-    except (DecisionRecordError, UnknownTemplateError, ValueError, KeyError) as error:
+    except (
+        CalendarCoverageError,
+        DecisionRecordError,
+        KeyError,
+        SessionStoreError,
+        UnknownTemplateError,
+        ValueError,
+    ) as error:
         # Refusals are the interesting outcome of this tool and are printed as one line on
         # stderr with a distinct exit code, so a nightly wrapper can tell "the scan declined"
-        # from "the scan crashed" without parsing a traceback.
+        # from "the scan crashed" without parsing a traceback. The tuple covers every refusal
+        # reachable from an argument: a date the corpus has no session for, a range the
+        # exchange calendar does not cover, a corpus with a hole in it, a template id nothing
+        # registers, and a decision record that is missing or unreadable.
         print(f"refused: {error}", file=sys.stderr)
         return _EXIT_REFUSED
 

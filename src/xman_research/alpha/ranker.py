@@ -49,7 +49,12 @@ from xman_research.alpha.explain import (
     TriggerExplanation,
     invalidators_for,
 )
-from xman_research.alpha.features import FeatureBuilder, FeatureFrame
+from xman_research.alpha.features import (
+    AsOfNotASessionError,
+    FeatureBuilder,
+    FeatureFrame,
+    InsufficientHistoryError,
+)
 from xman_research.alpha.library import AdmissionRecord, TemplateLibrary
 from xman_research.alpha.templates import StrategyTemplate, TemplateRegistry
 from xman_research.backtest.costs import Side
@@ -59,7 +64,7 @@ from xman_research.backtest.margin import MarginRequirement, ShortLeg, Simplifie
 from xman_research.backtest.market import SessionView
 from xman_research.clock import Clock, SystemClock
 from xman_research.code_version import CodeVersionProvider, GitCodeVersion
-from xman_research.session_store import SessionStore
+from xman_research.session_store import CalendarCoverageError, SessionStore, SessionStoreError
 
 __all__ = [
     "IDEA_SHEET_SCHEMA_VERSION",
@@ -81,6 +86,18 @@ SKIP_NO_SESSION_VIEW = "no_session_view"
 SKIP_NO_ENTRY = "no_entry_at_decision_minute"
 SKIP_INFEASIBLE = "infeasible"
 SKIP_NO_MARGIN = "no_margin_estimate"
+SKIP_NO_FEATURES = "no_features_for_product"
+
+
+#: Reading one product's session can fail for reasons that are about that product's corpus
+#: rather than about the scan: no session on the as-of date, too little history behind it, a
+#: hole the store refuses to cross, or a date the exchange calendar does not cover.
+_PRODUCT_UNREADABLE = (
+    AsOfNotASessionError,
+    CalendarCoverageError,
+    InsufficientHistoryError,
+    SessionStoreError,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,18 +253,40 @@ class NightlyScan:
         admitted = self._library.admitted()
         ideas: list[Idea] = []
         skipped: list[SkippedCandidate] = []
-        frames: dict[str, FeatureFrame] = {}
+        unreadable: list[Exception] = []
 
         for underlying in self._universe:
-            frame = self._features.build(underlying, self._as_of)
-            frames[underlying] = frame
-            view = self._features.session_view(underlying, self._as_of)
+            try:
+                frame = self._features.build(underlying, self._as_of)
+                view = self._features.session_view(underlying, self._as_of)
+            except _PRODUCT_UNREADABLE as error:
+                # **One product's missing data must not silence the others.** A universe is a
+                # list, and a corpus is onboarded one underlying at a time, so a scan that
+                # aborted on the first product without a session that night would stop
+                # producing ideas for the products that do have one — a total outage caused by
+                # a partial one. The product is recorded as a skip against every admitted
+                # template instead, so the sheet says which product was unreadable and why.
+                unreadable.append(error)
+                skipped.extend(
+                    SkippedCandidate(
+                        admission.template_id, underlying, SKIP_NO_FEATURES, str(error)
+                    )
+                    for admission in admitted
+                )
+                continue
             for admission in admitted:
                 outcome = self._evaluate(admission, underlying, frame, view)
                 if isinstance(outcome, SkippedCandidate):
                     skipped.append(outcome)
                 else:
                     ideas.append(outcome)
+
+        if unreadable and len(unreadable) == len(self._universe):
+            # Every product failed, so there is no partial answer to hand back. A sheet of
+            # skips would look like a quiet night rather than a scan that could read nothing,
+            # and the caller — a nightly wrapper, or an operator who typed a date — needs the
+            # difference.
+            raise unreadable[0]
 
         # Highest score first; ties break on template id then product so the order does not
         # depend on which product happened to be scanned first.

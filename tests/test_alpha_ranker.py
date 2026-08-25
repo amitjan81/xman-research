@@ -14,7 +14,14 @@ from pathlib import Path
 
 import pytest
 
-from alpha_helpers import FLAT_SPOT, LOT_SIZE, STEP, trading_days, write_corpus
+from alpha_helpers import (
+    DECISION_MINUTE_INDEX,
+    FLAT_SPOT,
+    LOT_SIZE,
+    STEP,
+    trading_days,
+    write_corpus,
+)
 from xman_research import ManualClock, StaticCodeVersion
 from xman_research.alpha.explain import (
     RATIONALE_SCHEMA_VERSION,
@@ -26,6 +33,7 @@ from xman_research.alpha.library import AdmissionStatus, TemplateLibrary
 from xman_research.alpha.ranker import (
     SKIP_INFEASIBLE,
     SKIP_NO_ENTRY,
+    SKIP_NO_FEATURES,
     SKIP_TEMPLATE_NOT_REGISTERED,
     SKIP_TRIGGER_DID_NOT_FIRE,
     IdeaSheet,
@@ -477,3 +485,78 @@ def test_a_scan_refuses_an_empty_universe(
             as_of=sessions[-1],
             universe=[],
         )
+
+
+# ------------------------------------------------------------- look-ahead and resilience
+
+
+def test_bars_printed_after_the_decision_minute_move_no_part_of_the_sheet(
+    synthetic_store, tmp_path: Path, clock: ManualClock
+) -> None:
+    """The feature tests pin the frame; this pins everything downstream of it.
+
+    A post-decision print could in principle move the spot the at-the-money strike is chosen
+    from, and therefore the legs, the margin and the score. It does not, because the scan
+    reads the session through the same truncated view the features do — and this is what
+    says so.
+    """
+    sessions = trading_days(SESSION_COUNT, ending=LAST_SESSION)
+    expiry = sessions[-1] + dt.timedelta(days=14)
+    write_corpus(
+        synthetic_store.root,
+        sessions=sessions,
+        spot_for=lambda index: FLAT_SPOT + STEP * (index % 3),
+        expiry=expiry,
+    )
+    library = _library(tmp_path, clock, "short_atm_straddle_hold_n")
+    quiet = _scan(synthetic_store(), library, sessions[-1]).as_dict()
+
+    write_corpus(
+        synthetic_store.root,
+        sessions=[sessions[-1]],
+        spot_for=lambda _: FLAT_SPOT + STEP * ((SESSION_COUNT - 1) % 3),
+        expiry=expiry,
+        spot_by_minute={index: FLAT_SPOT * 1.5 for index in range(DECISION_MINUTE_INDEX + 1, 375)},
+        spot_by_minute_on=sessions[-1],
+    )
+    violent = _scan(synthetic_store(), library, sessions[-1]).as_dict()
+    assert violent == quiet
+
+
+def test_one_unreadable_product_does_not_silence_the_others(
+    corpus: tuple[SessionStore, list[dt.date]], tmp_path: Path, clock: ManualClock
+) -> None:
+    """A universe is a list, and products are onboarded one at a time."""
+    store, sessions = corpus
+    sheet = NightlyScan(
+        store=store,
+        registry=default_registry(),
+        library=_library(tmp_path, clock, "short_atm_straddle_hold_n"),
+        as_of=sessions[-1],
+        universe=["NIFTY", "BANKNIFTY"],
+        feature_builder=FeatureBuilder(store, regime_lookback_sessions=10),
+        clock=ManualClock(dt.datetime(2026, 4, 24, 18, 0, tzinfo=dt.UTC)),
+        code_version=StaticCodeVersion("0" * 40, dirty=False),
+    ).run()
+
+    assert [idea.underlying for idea in sheet.ideas] == ["NIFTY"]
+    unreadable = [skip for skip in sheet.skipped if skip.reason == SKIP_NO_FEATURES]
+    assert [skip.underlying for skip in unreadable] == ["BANKNIFTY"]
+    assert unreadable[0].detail
+
+
+def test_a_scan_whose_every_product_is_unreadable_refuses_rather_than_reporting_a_quiet_night(
+    corpus: tuple[SessionStore, list[dt.date]], tmp_path: Path, clock: ManualClock
+) -> None:
+    store, sessions = corpus
+    with pytest.raises(Exception, match=r"BANKNIFTY|not a supported underlying"):
+        NightlyScan(
+            store=store,
+            registry=default_registry(),
+            library=_library(tmp_path, clock, "short_atm_straddle_hold_n"),
+            as_of=sessions[-1],
+            universe=["BANKNIFTY"],
+            feature_builder=FeatureBuilder(store, regime_lookback_sessions=10),
+            clock=ManualClock(dt.datetime(2026, 4, 24, 18, 0, tzinfo=dt.UTC)),
+            code_version=StaticCodeVersion("0" * 40, dirty=False),
+        ).run()

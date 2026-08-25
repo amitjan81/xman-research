@@ -162,18 +162,19 @@ def test_an_expiry_session_produces_an_explicit_reason_rather_than_a_mute_empty_
     assert sheet["skipped"][0]["reason"] == "no_entry_at_decision_minute"
 
 
-def test_the_scan_reads_no_session_after_the_as_of(seeded_library: Path, tmp_path: Path) -> None:
-    """The strongest statement this test can make about look-ahead on captured data.
+def test_each_sheet_is_dated_by_the_session_it_read(seeded_library: Path, tmp_path: Path) -> None:
+    """Two scans four sessions apart file their results under their own dates.
 
-    The two sheets are produced from the same corpus at two dates four sessions apart. The
-    earlier one's features must not have been able to see the later session, which shows up
-    as the two sheets disagreeing about the market — a scan reaching forward would converge.
+    This is a provenance check and nothing more. The look-ahead guarantee is held where it
+    can actually be tested — ``test_alpha_features.py`` builds one frame from a corpus that
+    stops at the as-of session and another from a corpus that continues past it with a
+    wildly different price, and requires them to be equal.
     """
     early, late = tmp_path / "early.json", tmp_path / "late.json"
     assert _scan(seeded_library, early, FIRES) == 0
     assert _scan(seeded_library, late, EXPIRY_SESSION) == 0
-    assert json.loads(early.read_text())["as_of"] != json.loads(late.read_text())["as_of"]
-    assert json.loads(early.read_text())["ideas"] != json.loads(late.read_text())["ideas"]
+    assert json.loads(early.read_text())["as_of"] == FIRES.isoformat()
+    assert json.loads(late.read_text())["as_of"] == EXPIRY_SESSION.isoformat()
 
 
 def test_a_scan_of_a_date_the_corpus_has_no_session_for_is_refused(
