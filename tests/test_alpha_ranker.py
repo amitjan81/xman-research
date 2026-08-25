@@ -615,3 +615,110 @@ def test_a_scan_whose_every_product_is_unreadable_refuses_rather_than_reporting_
             clock=ManualClock(dt.datetime(2026, 4, 24, 18, 0, tzinfo=dt.UTC)),
             code_version=StaticCodeVersion("0" * 40, dirty=False),
         ).run()
+
+
+# --------------------------------------------------- the shipped conditional template
+
+
+def test_the_shipped_conditional_template_fires_and_is_ranked(
+    synthetic_store, tmp_path: Path, clock: ManualClock
+) -> None:
+    """The real path: the frame's spread reaches the strategy and the strength reaches the score.
+
+    On an unmoving price path realised volatility is zero, so the spread is the fixture's
+    whole implied reading and clears the template's threshold by more than its saturation
+    span — the trigger fires at full strength.
+    """
+    sessions = trading_days(SESSION_COUNT, ending=LAST_SESSION)
+    write_corpus(
+        synthetic_store.root,
+        sessions=sessions,
+        spot_for=lambda _: FLAT_SPOT,
+        expiry=sessions[-1] + dt.timedelta(days=14),
+    )
+    store = synthetic_store()
+    sheet = _scan(store, _library(tmp_path, clock, "short_atm_straddle_iv_rv"), sessions[-1])
+
+    assert len(sheet.ideas) == 1
+    idea = sheet.ideas[0]
+    assert idea.template_id == "short_atm_straddle_iv_rv"
+    trigger = idea.rationale.trigger
+    assert trigger.feature == "iv_minus_rv_20"
+    assert trigger.fired is True
+    assert trigger.value is not None
+    assert trigger.value >= trigger.threshold
+    assert idea.signal_strength == 1.0
+    assert idea.rationale.trade.legs
+
+
+def test_the_shipped_conditional_template_scores_below_saturation_when_the_spread_is_thin(
+    synthetic_store, tmp_path: Path, clock: ManualClock
+) -> None:
+    """A spread inside the saturation span must reach the score as a fraction, not a one."""
+    sessions = trading_days(SESSION_COUNT, ending=LAST_SESSION)
+    # A small alternating move lifts realised volatility until the spread sits between the
+    # template's threshold and its saturation span.
+    write_corpus(
+        synthetic_store.root,
+        sessions=sessions,
+        spot_for=lambda index: FLAT_SPOT + (95.0 if index % 2 else 0.0),
+        expiry=sessions[-1] + dt.timedelta(days=14),
+    )
+    store = synthetic_store()
+    sheet = _scan(store, _library(tmp_path, clock, "short_atm_straddle_iv_rv"), sessions[-1])
+
+    assert len(sheet.ideas) == 1
+    idea = sheet.ideas[0]
+    conditioner = default_registry().get("short_atm_straddle_iv_rv").conditioner
+    assert conditioner is not None
+    spread = idea.rationale.trigger.value
+    assert spread is not None
+    assert 0.0 < idea.signal_strength < 1.0
+    assert idea.signal_strength == pytest.approx(conditioner.strength(spread))
+    assert idea.score == pytest.approx(
+        idea.expected_edge * idea.signal_strength / idea.margin_ratio
+    )
+
+
+def test_a_breached_invalidator_reaches_the_idea(
+    synthetic_store, tmp_path: Path, clock: ManualClock
+) -> None:
+    """An idea whose own invalidator has already fired must say so beside its score."""
+    sessions = trading_days(SESSION_COUNT, ending=LAST_SESSION)
+    write_corpus(
+        synthetic_store.root,
+        sessions=sessions,
+        # A settled alternating path sets the average true range, then the as-of session
+        # gaps ten per cent — far beyond twice that range.
+        spot_for=lambda index: (
+            FLAT_SPOT * 1.10
+            if index == SESSION_COUNT - 1
+            else FLAT_SPOT + (STEP if index % 2 else 0.0)
+        ),
+        expiry=sessions[-1] + dt.timedelta(days=14),
+    )
+    sheet = _scan(
+        synthetic_store(), _library(tmp_path, clock, "short_atm_straddle_hold_n"), sessions[-1]
+    )
+
+    assert len(sheet.ideas) == 1
+    idea = sheet.ideas[0]
+    assert "overnight_gap" in idea.breached_invalidators
+    gap_rule = next(r for r in idea.rationale.invalidators if r.name == "overnight_gap")
+    assert gap_rule.breached is True
+    assert gap_rule.observed is not None and gap_rule.threshold is not None
+    assert gap_rule.observed > gap_rule.threshold
+    assert idea.as_dict()["breached_invalidators"] == list(idea.breached_invalidators)
+
+
+def test_a_sheet_says_when_its_as_of_session_was_part_of_the_sample(
+    corpus: tuple[SessionStore, list[dt.date]], tmp_path: Path, clock: ManualClock
+) -> None:
+    """Not a look-ahead leak, but an in-sample mean applied to a session it already saw."""
+    store, sessions = corpus
+    library = _library(tmp_path, clock, "short_atm_straddle_hold_n")
+    window = library.admitted()[0].evidence.window
+    assert window == "2026-01-01..2026-04-30"
+    sheet = _scan(store, library, sessions[-1])
+    assert sheet.rests_on_in_sample_evidence is True
+    assert sheet.ideas[0].as_of_inside_evidence_window is True

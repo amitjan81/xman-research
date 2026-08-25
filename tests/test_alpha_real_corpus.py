@@ -7,9 +7,10 @@ the corpus is absent so the suite still runs on a machine without it, and everyt
 reads is read-only.
 
 **Both dates are inside the in-sample window.** ``research/h1/decision.json`` seals
-2026-05-01 onward as a holdout, and a scan reads a hundred and forty sessions of trailing
-history, so an as-of date after 30 April would put holdout sessions into a feature window.
-The window here ends comfortably before it.
+2026-05-01 onward as a holdout, and a scan reads trailing history behind its as-of date —
+sixty-one sessions at the forty-observation regime window this file passes, and a hundred
+and forty-one at the default. Either way an as-of date after 30 April would put holdout
+sessions into a feature window, and both dates here sit before it.
 
 **Two dates, because they exercise opposite branches.** 28 April 2026 is an expiry Tuesday:
 the front contract dies that evening, the template will not open a position it cannot hold,
