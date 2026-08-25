@@ -16,6 +16,17 @@ decision and the command demands their name for it.
         --out research/screen/sheet.json
     python -m xman_research.alpha.cli library seed-from-screen \\
         --sheet research/screen/sheet.json --rank 1 --by <name>
+    python -m xman_research.alpha.cli track record --sheet ideas.json
+    python -m xman_research.alpha.cli track settle --through 2026-04-30 \\
+        [--demote-by <name>]
+    python -m xman_research.alpha.cli track report [--template <id>]
+
+``track`` closes the loop the other two open: ``record`` files what one night's sheet
+proposed, ``settle`` marks every idea whose hold has elapsed at the prices the market
+actually printed, and ``report`` prints realised against admitted per template. ``settle``
+reports which admitted points breach the demotion rule and files the demotions only when
+``--demote-by`` names whoever is accountable for them — the same convention ``library
+demote`` follows, for the same reason.
 
 ``screen`` is the offline loop's stage one: it runs every instance a TOML spec names over an
 in-sample window, appends each as a trial, and writes a ranked sheet. It grades nothing —
@@ -70,6 +81,15 @@ from xman_research.alpha.templates import (
     TemplateRegistry,
     UnknownTemplateError,
     default_registry,
+)
+from xman_research.alpha.tracking import (
+    DEFAULT_LEDGER_PATH,
+    DEFAULT_MIN_SETTLED,
+    DEFAULT_WINDOW,
+    STATUS_SETTLED,
+    IdeaLedger,
+    LedgerError,
+    apply_demotions,
 )
 from xman_research.backtest.engine import BacktestConfig
 from xman_research.backtest.execution import ParticipationLimits
@@ -261,7 +281,81 @@ def build_parser() -> argparse.ArgumentParser:
             "different trades"
         ),
     )
+
+    track = commands.add_parser("track", help="record presented ideas and mark what they made")
+    track.add_argument(
+        "--ledger",
+        type=Path,
+        default=DEFAULT_LEDGER_PATH,
+        help=f"path to the idea ledger JSON (default: {DEFAULT_LEDGER_PATH})",
+    )
+    track_commands = track.add_subparsers(dest="track_command", required=True)
+
+    track_record = track_commands.add_parser("record", help="file every idea on one night's sheet")
+    track_record.add_argument("--sheet", required=True, type=Path, help="path to an idea sheet")
+
+    track_settle = track_commands.add_parser(
+        "settle", help="mark every open idea whose hold has elapsed"
+    )
+    track_settle.add_argument(
+        "--through",
+        required=True,
+        help=(
+            "settle using sessions up to and including this date, YYYY-MM-DD. Nothing later "
+            "is ever read, which is what keeps a sealed holdout sealed"
+        ),
+    )
+    track_settle.add_argument(
+        "--corpus-root", type=Path, help="override the session store's corpus root"
+    )
+    track_settle.add_argument(
+        "--decision-time",
+        default=DEFAULT_DECISION_TIME.isoformat(timespec="minutes"),
+        help=f"minute of the session marks are taken at (default: {DEFAULT_DECISION_TIME:%H:%M})",
+    )
+    track_settle.add_argument(
+        "--gaps-reason",
+        help="accept missing sessions inside the settlement range, against this written reason",
+    )
+    track_settle.add_argument(
+        "--demote-by",
+        help=(
+            "run the demotion rule after settling and file any breach under this name. "
+            "Omitted, the rule is only reported: demoting a template is somebody's decision "
+            "and the library records whose"
+        ),
+    )
+    _add_drift_arguments(track_settle)
+
+    track_report = track_commands.add_parser(
+        "report", help="print realised against expected, per admitted point"
+    )
+    track_report.add_argument("--template", help="restrict the report to one template id")
+    _add_drift_arguments(track_report)
     return parser
+
+
+def _add_drift_arguments(parser: argparse.ArgumentParser) -> None:
+    """The two knobs the drift statistics take, on every command that computes them.
+
+    Both are shared rather than defaulted per command so that a settle and the report that
+    follows it cannot silently judge the same ledger over two different windows.
+    """
+    parser.add_argument(
+        "--window",
+        type=int,
+        default=DEFAULT_WINDOW,
+        help=f"settled ideas the drift statistics look back over (default: {DEFAULT_WINDOW})",
+    )
+    parser.add_argument(
+        "--min-settled",
+        type=int,
+        default=DEFAULT_MIN_SETTLED,
+        help=(
+            "settled ideas below which no demotion may fire, however bad the numbers "
+            f"(default: {DEFAULT_MIN_SETTLED})"
+        ),
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -274,12 +368,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _screen(args)
         if args.command == "gate":
             return _gate(args)
+        if args.command == "track":
+            return _track(args)
         return _library(args)
     except (
         AdmittedParametersMismatchError,
         AmbiguousParameterPointError,
         CalendarCoverageError,
         DecisionRecordError,
+        LedgerError,
         LibraryFileError,
         ScreenSpecError,
         ScreeningRunError,
@@ -397,6 +494,98 @@ def _gate(args: argparse.Namespace) -> int:
         f"(the screen at {run.sheet_path} contributed {run.screen_trials})"
     )
     print(f"holdout spent: {run.holdout_spent}")
+    return _EXIT_OK
+
+
+def _track(args: argparse.Namespace) -> int:
+    """The forward loop: what was proposed, what it made, and whether it still earns its place."""
+    ledger = IdeaLedger.load(args.ledger)
+    if args.track_command == "record":
+        recorded = ledger.record_sheet(json.loads(args.sheet.read_text()))
+        ledger.save()
+        print(f"{args.ledger}: recorded {len(recorded)} idea(s) from {args.sheet}")
+        for idea in recorded:
+            print(
+                f"  {idea.as_of} {idea.template_id} [{idea.parameter_key or 'no parameters'}] "
+                f"{idea.underlying}: {idea.granted_lots} lot(s), expected "
+                f"{idea.expected_edge:+.6g} over {idea.hold_sessions} session(s)"
+            )
+        return _EXIT_OK
+
+    library = TemplateLibrary.load(args.library)
+    if args.track_command == "settle":
+        settled = ledger.settle(
+            as_of_end=dt.date.fromisoformat(args.through),
+            store=SessionStore(root=args.corpus_root) if args.corpus_root else SessionStore(),
+            decision_time=dt.time.fromisoformat(args.decision_time),
+            gaps_reason=args.gaps_reason,
+        )
+        ledger.save()
+        marked = sum(1 for entry in settled if entry.status == STATUS_SETTLED)
+        print(
+            f"{args.ledger}: settled {marked} idea(s) through {args.through}, "
+            f"{len(settled) - marked} unmarkable, {len(ledger.open_ideas())} still open"
+        )
+        for entry in settled:
+            if entry.realised_return is None:
+                print(f"  {entry.as_of} {entry.template_id}: UNMARKABLE — {entry.reason}")
+            else:
+                print(
+                    f"  {entry.as_of} {entry.template_id}: realised "
+                    f"{entry.realised_return:+.6g} vs expected {entry.expected_return:+.6g} "
+                    f"(drift {entry.drift:+.6g}), exited {entry.exit_as_of}"
+                )
+        reports = ledger.drift(library, window=args.window, min_settled=args.min_settled)
+        if args.demote_by:
+            demoted = apply_demotions(reports, library, by=args.demote_by)
+            if demoted:
+                library.save()
+            print(f"{args.library}: demoted {len(demoted)} admitted point(s)")
+            for report in demoted:
+                print(f"  {report.summary()}")
+        else:
+            breached = [report for report in reports if report.breached]
+            print(
+                f"{len(breached)} admitted point(s) breach the demotion rule; pass --demote-by "
+                "to file the demotions"
+            )
+            for report in breached:
+                print(f"  {report.summary()}")
+        return _EXIT_OK
+
+    reports = ledger.drift(
+        library,
+        window=args.window,
+        min_settled=args.min_settled,
+        template_id=args.template,
+    )
+    if not reports:
+        print(f"{args.ledger}: no settled ideas to report on")
+        return _EXIT_OK
+    for report in reports:
+        print(report.summary())
+        card = report.card_mean_return_at_hold
+        print(
+            f"    admitted mean return at hold: "
+            f"{'none on the card' if card is None else format(card, '+.6g')}"
+        )
+        if report.realised_hit_rate is not None:
+            deviation = report.hit_rate_deviation
+            print(
+                f"    hit rate: {report.realised_hit_rate:.3f} realised"
+                + (
+                    ""
+                    if deviation is None
+                    else f", {deviation:+.3f} against the admitted {report.card_hit_rate:.3f}"
+                )
+            )
+        if report.cusum is not None and report.cusum_threshold is not None:
+            print(
+                f"    drift CUSUM: {report.cusum:.6g} against a threshold of "
+                f"{report.cusum_threshold:.6g} (sigma {report.sigma:.6g})"
+            )
+        if report.t_statistic is not None:
+            print(f"    one-sided t on realised: {report.t_statistic:.4g}")
     return _EXIT_OK
 
 
