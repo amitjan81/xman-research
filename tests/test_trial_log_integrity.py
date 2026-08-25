@@ -287,21 +287,25 @@ def test_an_absent_metric_is_absent_rather_than_defaulted(log: TrialLog) -> None
     assert row.metric("sharpe_per_period") == 0.02
 
 
-def test_a_legacy_row_supplies_its_sharpe_to_the_variance_the_same_way(
+def test_an_annualised_sharpe_with_declared_periodicity_reaches_the_variance(
     session: ResearchSession,
 ) -> None:
-    """The alias has to be reachable from the reader that actually consumes logged metrics.
+    """An annualised ``sharpe`` plus its periodicity converts and feeds the variance.
 
-    An alias nothing calls is not a fix for #20, it is a fix-shaped object. So this seeds
-    rows carrying ONLY a legacy key and asserts the variance reader still finds a Sharpe
-    in them — which fails if `_observed_sharpe_variance` goes back to reading the metrics
-    mapping directly. Seeding the current key alongside would pass either way and prove
-    nothing, which is what the first version of this test did.
+    NOTE ON THIS TEST'S SCOPE — corrected after review. An earlier docstring claimed it
+    seeded "rows carrying ONLY a legacy key" and would fail if ``_observed_sharpe_variance``
+    reverted to reading the metrics mapping directly. Neither was true: it seeds ``sharpe``
+    and ``sharpe_periods_per_year``, both CURRENT keys, so it exercises the annualised
+    conversion path and passes identically under a reverted reader.
+
+    That is precisely the fix-shaped object this PR exists to call out, committed inside
+    the PR itself. The real alias guard is
+    ``test_the_variance_reader_resolves_a_renamed_key_through_the_alias`` below, which
+    seeds a genuinely aliased key. This test is kept because the conversion path is worth
+    covering — it is just not evidence about the alias.
     """
     record = hypothesis()
     session.register(record)
-    # `legacy_sharpe_per_period` stands in for a renamed key: the row carries only the old
-    # name, so the reader can only see it through the alias table.
     append(session.log, record, metrics={"sharpe": 0.30, "sharpe_periods_per_year": 252})
     append(session.log, record, metrics={"sharpe": 0.95, "sharpe_periods_per_year": 252})
 
