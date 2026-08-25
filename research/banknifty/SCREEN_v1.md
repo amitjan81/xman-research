@@ -198,3 +198,47 @@ product they were proposed on, so `tracking` matches the library on that pair an
 demotes without naming a product; the library refuses outright once one point is
 admitted on two products, which is the honest answer to a report that cannot say
 which of them drifted.
+
+## Smoke, then the run
+
+**Smoke.** Benchmark plus two candidates (unconditional strangle hold 3,
+`iv_rv` straddle hold 3) over 2025-02-01..2025-03-31, a temp trial log, notional
+5,000,000 as the real spec pins it. Exit 0 in **82 seconds** wall clock, of which
+the two candidate instances took **8 seconds each** — the rest is the feature
+pass, which is paid once. 36 sessions carried features and none were missing.
+
+| instance | annualised Sharpe | alpha | n | round trips |
+|---|---|---|---|---|
+| benchmark `short_atm_straddle_hold_n` | -2.212 | — | 36 | 3 |
+| `short_atm_strangle_hold_n` k=1.0 | -1.226 | +1.998 | 36 | 1 |
+| `short_atm_straddle_iv_rv` 0.02 | -2.263 | -2.646 | 36 | 2 |
+
+**These numbers are a plumbing check and nothing else.** One to three round trips
+over two months is far too few to read a Sharpe from, and the window was chosen
+to be short rather than to be representative: it holds the 2025-02-27 expiry-day
+convergence failure, one of the ten quarantined expiries, so a cycle declines at
+entry as UNSETTLEABLE inside it. What the smoke establishes is that the engine
+runs BANKNIFTY end to end — features, entries, settlement, costs, a written sheet
+— and that the run is watchable.
+
+**Per-instance cost, and what it implies.** 8 seconds over 36 sessions is
+~0.22 s/session/instance. The full window carries 353 sessions on disk, so an
+instance costs ~78 seconds and the 103 instances (benchmark plus 102) come to
+**~2.2 hours**, plus one feature pass over the longer window. Entries decline on
+unsettleable cycles rather than being backtested, so a window with proportionally
+more of them runs faster than this scaling suggests — the estimate is an upper
+bound in that direction and no better than the smoke it rests on.
+
+**Launched** 2026-08-25 21:04:24 UTC, PID 519660, detached under `setsid nohup`
+from the branch worktree at commit `1dfa745`:
+
+```
+uv run python -m xman_research.alpha.cli screen \
+  --spec research/banknifty/screen_v1.toml \
+  --out research/banknifty/screen_v1.json
+```
+
+Progress goes to
+`/tmp/claude-1003/-home-qa-xman-research/3f31834d-274b-415e-85a8-5b5449afebee/scratchpad/bn-screen.log`,
+one INFO line per completed instance carrying its position, id and session count.
+The sheet is written once at the end, so the log is the only signal until then.

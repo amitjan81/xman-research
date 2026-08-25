@@ -893,7 +893,6 @@ class TemplateRegistry:
         return tuple(self._templates)
 
 
-
 # ------------------------------------------------------------------- the shipped templates
 
 _TARGET_NOTIONAL = ParameterRange(

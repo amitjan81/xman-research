@@ -32,6 +32,7 @@ from xman_research.alpha.features import FeatureBuilder, InsufficientHistoryErro
 from xman_research.alpha.library import AdmissionStatus, TemplateLibrary
 from xman_research.alpha.ranker import (
     SKIP_INFEASIBLE,
+    SKIP_NO_ADMISSION_FOR_PRODUCT,
     SKIP_NO_ENTRY,
     SKIP_NO_FEATURES,
     SKIP_TEMPLATE_NOT_REGISTERED,
@@ -84,7 +85,7 @@ def _library(tmp_path: Path, clock: ManualClock, *template_ids: str) -> Template
     registry = default_registry()
     for template_id in template_ids:
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             override_reason=RANKER_OVERRIDE,
             template=registry.get(template_id),
             decision_path=DECISION_RECORD,
@@ -149,7 +150,7 @@ def _two_templates_of_different_strength(
     library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
     for template_id in ("short_atm_straddle_hold_n", "a_weaker_sibling"):
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             override_reason=RANKER_OVERRIDE,
             template=registry.get(template_id),
             decision_path=DECISION_RECORD,
@@ -251,7 +252,6 @@ def test_a_tie_breaks_on_template_id_then_product(
             template_id="a_twin_of_the_benchmark",
             name="a twin",
             thesis="the same trade under a second id, so two ideas score exactly alike",
-            products=original.products,
             hold_sessions=original.hold_sessions,
             parameters=original.parameters,
             conditioner=None,
@@ -261,7 +261,7 @@ def test_a_tie_breaks_on_template_id_then_product(
     library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
     for template_id in ("short_atm_straddle_hold_n", "a_twin_of_the_benchmark"):
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             override_reason=RANKER_OVERRIDE,
             template=registry.get(template_id),
             decision_path=DECISION_RECORD,
@@ -309,6 +309,25 @@ def test_a_template_whose_conditioner_does_not_fire_is_skipped_with_the_reading(
     assert "iv_minus_rv_20" in skip.detail
     assert sheet.no_ideas_reason is not None
     assert SKIP_TRIGGER_DID_NOT_FIRE in sheet.no_ideas_reason
+
+
+def test_a_product_with_no_admission_for_the_template_is_skipped_by_name(
+    corpus: tuple[SessionStore, list[dt.date]], tmp_path: Path, clock: ManualClock
+) -> None:
+    """Evidence covers one product, so a scan of another has nothing to propose from."""
+    store, sessions = corpus
+    library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
+    library.admit(
+        underlying="BANKNIFTY",
+        override_reason=RANKER_OVERRIDE,
+        template=default_registry().get("short_atm_straddle_hold_n"),
+        decision_path=DECISION_RECORD,
+        by="tester",
+        reason="admitted for a product this scan does not cover",
+    )
+    sheet = _scan(store, library, sessions[-1])
+    assert sheet.ideas == ()
+    assert sheet.skipped[0].reason == SKIP_NO_ADMISSION_FOR_PRODUCT
 
 
 def test_a_template_the_library_admits_but_no_registry_holds_is_skipped_by_name(

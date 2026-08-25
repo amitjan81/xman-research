@@ -113,11 +113,6 @@ def test_an_unregistered_id_names_what_is_registered(registry: TemplateRegistry)
         registry.get("no_such_template")
 
 
-def test_for_product_selects_only_templates_declaring_it(registry: TemplateRegistry) -> None:
-    assert len(registry.for_product("NIFTY")) == len(registry)
-    assert registry.for_product("BANKNIFTY") == ()
-
-
 # ------------------------------------------------------------------------------- building
 
 
@@ -138,11 +133,53 @@ def test_every_shipped_template_builds_something_satisfying_the_engine_protocol(
         assert dict(built.parameters())
 
 
-def test_build_refuses_a_product_the_template_was_not_measured_on(
+def test_build_instantiates_the_shape_for_any_product_named(
     registry: TemplateRegistry,
 ) -> None:
-    with pytest.raises(ValueError, match="says nothing about"):
-        registry.get("short_atm_straddle_hold_n").build(None, "BANKNIFTY")
+    """A template is a shape, so a screen may measure it on a product nothing admits yet."""
+    built = registry.get("short_atm_straddle_hold_n").build(None, "BANKNIFTY")
+    assert isinstance(built, Strategy)
+
+
+def test_build_refuses_to_guess_a_product(registry: TemplateRegistry) -> None:
+    with pytest.raises(ValueError, match="without an underlying"):
+        registry.get("short_atm_straddle_hold_n").build(None, None)
+
+
+def test_admit_refuses_evidence_measured_on_another_product(
+    tmp_path: Path, library: TemplateLibrary, registry: TemplateRegistry
+) -> None:
+    """The card's product is the measurement's; the admission's is the caller's claim."""
+    path = _decision_record(tmp_path, template_parameters=None)
+    payload = json.loads(path.read_text())
+    payload["runs"]["in_sample"]["underlying"] = "NIFTY"
+    path.write_text(json.dumps(payload))
+    with pytest.raises(CrossProductEvidenceError, match="measured .* on NIFTY"):
+        library.admit(
+            underlying="BANKNIFTY",
+            template=registry.get("short_atm_straddle_hold_n"),
+            decision_path=path,
+            by="tester",
+            reason="evidence from one market, an admission for another",
+            status=AdmissionStatus.CANDIDATE,
+        )
+
+
+def test_a_card_from_a_silent_record_says_it_corroborates_no_product(
+    tmp_path: Path, library: TemplateLibrary, registry: TemplateRegistry
+) -> None:
+    entry = library.admit(
+        underlying="BANKNIFTY",
+        template=registry.get("short_atm_straddle_hold_n"),
+        decision_path=_decision_record(tmp_path, template_parameters=None),
+        by="tester",
+        reason="the record names no product, so the product here is asserted",
+        status=AdmissionStatus.CANDIDATE,
+    )
+    assert entry.underlying == "BANKNIFTY"
+    assert entry.evidence.underlying is None
+    assert "absent" in entry.evidence.provenance["underlying"]
+    assert AdmissionRecord.from_dict(entry.as_dict()).underlying == "BANKNIFTY"
 
 
 def test_build_refuses_a_parameter_outside_its_declared_range(
@@ -252,7 +289,7 @@ def test_admit_refuses_a_decision_record_that_does_not_exist(
 ) -> None:
     with pytest.raises(DecisionRecordError, match="no decision record at"):
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             override_reason=OVERRIDE,
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=tmp_path / "absent.json",
@@ -268,7 +305,7 @@ def test_admit_refuses_a_decision_record_that_does_not_parse(
     broken.write_text("{not json")
     with pytest.raises(DecisionRecordError, match="does not parse"):
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             override_reason=OVERRIDE,
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=broken,
@@ -284,7 +321,7 @@ def test_admit_refuses_json_that_is_not_a_decision_record(
     wrong.write_text(json.dumps({"hello": "world"}))
     with pytest.raises(DecisionRecordError, match="no `in_sample` verdict"):
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             override_reason=OVERRIDE,
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=wrong,
@@ -299,7 +336,7 @@ def test_admit_demands_a_name_and_a_reason(
     template = registry.get("short_atm_straddle_hold_n")
     with pytest.raises(ValueError, match="requires `by`"):
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             override_reason=OVERRIDE,
             template=template,
             decision_path=DECISION_RECORD,
@@ -308,7 +345,7 @@ def test_admit_demands_a_name_and_a_reason(
         )
     with pytest.raises(ValueError, match="requires a written `reason`"):
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             override_reason=OVERRIDE,
             template=template,
             decision_path=DECISION_RECORD,
@@ -323,7 +360,7 @@ def test_admitting_unpassed_evidence_is_refused_without_a_written_override(
     """The shipped H1 record FAILED its gate, and the ranker proposes real trades."""
     with pytest.raises(UnpassedEvidenceError, match="not a pass"):
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=DECISION_RECORD,
             by="tester",
@@ -553,7 +590,7 @@ def test_admit_refuses_to_record_a_demotion_that_would_carry_no_reason(
 ) -> None:
     with pytest.raises(ValueError, match="use demote"):
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             override_reason=OVERRIDE,
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=DECISION_RECORD,
@@ -1051,7 +1088,7 @@ def test_admit_refuses_a_record_measuring_a_hold_the_ranker_will_not_trade(
     """A hold-3 record's numbers describe a different trade from the hold-1 the ranker builds."""
     with pytest.raises(AdmittedParametersMismatchError, match="two different trades"):
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             template=registry.get("short_atm_straddle_hold_n"),
             decision_path=_record_measuring_hold(tmp_path, 3),
             by="tester",
@@ -1163,7 +1200,7 @@ def test_admitting_a_point_the_record_did_not_measure_is_refused(tmp_path: Path)
     library = TemplateLibrary(tmp_path / "library.json")
     with pytest.raises(AdmittedParametersMismatchError, match="two different trades"):
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             template=template,
             decision_path=record,
             by="tester",
@@ -1180,7 +1217,7 @@ def test_a_record_with_no_point_still_has_its_hold_checked(tmp_path: Path) -> No
     library = TemplateLibrary(tmp_path / "library.json")
     with pytest.raises(AdmittedParametersMismatchError, match="names no template"):
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             template=template,
             decision_path=record,
             by="tester",
@@ -1197,7 +1234,7 @@ def test_one_template_admitted_at_two_points_is_two_admissions(tmp_path: Path) -
     for hold in (1, 3):
         point = template.resolve({"hold_sessions": hold})
         library.admit(
-        underlying="NIFTY",
+            underlying="NIFTY",
             template=template,
             decision_path=_decision_record(
                 tmp_path / f"h{hold}", template_parameters=point, hold_sessions=hold
@@ -1213,7 +1250,7 @@ def test_one_template_admitted_at_two_points_is_two_admissions(tmp_path: Path) -
     }
 
     # A bare id now names two different trades, and demoting one must not touch the other.
-    with pytest.raises(AmbiguousParameterPointError, match="parameter points"):
+    with pytest.raises(AmbiguousParameterPointError, match=r"parameter point\) pairs"):
         library.current(template.template_id)
     library.demote(
         template_id=template.template_id,

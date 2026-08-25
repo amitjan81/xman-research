@@ -396,9 +396,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     # Progress goes to stderr so a long run says where it is while stdout stays the
     # command's own result.
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     if getattr(args, "min_settled", DEFAULT_MIN_SETTLED) < DEFAULT_MIN_SETTLED:
         parser.error(
             f"--min-settled {args.min_settled} is below the floor {DEFAULT_MIN_SETTLED}. The "
