@@ -11,13 +11,18 @@
 | Fingerprint | `8eaadc6bec591b88bc75c532e044782bbeb005754b3ed3431898be1e385fa74e` |
 | **OUTCOME** | **FAILS_THRESHOLD** — on two thresholds, not one |
 
-**This record does not replace `research/m1/DECISION.md`, and that file is not edited.**
-The wedged run happened; its record stays exactly as written, on the branch that produced
-it — **commit `bcb8bd9` on `feat/validate-m1-m2`, open as PR #27.** It is deliberately not
-cherry-picked here: this branch carries only the pre-registration commit `1921a5b`, so that
-what is present is the gate, not the result it graded. If this branch merges first, `main`
-will hold this record and not the one it supersedes until PR #27 lands; the SHA above is
-what makes the wedged record findable in the meantime. This is the posture `gate.toml` takes toward `research/h1/gate.toml` — a superseded
+**This record does not replace `research/m1/DECISION.md`; that record stays, and none of its
+numbers, claims or its verdict are edited.** The wedged run happened, and its record says on
+`main` exactly what it said when it was written — the pre-merge commit being PR #27's
+`bcb8bd9`, also tagged `record/m1-wedged-bcb8bd9`.
+
+**What did change at merge time: a supersession banner was prepended to that file.** PR #27
+landed first, so `main` now holds both records, and an unmarked `DECISION.md` would have read
+as M1's current answer to anyone who opened it — which it is not. The banner states that
+FAILS_THRESHOLD here is the standing verdict, points at this file and at `decision_rerun.json`,
+and says why the superseded record is retained. It adds no number and alters none; the
+pre-banner text is byte-identical and recoverable at the tag above. This is the posture
+`gate.toml` takes toward `research/h1/gate.toml` — a superseded
 record that stays in the repository saying what it said is worth more than a corrected one
 that hides that the correction was needed.
 

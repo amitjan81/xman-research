@@ -17,6 +17,19 @@ itself — it scales every result by a constant that looks like alpha. Anything 
 :attr:`CostBreakdown.unverified_components` and travels all the way to the backtest
 result, so a headline number computed on a guessed rate says so.
 
+**A schedule never refuses a date.** A trade before a schedule's earliest entry is charged
+that schedule's *latest* rate and stamped ``costs.rate_extrapolated:<schedule>`` through
+the same channel — owner decision of 2026-08-20, generalising the declared-lot-size
+decision of 2026-08-13. The rule it replaced refused, and was thereby discarding 772 of
+1,233 captured sessions. Extrapolation fills the unknown ends **only**; every dated change
+that is actually recorded still applies on its own date. The direction of the resulting
+error is **per schedule, not uniform**: STT has only been revised upward, so extrapolating
+it overcharges — conservative, and therefore capable of hiding a real effect rather than
+inventing one — while the NSE transaction charge was revised *downward* in 2024, so
+extrapolating that one would undercharge and flatter a result.
+:func:`extrapolation_message` derives the direction from the schedule it is given and
+states both halves; it is what the stamp points a reader to.
+
 **Two traps this module exists to avoid.**
 
 *The expiry-settlement trap.* An index option that expires in the money is exercised,
@@ -59,12 +72,13 @@ __all__ = [
     "Confidence",
     "CostBreakdown",
     "FlatPerOrderBrokerage",
-    "RateNotInForceError",
+    "RateLookup",
     "RateSchedule",
     "Side",
     "StatutoryCostStack",
     "StatutoryRate",
     "TradeKind",
+    "extrapolation_message",
 ]
 
 
@@ -108,14 +122,91 @@ class TradeKind(StrEnum):
     SETTLEMENT = "settlement"
 
 
-class RateNotInForceError(Exception):
-    """No entry in a schedule covers the requested date.
+#: Stamp prefix for a rate that was extrapolated rather than looked up. Deliberately
+#: low-cardinality — the schedule name only, never the date — because ``unverified_inputs``
+#: is set-deduplicated at three layers and a per-session stamp would blow it up to
+#: hundreds of entries that say the same thing.
+RATE_EXTRAPOLATION_STAMP_PREFIX = "costs.rate_extrapolated"
 
-    Raised rather than falling back to the earliest entry. A backtest run over 2019 with
-    a table that starts in 2020 would otherwise charge 2020's rates and report a clean
-    number; this is the one failure mode in the whole component that produces a plausible
-    wrong answer rather than an obvious one.
+
+def extrapolation_message(schedule: RateSchedule) -> str:
+    """What an extrapolated-rate stamp means, including the direction of the error.
+
+    Mirrors :meth:`~xman_research.backtest.lot_size.LotSizeAudit.contradiction_message`:
+    a stamp that only said "something is approximate here" would be read as either fatal
+    or ignorable, and it is neither. Both halves of the argument belong in the text.
+
+    **The direction is derived from the schedule, never asserted globally.** An earlier
+    draft of this function claimed these charges "have only ever been revised upward",
+    which is false: ``nse.transaction_charge.options`` fell from 0.05% to 0.03503% on
+    1 Oct 2024. Extrapolating that schedule would *understate* the charge, and a stamp
+    that told the reader they were overcharged would be worse than no stamp at all.
     """
+    latest, earliest = schedule.entries[-1], schedule.entries[0]
+    head = (
+        f"{schedule.name}: the trade date precedes the earliest entry in this schedule "
+        f"({earliest.effective_from.isoformat()}), so the LATEST entry's rate "
+        f"({latest.rate!r}, effective {latest.effective_from.isoformat()}) was charged "
+        "instead of refusing the session — owner decision of 2026-08-20, generalising the "
+        "declared-lot-size decision of 2026-08-13. "
+    )
+    if latest.rate > earliest.rate:
+        return head + (
+            "DIRECTION OF ERROR: this schedule has been revised UPWARD, so the rate "
+            f"charged ({latest.rate!r}) is higher than the earliest recorded rate "
+            f"({earliest.rate!r}) and almost certainly higher than the true historical "
+            "one — the session is charged MORE than it truly bore. For "
+            "stt.sell_option_premium the 2021-2024 rate was most likely 0.05% against the "
+            "0.15% charged, which OVERSTATES that component by roughly 3x. That direction "
+            "is conservative: it makes a hypothesis harder to pass and cannot manufacture "
+            "a positive result out of a negative one. THE COST OF THAT SAFETY: an "
+            "overstated cost floor can SUPPRESS a real effect — a strategy whose true edge "
+            "cleared its true costs may be recorded here as failing to clear inflated "
+            "ones. A negative result on an extrapolated window is therefore not evidence "
+            "of no edge, and this stamp is what tells a reader which way to distrust it."
+        )
+    if latest.rate < earliest.rate:
+        return head + (
+            "DIRECTION OF ERROR: this schedule has been revised DOWNWARD, so the rate "
+            f"charged ({latest.rate!r}) is LOWER than the earliest recorded rate "
+            f"({earliest.rate!r}). The session is therefore charged LESS than it likely "
+            "bore, and this extrapolation is NOT conservative: it flatters the result and "
+            "could help a hypothesis pass on costs it would not really have survived. "
+            "Treat a positive result on a window carrying this stamp as unproven until "
+            "the historical entry is sourced and added."
+        )
+    return head + (
+        "DIRECTION OF ERROR: this schedule records no rate change, so there is no "
+        "observed trend to extrapolate along and the single known rate is simply carried "
+        "back. The error is whatever undocumented change preceded the earliest entry; its "
+        "size and its sign are both unknown, which is weaker than the upward-revision "
+        "case and should not be read as 'probably fine'."
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class RateLookup:
+    """The entry a schedule charges on a date, and whether reaching it needed extrapolation.
+
+    ``extrapolated`` is True only when the date falls **before** the schedule's earliest
+    entry. A date after the last entry is *not* extrapolation: a statutory rate stays in
+    force until it is amended, so the final entry is open-ended forward by construction.
+    """
+
+    entry: StatutoryRate
+    extrapolated: bool
+    schedule_name: str
+
+    @property
+    def rate(self) -> float:
+        return self.entry.rate
+
+    @property
+    def stamp(self) -> str | None:
+        """The ``unverified_inputs`` stamp this lookup earns, if any."""
+        if not self.extrapolated:
+            return None
+        return f"{RATE_EXTRAPOLATION_STAMP_PREFIX}:{self.schedule_name}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,8 +243,31 @@ class RateSchedule:
         if len(set(dates)) != len(dates):
             raise ValueError(f"{self.name}: two entries share an effective_from")
 
-    def at(self, on: dt.date) -> StatutoryRate:
-        """The rate in force on ``on``, or :class:`RateNotInForceError`."""
+    def lookup(self, on: dt.date) -> RateLookup:
+        """The entry to charge on ``on``. **This never refuses.**
+
+        For any date at or after the earliest entry this is an exact in-force lookup, and
+        the dated history is honoured precisely — the 1 Oct 2024 exchange-charge change and
+        the 1 Apr 2026 STT rise still apply on their own dates. Extrapolation fills the
+        unknown end only; it does not flatten known history.
+
+        For a date *before* the earliest entry the **latest** entry is charged and the
+        lookup is flagged. Latest, not nearest: the owner's instruction is to use the
+        latest value for data of this kind.
+
+        **It is NOT uniformly the conservative choice, and an earlier draft of this
+        docstring said it was.** The direction depends on the individual schedule:
+        ``stt.sell_option_premium`` has only been revised upward, so extrapolating it
+        overcharges — conservative, and therefore able to hide a real effect rather than
+        invent one. ``nse.transaction_charge.options`` was revised *downward* (0.05% ->
+        0.03503% on 2024-10-01), so extrapolating that one **undercharges and flatters**
+        the result. :func:`extrapolation_message` derives the direction from each
+        schedule's own entries; consult it rather than assuming.
+
+        A nearest-entry clamp would charge 0.1% rather than 0.15% on a 2021 session and
+        roughly halve the overstatement, at the price of no longer being the latest
+        value; that is an owner call, not a code call.
+        """
         found: StatutoryRate | None = None
         for entry in self.entries:
             if entry.effective_from <= on:
@@ -161,16 +275,15 @@ class RateSchedule:
             else:
                 break
         if found is None:
-            raise RateNotInForceError(
-                f"{self.name}: no rate recorded for {on.isoformat()} — this schedule starts on "
-                f"{self.entries[0].effective_from.isoformat()}. Charging the earliest known rate "
-                f"to an earlier date would silently scale every number in the result; add the "
-                f"historical entry, with its source, instead."
-            )
-        return found
+            return RateLookup(entry=self.entries[-1], extrapolated=True, schedule_name=self.name)
+        return RateLookup(entry=found, extrapolated=False, schedule_name=self.name)
+
+    def at(self, on: dt.date) -> StatutoryRate:
+        """The entry charged on ``on``. Never refuses; see :meth:`lookup`."""
+        return self.lookup(on).entry
 
     def rate_at(self, on: dt.date) -> float:
-        return self.at(on).rate
+        return self.lookup(on).rate
 
 
 # --------------------------------------------------------------------------- the table
@@ -188,12 +301,16 @@ class RateSchedule:
 #: What Finance (No. 2) Act 2019 actually changed was the *exercise* side: the base moved
 #: from settlement price to intrinsic value. See :data:`STT_ON_EXERCISE`.
 #:
-#: They were carried so that a backfill would "not hit RateNotInForceError with no
-#: warning". That reasoning is backwards by this module's own standard, and
-#: :class:`RateNotInForceError`'s own docstring is the argument against it: charging a
-#: rate nobody has checked produces a plausible wrong answer, which is the single failure
-#: mode the whole dated-schedule design exists to prevent. A refusal is a research task; a
-#: silently mis-scaled five-year backtest is a published mistake.
+#: They were once carried so that a backfill would "not hit an error with no warning",
+#: then deleted in favour of a hard refusal, and the refusal is now gone too — **by owner
+#: decision of 2026-08-20**. The refusal was dropping 772 of 1,233 captured sessions,
+#: which is the entire corpus before 1 Oct 2024, and losing five years of data to protect
+#: a rate's precision is the wrong trade. What replaced it is not the old silent
+#: backfill: a pre-2024-10-01 date is charged the LATEST rate and the result is STAMPED
+#: all the way out to the verdict, so the number is used and the uncertainty is visible.
+#: See :func:`extrapolation_message` for the direction of the error. The entries below are
+#: still the only *sourced* history; anyone who reads the Finance Act texts should add the
+#: real pre-2024 entries with citations and shrink the extrapolated window to nothing.
 #:
 #: One attempt was made to reach the primary text at incometaxindia.gov.in; it returned
 #: HTTP 403, as it had for the reviewer. **No replacement dates were invented from
@@ -264,8 +381,11 @@ STT_ON_EXERCISE = RateSchedule(
                 "itself UNVERIFIED (the primary text returned HTTP 403); it is the date "
                 "from which this entry's own stated base is defensible, not a sourced "
                 "commencement. A window reaching earlier must read the Act and add the "
-                "settlement-price entry — until then RateNotInForceError fires, which is "
-                "the intended outcome."
+                "settlement-price entry. Until then a pre-2019-09-01 date is charged this "
+                "entry's rate under the extrapolation rule and stamped — note that for "
+                "THIS schedule the extrapolation is on the wrong BASE, not merely the "
+                "wrong rate, which is a larger error than the premium-side case; the "
+                "corpus starts 2021-06-01 and so does not currently reach it."
             ),
         ),
         StatutoryRate(
@@ -655,7 +775,14 @@ class StatutoryCostStack:
         unverified: list[str] = []
 
         def rate(schedule: RateSchedule) -> float:
-            entry = schedule.at(on)
+            found = schedule.lookup(on)
+            entry = found.entry
+            # An extrapolated rate is a separate defect from an unverified one and gets its
+            # own stamp: the confidence tier says "nobody checked this number", while this
+            # says "this number is from the wrong date, and knowably too high". A run can
+            # carry either, both, or neither, and a reader needs to tell them apart.
+            if (stamp := found.stamp) is not None:
+                unverified.append(stamp)
             if entry.confidence is not Confidence.CONFIRMED:
                 # The TIER travels, not just the name. A bare schedule name makes a
                 # CORROBORATED rate and a wholly UNVERIFIED one indistinguishable in

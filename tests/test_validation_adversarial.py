@@ -27,6 +27,12 @@ from validation_helpers import (
     trading_sessions,
 )
 from xman_research import DataWindow, HypothesisRecord, ManualClock, open_session
+from xman_research.backtest.costs import (
+    ChargeableTrade,
+    Side,
+    StatutoryCostStack,
+    TradeKind,
+)
 from xman_research.validation.decision import (
     HypothesisMismatchError,
     JudgedSeriesMismatchError,
@@ -46,6 +52,7 @@ from xman_research.validation.series import FeasibilityFacts
 from xman_research.validation.walkforward import walk_forward
 
 IN_SAMPLE_START = dt.date(2021, 1, 4)
+EXTRAPOLATED_STT = "costs.rate_extrapolated:stt.sell_option_premium"
 HOLDOUT_START = dt.date(2026, 1, 5)
 RUN_AT = dt.datetime(2026, 8, 5, 12, 0, tzinfo=dt.UTC)
 
@@ -508,3 +515,49 @@ def test_overlapping_folds_are_refused_before_any_fold_runs() -> None:
     with pytest.raises(SeriesError, match="guaranteed to fail"):
         walk_forward(dates, run=counting_runner, train_length=250, test_length=50, step=25)
     assert calls == 0
+
+
+def test_an_extrapolated_cost_rate_reaches_the_verdict(
+    workspace: tuple[ValidationConfig, Validator],
+) -> None:
+    """A stamp that stops at the CostBreakdown is not a stamp, it is a comment.
+
+    The stamps asserted here are **not** written by hand: they are produced by charging a
+    real 2021 trade through the real statutory stack, which is what makes this a test of
+    the whole chain rather than of a string literal. Before the owner's decision of
+    2026-08-20 that call raised, and this test could not have been written at all.
+    """
+    config, validator = workspace
+    record = make_hypothesis("H1 extrapolated costs")
+    log_the_search(config, record, how_many=12)
+    dates = trading_sessions(IN_SAMPLE_START, 400)
+    family = genuine_family(dates, seed=11)
+
+    costs = StatutoryCostStack().charge(
+        ChargeableTrade(
+            trade_date=dt.date(2021, 6, 1),
+            kind=TradeKind.TRADE,
+            side=Side.SELL,
+            quantity_units=65,
+            price=100.0,
+        )
+    )
+    assert EXTRAPOLATED_STT in costs.unverified_components
+
+    candidate = evidence(
+        family.series("cfg11"),
+        label="candidate",
+        run_at=RUN_AT,
+        unverified_inputs=costs.unverified_components,
+    )
+    naive = evidence(benchmark_series(dates, seed=91), label="naive", run_at=RUN_AT)
+
+    verdict = validator.grade(
+        candidate, benchmark=naive, hypothesis=record, overfitting=pbo_for(family)
+    )
+
+    assert EXTRAPOLATED_STT in verdict.unverified_inputs
+    # And it is legible in the rendered verdict, which is what a human actually reads.
+    assert EXTRAPOLATED_STT in verdict.summary()
+    # ...and into the trial-log row, so the caveat survives into the durable record.
+    assert EXTRAPOLATED_STT in verdict.metrics()["unverified_inputs"]
