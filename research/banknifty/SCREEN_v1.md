@@ -54,6 +54,36 @@ product override, and `TemplateRegistry.for_product` is never called on the
 screen path (the guard in `build` is the only product check, and it is
 unconditional).
 
+### This is the first wall, not provably the only one
+
+Because the guard fires in `expand`, everything downstream of it is untested for
+BANKNIFTY. `_feature_pass(underlying)` never ran, so whether
+`atm_iv_minus_rv20`, `ema20_z_abs`, `overnight_gap_sigmas` and
+`sessions_to_nearest_expiry` resolve on this corpus is **unknown**, as is whether
+the strike ladder satisfies the strangle and condor rules at BANKNIFTY's rung
+spacing. Nothing here supports reading the refusal as "one line and it runs".
+Clearing the product question is what makes the next wall observable, not what
+guarantees there isn't one.
+
+### The decision this needs
+
+Three shapes, and the choice between them is the owner's:
+
+1. **Widen `products` on the shipped templates.** One line, and it asserts that
+   NIFTY admission evidence covers BANKNIFTY — precisely what the guard exists to
+   prevent.
+2. **Register a BANKNIFTY template family with its own evidence base.** New code
+   and its own provenance; nothing is asserted that was not measured.
+3. **Rescope the guard.** It fires in `build()`, which a stage-1 screen reaches
+   while still pre-admission — and screening is the activity that *generates*
+   product evidence. Gating exploration on admission evidence may itself be the
+   defect, in which case the fix is to move the check to the admission path and
+   leave screening free.
+
+Option 3 would be a defect fix rather than a widening, and under the Issue
+Response Protocol any of the three starts with a postmortem and the owner's
+approval before code is written.
+
 ### What this blocks
 
 Steps 3 and 4 of the run: no smoke, no launch, no sheet, no PID, no timing. No
@@ -91,8 +121,12 @@ reads `grid` per row with no top-level default, so a block omitting
 being risk-comparable. The value is 50 lakh rather than the 15 lakh a NIFTY
 screen uses because BANKNIFTY's lot quantises a 15-lakh target to one lot, and at
 one lot every continuous sizing multiplier collapses to the same position. The
-binding case is the 35-lot epoch at the in-sample spot peak — roughly 21.7 lakh
-of exposure per lot — which at 50 lakh still buys 2.3 lots.
+binding case is the largest lot size `BANKNIFTY_LOT_SIZE_EPOCHS` records, 35. As
+arithmetic, a target of N buys at least two lots while spot is below N / 70: at
+50 lakh that threshold is about 71,400, and at 15 lakh it is about 21,400 — an
+order of magnitude under the range BANKNIFTY trades in across this window, so a
+15-lakh target is pinned at one lot or none throughout. No spot series was read
+to reach this; the two thresholds are the whole argument.
 
 **Conditional strangles pin `atr_multiple = 1.0`.** Crossing k in {0.5, 1.0}
 through every conditional block puts the grid at 132, past the ~110 ceiling. The

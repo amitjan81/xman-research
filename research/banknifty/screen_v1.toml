@@ -10,12 +10,16 @@ decision_time = "14:50"
 #
 # Why 5,000,000 rather than the 1,500,000 a NIFTY screen uses: BANKNIFTY's lot is
 # large enough that a 15-lakh target quantises to one lot, and one lot is where
-# every continuous sizing multiplier collapses. The binding case is the 35-lot
-# epoch at the in-sample spot peak — 35 x ~62,000 ~= 21.7 lakh of exposure per
-# lot — which at 50 lakh still buys 2.3 lots. Below that, a conditioner that
-# sizes with its strength (ema_atr_band) would round every strength between 0 and
-# 1 to the same single lot, and the screen would be comparing sizing rules that
-# cannot express themselves.
+# every continuous sizing multiplier collapses. The binding case is the largest
+# lot size `BANKNIFTY_LOT_SIZE_EPOCHS` records, 35. As pure arithmetic, a target
+# of N buys at least two lots while spot < N / 70: at 50 lakh that threshold is
+# ~71,400, and at 15 lakh it is ~21,400 — an order of magnitude below the range
+# BANKNIFTY trades in over this window, so a 15-lakh target is pinned at one lot
+# or none throughout. At one lot a conditioner that sizes with its strength
+# (ema_atr_band) rounds every strength between 0 and 1 onto the same position,
+# and the screen would be comparing sizing rules that cannot express themselves.
+# No spot series is read to make this choice; the thresholds are the whole
+# argument.
 
 gaps_reason = """
 BN-M1 benchmark over BANKNIFTY 2024-10-01..2026-05-29. The NSE calendar expects 407 sessions; 353 are on disk and 54 are absent. 53 of the 54 are sessions the producer captured and QUARANTINED, so no parquet was ever published: 42 for premium-below-intrinsic candles alongside a rolling-spot vs index divergence above 0.5% (clustered Apr-Jul 2025), 1 (2026-03-09) for the premium check alone with no divergence component, and 10 for expiry-day convergence failure — 2024-10-09, 2024-11-13, 2025-01-30, 2025-02-27, 2025-04-24, 2025-05-29, 2025-08-28, 2025-12-30, 2026-03-30 and 2026-05-26. The 54th, 2024-11-20, is in no manifest at all: NSE did not hold a session (Maharashtra state election) and the calendar this store uses expects one.
