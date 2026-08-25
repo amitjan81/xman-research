@@ -229,7 +229,11 @@ def test_library_list_reports_every_registered_template_and_its_status(
 ) -> None:
     assert main(["--library", str(seeded_library), "library", "list"]) == 0
     out = capsys.readouterr().out
-    assert "short_atm_straddle_hold_n: admitted" in out
+    # The listing names the point, not just the template: one template can be admitted at
+    # two points at once, and a line carrying only the id would hide whichever the ranker is
+    # also proposing tonight.
+    assert "short_atm_straddle_hold_n[" in out
+    assert "]: admitted" in out
     assert "short_atm_straddle_iv_rv: unfiled" in out
 
 

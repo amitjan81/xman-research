@@ -79,6 +79,7 @@ class GateRun:
     hypothesis: HypothesisRecord
     instance: CandidateInstance
     parameters: dict[str, float]
+    sheet: ScreenSheet
     sheet_path: Path
     gate_path: Path
     in_sample_result: BacktestResult
@@ -86,7 +87,17 @@ class GateRun:
     holdout_result: BacktestResult | None
     trial_rows: tuple[dict[str, Any], ...]
     holdout_spent: bool
-    screen_trials: int
+
+    @property
+    def screen_trials(self) -> int:
+        """How many trials the screen spent, read off the sheet's own rows.
+
+        A property and not a field, for the same reason :attr:`trial_count` is one: a count
+        accepted beside the evidence it describes is a count that can disagree with it, and
+        ``tests/test_no_caller_supplied_count.py`` refuses any public callable in this
+        package that takes one.
+        """
+        return self.sheet.n_trials_logged
 
     @property
     def trial_count(self) -> int:
@@ -215,7 +226,6 @@ def run_stage_two_gate(
     gate = config.gate()
     with open_session(log_path) as session:
         record = _hypothesis_of(session, sheet, Path(sheet_path))
-        screen_trials = session.count_family_trials(record)
     gate.check_binding(record)
 
     resolved_store = store if store is not None else SessionStore()
@@ -281,12 +291,12 @@ def run_stage_two_gate(
         parameters=point,
         sheet_path=Path(sheet_path),
         gate_path=Path(gate_path),
+        sheet=sheet,
         in_sample_result=in_sample_result,
         benchmark_result=benchmark_result,
         holdout_result=holdout_result,
         trial_rows=rows,
         holdout_spent=holdout_verdict is not None,
-        screen_trials=screen_trials,
     )
     _write(run, Path(out_dir))
     return run

@@ -523,12 +523,30 @@ class TemplateLibrary:
     def history(
         self, template_id: str, *, parameters: Mapping[str, float] | None = None
     ) -> tuple[AdmissionRecord, ...]:
-        """Every entry naming ``template_id``, narrowed to one point when one is given."""
+        """Every entry naming ``template_id``, narrowed by ``parameters`` when given.
+
+        **``parameters`` is a selector, not necessarily a whole point.** An entry matches
+        when it carries every name and value supplied, so ``{"hold_sessions": 3}`` selects
+        the hold-3 admission without the caller having to restate the defaults
+        :meth:`StrategyTemplate.resolve` filled in. A selector that matches two points is a
+        selector that names two different trades, and :meth:`current` refuses it rather than
+        picking the later one.
+
+        Values are compared as floats, so a hold read back from JSON as ``3.0`` selects the
+        entry stored from an integer ``3``.
+        """
         rows = tuple(entry for entry in self._entries if entry.template_id == template_id)
         if parameters is None:
             return rows
-        wanted = parameter_key(parameters)
-        return tuple(entry for entry in rows if entry.parameter_key == wanted)
+        wanted = {str(name): float(value) for name, value in parameters.items()}
+        return tuple(
+            entry
+            for entry in rows
+            if all(
+                name in entry.parameters and float(entry.parameters[name]) == value
+                for name, value in wanted.items()
+            )
+        )
 
     def points(self, template_id: str) -> tuple[str, ...]:
         """Every parameter point ``template_id`` has an entry at, oldest first, deduplicated."""
@@ -542,19 +560,20 @@ class TemplateLibrary:
     ) -> AdmissionRecord | None:
         """The latest entry for one admission, or ``None`` if there is none.
 
-        With ``parameters`` omitted the template must have entries at no more than one
-        point; a template live at two points is two admissions, and answering with the more
-        recent would name a trade the caller did not ask about.
+        The selector must land on at most one point, whether it is omitted entirely or is
+        too partial to separate two. A template live at two points is two admissions, and
+        answering with the more recent would name a trade the caller did not ask about.
         """
-        if parameters is None:
-            known = self.points(template_id)
-            if len(known) > 1:
-                raise AmbiguousParameterPointError(
-                    f"template {template_id!r} has entries at {len(known)} parameter points "
-                    f"({list(known)}). Name the point: a bare id here would answer about "
-                    "whichever was filed last."
-                )
         history = self.history(template_id, parameters=parameters)
+        matched = {entry.parameter_key for entry in history}
+        if len(matched) > 1:
+            raise AmbiguousParameterPointError(
+                f"template {template_id!r} has entries at {len(matched)} parameter points "
+                f"({sorted(matched)})"
+                + (f" matching [{parameter_key(parameters)}]" if parameters is not None else "")
+                + ". Name the point: this would otherwise answer about whichever was filed "
+                "last."
+            )
         return history[-1] if history else None
 
     def status(

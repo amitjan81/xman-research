@@ -229,7 +229,10 @@ def test_the_whole_loop_screens_gates_admits_and_ranks_at_the_screened_point(
                 "--reason",
                 "closing the loop end to end on the real corpus",
                 "--override-reason",
-                f"E2E: below the DSR bar at n={metrics['sample_length']}",
+                (
+                    f"E2E: {record['outcome']} at n={metrics['sample_length']} with a "
+                    f"deflated Sharpe of {metrics['deflated_sharpe']}"
+                ),
             ]
         )
         == 0

@@ -1080,6 +1080,7 @@ def _decision_record(
     }
     if template_parameters is not None:
         run["template_parameters"] = template_parameters
+    tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / "decision.json"
     path.write_text(
         json.dumps(
