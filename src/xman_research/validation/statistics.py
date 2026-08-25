@@ -190,13 +190,17 @@ def _observed_sharpe_variance(records: tuple) -> tuple[float | None, str, int]:
     observed: list[float] = []
     undeclared = 0
     for record in records:
-        metrics = record.metrics
-        value = metrics.get(SHARPE_PER_PERIOD_KEY)
+        # `record.metric`, not `record.metrics[...]`: this is the only reader in the
+        # package that consumes metrics off a logged row, so it is the one place where a
+        # row written before a rename has to still answer. Reading the mapping directly
+        # is what left the adjusted_sharpe split unhandled — the alias table existed
+        # nowhere the reader could reach it.
+        value = record.metric(SHARPE_PER_PERIOD_KEY)
         if isinstance(value, int | float) and math.isfinite(value):
             observed.append(float(value))
             continue
-        annualised = metrics.get(SHARPE_KEY)
-        periodicity = metrics.get(SHARPE_PERIODICITY_KEY)
+        annualised = record.metric(SHARPE_KEY)
+        periodicity = record.metric(SHARPE_PERIODICITY_KEY)
         if isinstance(annualised, int | float) and math.isfinite(annualised):
             if isinstance(periodicity, int | float) and periodicity > 0:
                 observed.append(float(annualised) / math.sqrt(float(periodicity)))

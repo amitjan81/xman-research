@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime as dt
 import math
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
@@ -28,6 +29,7 @@ from xman_research import (
     TrialOutcome,
     UnknownTrialError,
     open_session,
+    trial_log,
 )
 from xman_research.adapter import logged_run_at
 from xman_research.validation.decision import _logged_created_at
@@ -288,11 +290,45 @@ def test_an_absent_metric_is_absent_rather_than_defaulted(log: TrialLog) -> None
 def test_a_legacy_row_supplies_its_sharpe_to_the_variance_the_same_way(
     session: ResearchSession,
 ) -> None:
-    """The alias has to be reachable from the reader that actually consumes logged metrics."""
+    """The alias has to be reachable from the reader that actually consumes logged metrics.
+
+    An alias nothing calls is not a fix for #20, it is a fix-shaped object. So this seeds
+    rows carrying ONLY a legacy key and asserts the variance reader still finds a Sharpe
+    in them — which fails if `_observed_sharpe_variance` goes back to reading the metrics
+    mapping directly. Seeding the current key alongside would pass either way and prove
+    nothing, which is what the first version of this test did.
+    """
     record = hypothesis()
     session.register(record)
-    append(session.log, record, metrics={"adjusted_sharpe": 0.03, "sharpe_per_period": 0.02})
-    append(session.log, record, metrics={"adjusted_sharpe": 0.05, "sharpe_per_period": 0.06})
+    # `legacy_sharpe_per_period` stands in for a renamed key: the row carries only the old
+    # name, so the reader can only see it through the alias table.
+    append(session.log, record, metrics={"sharpe": 0.30, "sharpe_periods_per_year": 252})
+    append(session.log, record, metrics={"sharpe": 0.95, "sharpe_periods_per_year": 252})
+
+    universe = SelectionUniverse(session, record)
+
+    assert universe.variance_basis == "observed"
+    assert universe.sharpe_variance is not None and universe.sharpe_variance > 0
+
+
+def test_the_variance_reader_resolves_a_renamed_key_through_the_alias(
+    session: ResearchSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The alias table is consulted by the production reader, not merely by tests.
+
+    Proven by adding an entry to the real table and seeding rows that carry only the old
+    name. If the reader stops going through ``TrialRecord.metric`` this fails, which is
+    the regression #20 is actually about.
+    """
+    monkeypatch.setattr(
+        trial_log,
+        "_LEGACY_METRIC_NAMES",
+        MappingProxyType({"sharpe_per_period": ("legacy_sharpe",)}),
+    )
+    record = hypothesis()
+    session.register(record)
+    append(session.log, record, metrics={"legacy_sharpe": 0.02})
+    append(session.log, record, metrics={"legacy_sharpe": 0.06})
 
     universe = SelectionUniverse(session, record)
 
