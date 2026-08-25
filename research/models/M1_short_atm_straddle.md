@@ -70,13 +70,15 @@ Sizing is by **notional, not lots**, so that $\text{Sharpe}$, $\text{MDD}$ and t
 
 **The $n_t = 0$ branch is the one place sizing could re-introduce a dependence on $L_t$** — *which* sessions trade would become a function of the contract multiplier. §12's check is what removes it, by verifying no session reaches the branch, rather than assuming so.
 
-**Realised scale, and why a conditional model cannot inherit it.** The graded value is $N^{*} = ₹15{,}00{,}000$ of index notional. Against a lot of 75 units and NIFTY in the 20,000–26,500 range the window spans,
+**Realised scale, and why a conditional model cannot inherit it.** The graded value is $N^{*} = ₹15{,}00{,}000$ of index notional, so
 
-$$n_{\text{base}} \;=\; \frac{N^{*}}{S_{t,\tau} L_t} \;\in\; [0.75,\ 1.00] \;\Rightarrow\; n_t = \left\lfloor n_{\text{base}} + \tfrac12 \right\rfloor = 1 \ \text{ lot per leg, every entry}$$
+$$n_{\text{base}} \;=\; \frac{N^{*}}{S_{t,\tau} L_t}$$
 
-Corroborated by the margin: peak ₹4,76,378.63 against $\rho_{\text{span}} + \rho_{\text{exp}} = 0.12$ over two legs implies $q S \approx ₹19.8$ lakh, i.e. $q = 75$ units. And by the counts — 178 legs / 385 sessions = 89 straddles, one per weekly cycle.
+is $O(1)$ **lot**, not $O(10)$. With NIFTY in the 20,000–26,500 band this window spans and $L_t = 75$, $n_{\text{base}} \approx 0.75$–$1.0$, giving $n_t = 1$ lot per leg on every entry. Corroborated two ways: the counts (178 legs / 385 sessions = 89 straddles, one per weekly cycle), and peak margin — ₹4,76,378.63 at $\rho_{\text{span}} + \rho_{\text{exp}} = 0.12$ over two legs implies $q S \approx ₹19.8$ lakh, i.e. $q = 75$ units at $S \approx 26{,}465$.
 
-**$n_{\text{base}} < 1$ is the problem for any conditional model.** A continuous multiplier $f \in [0,1]$ gives $n_t = \lfloor n_{\text{base}} f + 1/2 \rfloor \in \{0,1\}$: not a size, a **switch**, tripping at $f^{*} = 0.5 / n_{\text{base}} \in [0.50,\ 0.67]$. **M1's $N^*$ is therefore unusable for any model that sizes continuously** (M3 §12.1(b)).
+**$L_t$ is contested, which widens this range rather than pinning it.** The engine sizes on the *declared* refdata value, which across this window steps $25 \to 75 \to 25 \to 75 \to 65$, while the bars support 75 through 2025-12-30 and 65 after (§12.1). At $L_t = 25$, $n_{\text{base}} \approx 2.5$. So $n_{\text{base}}$ is small, spot-dependent **and** lot-regime-dependent, stepping discontinuously at each contract-size boundary — one of which, 2024-11-20, lies inside the costable window (§13).
+
+**That is the obstruction for any conditional model.** A continuous multiplier $f \in [0,1]$ yields $n_t = \lfloor n_{\text{base}} f + 1/2 \rfloor$ ranging over a handful of integers — not a size but a **switch**, tripping at $f^{*} = 0.5/n_{\text{base}}$, itself a moving function of spot and lot regime. **M1's $N^{*}$ is therefore unusable for any model that sizes continuously** (M3 §12.1(b)).
 
 ## 6. Exit
 
@@ -218,6 +220,6 @@ Measured per-epoch on the re-run: the pre-committed positive sign holds in 5 of 
 3. Expiry-eve entry has no exit — contract is dropped from the master on its expiry date (issue #23). Cost H26 ~43% of observations. M1 held to expiry is exposed on the entry side only.
 4. Only $\delta$ is primary-sourced. Every verdict carries `unverified_inputs`.
 5. Settlement is unweighted where NSE's is volume-weighted.
-6. **The strike ladder $\mathcal{K}_t$ is a spot-tracking moving window, not a fixed grid** (`corpus.strike_ladder_is_a_moving_window`). For M1 this costs *marks*, not runs: settlement is on $S_T$ and needs no listed contract, so a strike that leaves the ladder mid-hold produces a stale mark rather than a refusal — measured stale-mark fraction 1.82% on the re-run. It is **fatal** for any model needing to re-trade a specific strike (M2 §1).
+6. **The strike ladder $\mathcal{K}_t$ is a spot-tracking moving window, not a fixed grid** (`corpus.strike_ladder_is_a_moving_window`). For M1 this costs *marks*, not runs: settlement is on $S_T$ and needs no listed contract, so a strike that leaves the ladder mid-hold produces a stale mark rather than a refusal — measured stale-mark fraction 1.82% on the re-run. It is **fatal** for any model needing to re-trade a specific strike (M2 §0).
 7. Two listed weekly expiries have **no session file** in the corpus (2025-04-30, 2025-05-08). The engine refuses to open a position it cannot settle (`UNSETTLEABLE`) and raises if one is ever held past its expiry. Cost: 14 legs over 7 sessions, `infeasible_fraction` 7.87% against a 10% not-evaluable limit. **A third missing expiry would have returned NOT_EVALUABLE instead of a verdict**, and no census of missing expiries over the full 1,233-session corpus has been run.
 8. An apparatus defect permanently taxes the family: fixing the wedged book cost one trial, raising $\text{SR}^*$ for every future member. Issue #14 is the standing question of whether it should.

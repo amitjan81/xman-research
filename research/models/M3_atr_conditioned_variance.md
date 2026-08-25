@@ -131,7 +131,7 @@ Universe (M1 §2), entry rule and strike selection (M1 §4), hold-to-expiry exit
 
 M3 takes M1's posture, not M2's: holding to expiry means settlement is on $S_T$ and needs no listed contract, so neither the expiry-eve drop nor the moving strike ladder (M1 §14.6) can refuse M3's exit. They cost stale marks (1.82% on M1's re-run), not runs.
 
-**Consequence specific to M3, and it is a real limit.** Combining hold-to-expiry, enter-when-flat and the two dark boundaries, entries land on the first eligible session after each settlement — under Tuesday expiry, predominantly Wednesday. So $z_t$ is sampled roughly weekly on a near-fixed weekday, ~89 times in-sample. M3's conditioning claim is about the state on those sessions, and generalising it to every session is not supported.
+**Consequence specific to M3, and it is a real limit.** Combining hold-to-expiry, enter-when-flat and the two dark boundaries, entries land on the first eligible session after each settlement — under Tuesday expiry, predominantly Wednesday. So $z_t$ is sampled roughly weekly on a near-fixed weekday, ~82 times in-sample. M3's conditioning claim is about the state on those sessions, and generalising it to every session is not supported.
 
 ## 6. Null hypothesis ▲
 
@@ -167,11 +167,11 @@ Conflating them would overstate the evidence, which is the failure this apparatu
 | quantity | symbol | value | what reads it |
 |---|---|---:|---|
 | daily return observations | $n_{\text{obs}}$ | **384** (385 sessions, M1's pre-registered window) | PSR, DSR, drawdown, the risk-matching |
-| independent conditioning draws | $n_{\text{cond}}$ | **≈ 89** in-sample (M1 realised 89 straddles / 385 sessions) | the claim that $f(z)$ covaries with the outcome |
+| independent conditioning draws | $n_{\text{cond}}$ | **≈ 82** in-sample (M1 attempted 89 straddles, filled 82 — 178/164 legs) | the claim that $f(z)$ covaries with the outcome |
 
-**The DSR reads 384. The conditioning claim rests on ~89.** Every session inside a held straddle inherits that cycle's single draw of $z_t$; the sessions are not independent evidence about the conditioning. Over the full 1,233-session corpus $n_{\text{cond}} \approx 250$.
+**The DSR reads 384. The conditioning claim rests on ~82.** Every session inside a held straddle inherits that cycle's single draw of $z_t$; the sessions are not independent evidence about the conditioning. Over the full 1,233-session corpus $n_{\text{cond}} \approx 250$.
 
-~89 is small. It is also **30× the 2–3 that regime classification affords** (§2), which is the entire argument for the continuous form — not that 89 is comfortable, but that it is the largest number this position structure makes available.
+~82 is small. It is also **~30× the 2–3 that regime classification affords** (§2), which is the entire argument for the continuous form — not that 82 is comfortable, but that it is the largest number this position structure makes available.
 
 ## 8. Parameters — ONE pre-registered parameterisation, no grid ▲
 
@@ -211,11 +211,11 @@ $k = 2$ is chosen **a priori from that requirement**. §12.1(a) verifies it held
 
 ## 9. Rejected alternatives ▲
 
-**Overlapping daily entries** (enter every session, run concurrent straddles) would raise $n_{\text{cond}}$ from ~89 to ~384. It gains nothing: the returns overlap, so the number of *independent* draws stays at the number of non-overlapping expiry cycles, while serial correlation inflates $\widehat{\text{SR}}$ and the margin stack multiplies. Rejected.
+**Overlapping daily entries** (enter every session, run concurrent straddles) would raise $n_{\text{cond}}$ from ~82 to ~384. It gains nothing: the returns overlap, so the number of *independent* draws stays at the number of non-overlapping expiry cycles, while serial correlation inflates $\widehat{\text{SR}}$ and the margin stack multiplies. Rejected.
 
 **$\text{IV} - \text{RV}^{\text{continuous}}$, the conditioner H1's decision record actually recommended.** `research/h1/DECISION.md` §5.3 names it: *enter only when ATM implied variance exceeds a trailing continuous realised variance by some margin*, on Sankar's reasoning. It is better motivated than ATR-band distance — it conditions on the component that the cited evidence says is compensated, rather than on one close to the component that is not (§1).
 
-It is not first on **availability**, not on merit. ATR-band distance needs the spot series alone. $\text{IV} - \text{RV}^{c}$ needs (a) a clean ATM implied-variance series, which the spot-tracking strike ladder makes fragile — the ATM strike changes identity session to session and M1 already logs stale marks where a strike leaves the window — and (b) a jump/continuous decomposition (bipower variation or similar) on intraday data. Both are buildable; neither is buildable this week, and (a) shares a root cause with M2's blocker (M2 §1.3). **It should be the family's second conditioner**, and M3's result — positive or negative — sharpens what it is testing.
+It is not first on **availability**, not on merit. ATR-band distance needs the spot series alone. $\text{IV} - \text{RV}^{c}$ needs (a) a clean ATM implied-variance series, which the spot-tracking strike ladder makes fragile — the ATM strike changes identity session to session and M1 already logs stale marks where a strike leaves the window — and (b) a jump/continuous decomposition (bipower variation or similar) on intraday data. Both are buildable; neither is buildable this week, and (a) shares a root cause with M2's blocker (M2 §0.3). **It should be the family's second conditioner**, and M3's result — positive or negative — sharpens what it is testing.
 
 **Regime classification.** §2.
 
@@ -223,7 +223,7 @@ It is not first on **availability**, not on merit. ATR-band distance needs the s
 
 M1 §14 applies in full, plus:
 
-1. **$n_{\text{cond}} \approx 89$**, weekday-clustered (§5, §7). Small, and the largest this position structure allows.
+1. **$n_{\text{cond}} \approx 82$**, weekday-clustered (§5, §7). Small, and the largest this position structure allows.
 2. **The mechanism may be aimed at the wrong variance component** (§1). Sankar et al. find jumps do not forecast variance-swap returns, and an ATR-band extension is close to a jump.
 3. **$N^{*}$ must exceed M1's**, so the cost-breakeven multiple is **not comparable** with M1's — brokerage $b$ is a flat ₹20/order and dilutes with size (M1 §11.1). Tolerable only because breakeven is a reported diagnostic and not a gate. Stamp it rather than compare it.
 4. **The open-interest unit convention becomes load-bearing.** At M1's one lot, $\lfloor \beta \Omega \rfloor \geq 1$ held under either reading, so `corpus.open_interest_not_divisible_by_lot_size` was decorative (M1 §7). At M3's larger requested size it binds, and the convention is still unconfirmed. Under M3, that stamp means something.
@@ -257,13 +257,15 @@ $$\left|\left\{ \left\lfloor n_{\text{base}}\, f(z_t) + \tfrac12 \right\rfloor :
 
 **Bound on the realised $f$ distribution, not on $n_{\text{base}}$ alone.** A bare $n_{\text{base}} \geq R$ is not sufficient: at the bottom of the realised $f$ range, $\lfloor 20 \times 0.05 \rceil = 1$, and the quantisation is worst exactly where graceful degradation is the claim.
 
-**M1's $N^{*}$ fails this, and the failure is worse than a rounding nuisance.** M1 sizes at $N^{*} = ₹15{,}00{,}000$, giving $n_{\text{base}} \in [0.75, 1.00]$ across the window's spot range (M1 §5). Then
+**M1's $N^{*}$ fails this, and the failure is worse than a rounding nuisance.** M1 sizes at $N^{*} = ₹15{,}00{,}000$, so $n_{\text{base}}$ is a small number of lots — $\approx 0.75$–$1.0$ at $L_t = 75$, $\approx 2.5$ at the declared $L_t = 25$ (M1 §5). Then
 
-$$n_t = \left\lfloor n_{\text{base}} f(z_t) + \tfrac12 \right\rfloor = \begin{cases} 1, & f(z_t) \geq f^{*} \\ 0, & \text{otherwise}\end{cases}, \qquad f^{*} = \frac{0.5}{n_{\text{base}}} \in [0.50,\ 0.67]$$
+$$n_t = \left\lfloor n_{\text{base}}\, f(z_t) + \tfrac12 \right\rfloor \quad\text{trips at}\quad f^{*} = \frac{0.5}{n_{\text{base}}}$$
 
-The realised set is $\{0,1\}$, so $R = 2$. **At M1's notional, M3 *is* a threshold rule** — $\tanh(|z|) \geq f^{*}$, i.e. $|z| \geq \operatorname{artanh}(f^{*}) \approx 0.55$ to $0.81$ — which is precisely the regime switch §2 rejects, arrived at by arithmetic rather than by choice. Worse, the threshold $f^{*}$ drifts with spot, so the switch point is a function of the index level: the model would silently condition on where NIFTY happens to trade.
+The realised set holds two to four values, so $R \ll 10$. **At M1's notional M3 *is* a threshold rule** — $\tanh(|z_t|) \geq f^{*}$, i.e. $|z_t| \geq \operatorname{artanh}(f^{*})$ — precisely the regime switch §2 rejects, reached by arithmetic rather than by choice.
 
-**The remedy is to raise $N^{*}$ at pre-registration, with the capital base raised in lockstep** so that Sharpe, drawdown and the increment stay scale-free and comparable to M1's. It is not to lower $R$. Indicatively, $R = 10$ needs $n_{\text{base}} \gtrsim 10/(f_{q90} - f_{q10})$, an order of magnitude above M1's — which is exactly what (c) then has to clear.
+**And the threshold does not hold still.** $f^{*}$ moves inversely with $S_{t,\tau}$ and **steps discontinuously at every contract-size boundary**, one of which (2024-11-20) sits inside the costable window. M3 would be silently conditioning on the index level and on NSE's lot-size circulars.
+
+**The remedy is to raise $N^{*}$ at pre-registration, with the capital base raised in lockstep** so that Sharpe, drawdown and the increment stay scale-free and comparable to M1's. It is not to lower $R$. Indicatively $R = 10$ needs $n_{\text{base}} \gtrsim 10/(f_{q90} - f_{q10})$, an order of magnitude above M1's — which is then exactly what (c) must clear. **The realised set is what this gate measures; the figures above are the reason to expect it to fail, not a substitute for running it.**
 
 ### 12.1(c) Feasibility-slack gate — does the larger $N^{*}$ still fit?
 
@@ -277,6 +279,18 @@ M1 realised zero of both, which is what makes the M1 comparison scale-free. If M
 
 At least $B = 60$ completed sessions exist in the corpus strictly before the window's first session, so the state series is seeded from pre-window data and the graded window is not shortened (§3.3).
 
-### 12.1(e) M1 §12.1 unchanged
+### 12.1(e) The zero branch — M1 §12.1 does **not** carry over
 
-The sizing-floor check, run against $N^{*} f(z_t)$ rather than $N^{*}$. Note that $f \leq 1$ makes it **strictly harder** than M1's: the binding session is the one with the smallest $f$, not the smallest spot. Passing it is what keeps *which* sessions trade independent of $L_t$ — and under (b)'s resolution requirement the two gates work together, since a large $n_{\text{base}}$ is what stops small $f$ rounding to zero.
+M1's floor check is $\min_t N^{*}/(S_{t,\tau} L_t) \geq 0.5$. Its literal transcription,
+
+$$\min_t \frac{N^{*} f(z_t)}{S_{t,\tau} L_t} \;\geq\; 0.5$$
+
+is **unsatisfiable for every finite $N^{*}$**, because $f(0) = 0$ by §4. An earlier draft of this clause called M3's version of M1 §12.1 "strictly harder"; it is not harder, it is impossible, and a gate that can only fail is not a gate.
+
+What M3 needs instead is the extension below which the zero branch is reached:
+
+$$\left|z_t\right| \;<\; z_0 \;\equiv\; \operatorname{artanh}\!\left(\frac{0.5}{n_{\text{base}}}\right) \quad\Longrightarrow\quad n_t = 0$$
+
+**Report $z_0$ and the fraction of entries below it, and verify that fraction is small.** At $n_{\text{base}} = 20$, $z_0 = \operatorname{artanh}(0.025) \approx 0.025$ — one-fortieth of a scaled ATR, which is no extension at all, and §4.1 says M3 takes no position there *by design*. At M1's $n_{\text{base}} \approx 1$, $z_0 \approx 0.55$ and the branch silences a large share of the sample: the same defect (b) catches, seen from the other side.
+
+The residual dependence of *which sessions trade* on $L_t$ — the thing M1 §12.1 exists to remove — is real here and confined to that fraction. **(b)'s resolution requirement is what keeps it negligible**, which is why the two gates are stated together and neither substitutes for the other.
