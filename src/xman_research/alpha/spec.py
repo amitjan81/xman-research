@@ -180,6 +180,13 @@ def _hypothesis(payload: Mapping[str, Any], source: Path) -> HypothesisRecord:
             f"{source} has no `[hypothesis]` table. Every screened instance is filed against "
             "one, and it is what lets a stage-two gate deflate against the whole screen."
         )
+    predictors = section.get("predictors", [])
+    if isinstance(predictors, str) or not isinstance(predictors, list):
+        raise ScreenSpecError(
+            f"{source}: `hypothesis.predictors` must be a list of names. A bare string "
+            "iterates as its own characters, which would register a hypothesis predicting "
+            "on single letters."
+        )
     thresholds = section.get("thresholds")
     if not isinstance(thresholds, Mapping) or not thresholds:
         raise ScreenSpecError(
@@ -192,7 +199,7 @@ def _hypothesis(payload: Mapping[str, Any], source: Path) -> HypothesisRecord:
             mechanism=str(section.get("mechanism", "")),
             null_hypothesis=str(section.get("null_hypothesis", "")),
             thresholds=dict(thresholds),
-            predictors=tuple(str(name) for name in section.get("predictors", ())),
+            predictors=tuple(str(name) for name in predictors),
             notes=str(section.get("notes", "")),
             parent_id=(str(section["parent_id"]) if section.get("parent_id") is not None else None),
         )

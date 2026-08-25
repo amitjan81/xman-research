@@ -115,7 +115,11 @@ class StrengthShape(StrEnum):
     ``EXCESS_OVER_SPAN`` scales how far the value sits past the threshold.
     ``TANH_OF_MAGNITUDE`` reads the value's own magnitude through ``tanh(|value| / span)``,
     which is the right shape when the threshold is a gate and the value itself — not its
-    distance past the gate — is what the strength should track.
+    distance past the gate — is what the strength should track. ``GATE_ONLY`` returns one
+    whenever the test fires, for a conditioner whose feature carries no notion of *more*:
+    a weekday is not a quantity, so any curve over it would be an invented ordering, and a
+    distance-based shape would score it zero forever — which the ranker multiplies through
+    to a permanent zero score.
 
     Both are **conventions, not measurements**, in exactly the sense
     :class:`ConditionerSpec` states for the span: nothing establishes that a value twice as
@@ -125,6 +129,7 @@ class StrengthShape(StrEnum):
 
     EXCESS_OVER_SPAN = "excess_over_span"
     TANH_OF_MAGNITUDE = "tanh_of_magnitude"
+    GATE_ONLY = "gate_only"
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,6 +218,17 @@ class ConditionerSpec:
                     f"conditioner on {self.feature} declares a band [{self.threshold}, "
                     f"{self.upper_threshold}] whose upper edge is below its lower one"
                 )
+            if (
+                self.upper_threshold == self.threshold
+                and self.strength_shape is not StrengthShape.GATE_ONLY
+            ):
+                raise ValueError(
+                    f"conditioner on {self.feature} declares the single-point band "
+                    f"[{self.threshold}, {self.threshold}] under {self.strength_shape}. A "
+                    "band with no interior has zero depth, so a depth-based strength is "
+                    "identically zero and the ranker would score every such idea at zero "
+                    "forever. Use GATE_ONLY for a feature that has no notion of `more`."
+                )
         elif self.upper_threshold is not None:
             raise ValueError(
                 f"conditioner on {self.feature} compares {self.comparator} and also names an "
@@ -242,6 +258,8 @@ class ConditionerSpec:
         """
         if not self.fires(value) or value is None:
             return 0.0
+        if self.strength_shape is StrengthShape.GATE_ONLY:
+            return 1.0
         if self.strength_shape is StrengthShape.TANH_OF_MAGNITUDE:
             return math.tanh(abs(value) / self.saturation_span)
         if self.comparator is Comparator.AT_LEAST:
@@ -325,8 +343,9 @@ def _structure_intents(
 
     **The strike ladder is coarser than the rule.** ``atm_strike`` returns the nearest
     listed strike to the price the rule asks for, so a half-ATR offset in a calm market can
-    round onto the at-the-money strike. The duplicate check turns that into a refusal rather
-    than into a strangle silently traded as a straddle.
+    round onto the at-the-money rung. The collision check turns that into a refusal rather
+    than into a strangle silently traded as a straddle, or a condor whose wing sits on its
+    own short strike and defines no risk at all.
     """
     expiry = session.universe.nearest_expiry(session.session_date)
     if expiry is None:
@@ -342,15 +361,24 @@ def _structure_intents(
     width = atr if atr is not None else 0.0
 
     resolved: list[tuple[LegRule, Contract, float]] = []
-    claimed: set[tuple[float, str]] = set()
+    claimed: dict[float, float] = {}
+    taken: set[tuple[float, str]] = set()
     for leg in legs:
         strike = session.universe.atm_strike(spot + leg.atr_offset * width, expiry)
         if strike is None:
             return ()
-        key = (strike, leg.option_type)
-        if key in claimed:
+        # Two legs the rule places at *different* distances from spot, landing on one rung,
+        # are not the structure the template names. Keyed on the strike alone rather than on
+        # the contract: a strangle's call and put never share an option type, so a key that
+        # included it would let both legs collapse onto the at-the-money rung and trade a
+        # straddle under the strangle's name — with the strangle's evidence attached.
+        if claimed.get(strike, leg.atr_offset) != leg.atr_offset:
             return ()
-        claimed.add(key)
+        claimed[strike] = leg.atr_offset
+        key = (strike, leg.option_type)
+        if key in taken:
+            return ()
+        taken.add(key)
         contract = session.universe.get(expiry, strike, leg.option_type)
         if contract is None:
             return ()
@@ -390,6 +418,10 @@ def _exit_intents(session: SessionView, book: BookView, group: str) -> Sequence[
     composed trading symbol outright, and it is right to, because composing one is how a
     backtest comes to trade an instrument that was never listed. The position stays open and
     the exchange cash-settles it, which the run's settlement count reports.
+
+    **A skipped leg leaves no `GROUP_INCOMPLETE`.** It is left out of the group rather than
+    refused inside it, so the engine sees a complete group of whatever remains; the run's
+    settlement count is the only trace that a leg went to cash settlement instead.
 
     Two conditions, and the second is not redundant. A contract expiring on the session date
     is dropped from that session's master, so the universe check alone would catch it; the
@@ -495,7 +527,7 @@ class HoldNSpread:
 
     def parameters(self) -> Mapping[str, Any]:
         return {
-            "hold_sessions": self.hold_sessions,
+            HOLD_SESSIONS: self.hold_sessions,
             "target_notional": self.target_notional,
             "min_calendar_days_to_expiry": self.min_calendar_days_to_expiry,
             "structure": self.structure,
@@ -858,10 +890,15 @@ _HOLD_SESSIONS_RANGE = ParameterRange(
     default=1.0,
     unit="sessions",
     description=(
-        "Sessions the structure is held before it is closed at the decision minute. Bounded "
-        "at five because the front weekly contract cannot survive a longer hold on this "
-        "corpus, so the position would cash-settle and the observation would stop being a "
-        "hold-N at all."
+        "Sessions the structure is held before it is closed at the decision minute. The "
+        "declared ceiling is five, but what is *reachable* is narrower and is a fact about "
+        "the exchange rather than about this range: NIFTY expires weekly, so no session sits "
+        "more than six calendar days from the nearest expiry, and an entry demands "
+        "`hold + 3` days of headroom. A hold of three therefore enters only on the session "
+        "furthest from expiry, and holds of four and five never enter at all — a grid naming "
+        "one produces an instance the sheet reports as `never_entered` rather than a "
+        "measured row. Rolling to a later expiry would reach them and is refused: it is a "
+        "different trade with a different variance exposure."
     ),
 )
 
@@ -881,8 +918,9 @@ _ATR_MULTIPLE = ParameterRange(
     unit="ATR14 multiples",
     description=(
         "How far from spot the short strikes sit, in fourteen-session average true ranges. "
-        "Below a quarter the strikes round onto the at-the-money ladder rung and the "
-        "structure refuses; above three the premium collected on this corpus is negligible."
+        "No value guarantees distinct strikes — the ladder is coarser than the rule, so a "
+        "small multiple in a calm market rounds both legs onto one rung and the structure "
+        "refuses that session outright. Above three the premium collected is negligible."
     ),
 )
 
@@ -1223,6 +1261,7 @@ _CONDITIONER_KINDS = (
             threshold=params["weekday"],
             upper_threshold=params["weekday"],
             saturation_span=1.0,
+            strength_shape=StrengthShape.GATE_ONLY,
             lookback_sessions=1,
             description="The as-of session's weekday, Monday zero.",
         ),

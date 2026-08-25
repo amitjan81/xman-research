@@ -59,7 +59,11 @@ from xman_research.alpha.screen import (
     load_screen_sheet,
 )
 from xman_research.alpha.spec import ScreenSpecError, load_screen_spec
-from xman_research.alpha.templates import UnknownTemplateError, default_registry
+from xman_research.alpha.templates import (
+    TemplateRegistry,
+    UnknownTemplateError,
+    default_registry,
+)
 from xman_research.backtest.engine import BacktestConfig
 from xman_research.backtest.execution import ParticipationLimits
 from xman_research.evaluation import open_session
@@ -306,11 +310,16 @@ def _screen(args: argparse.Namespace) -> int:
     )
     for rank, row in enumerate(sheet.instances[:5], start=1):
         alpha = "unmeasured" if row.alpha is None else f"{row.alpha:+.3f}"
-        print(f"  {rank}. {row.instance.instance_id}: alpha={alpha} n={row.n_observations}")
+        print(
+            f"  {rank}. {row.instance.instance_id}: alpha={alpha} "
+            f"n={row.n_observations} entered={row.sessions_entered} ({row.outcome})"
+        )
     return _EXIT_OK
 
 
-def _seed_from_screen(args: argparse.Namespace, library: TemplateLibrary, registry) -> int:
+def _seed_from_screen(
+    args: argparse.Namespace, library: TemplateLibrary, registry: TemplateRegistry
+) -> int:
     sheet = load_screen_sheet(args.sheet)
     if args.rank < 1 or args.rank > len(sheet.instances):
         raise ValueError(
@@ -362,6 +371,10 @@ def _library(args: argparse.Namespace) -> int:
             )
             unregistered = "" if template_id in registry else " [NOT REGISTERED]"
             print(f"{template_id}: {status}{unregistered}{suffix}")
+            if entry is not None and entry.override_reason:
+                # On its own line and unabbreviated: an admission over unpassed evidence is
+                # the one thing in this listing a reader must not be able to skim past.
+                print(f"    ADMITTED OVER UNPASSED EVIDENCE: {entry.override_reason}")
         return _EXIT_OK
 
     if args.library_command == "seed-from-screen":
@@ -392,7 +405,7 @@ def _library(args: argparse.Namespace) -> int:
         reason=reason,
         status=status,
         notes=args.notes,
-        override_reason=getattr(args, "override_reason", None),
+        override_reason=args.override_reason,
     )
     library.save()
     card = entry.evidence

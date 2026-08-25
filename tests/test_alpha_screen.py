@@ -18,9 +18,11 @@ import pytest
 
 from alpha_helpers import FLAT_SPOT, trading_days, write_corpus
 from xman_research import ManualClock, StaticCodeVersion
-from xman_research.alpha.features import FeatureBuilder
+from xman_research.alpha.features import DEFAULT_DECISION_TIME, FeatureBuilder
 from xman_research.alpha.library import AdmissionStatus, TemplateLibrary
 from xman_research.alpha.screen import (
+    NEVER_ENTERED,
+    CandidateInstance,
     CandidateSpec,
     ScreenedInstance,
     ScreeningRun,
@@ -134,29 +136,50 @@ def test_the_excess_is_the_candidate_minus_the_benchmark_session_by_session() ->
 def test_a_flat_session_counts_as_a_zero_and_not_as_a_missing_observation() -> None:
     """The bias this guards is invisible from inside the sheet — see the module docstring.
 
-    The candidate trades one of three sessions. Aligned correctly its excess is
-    ``(-0.01, -0.01, +0.04)``; drop the sessions it sat out and the excess would be the
-    single positive number, which is the flattering answer.
+    The candidate declined to enter on two of three sessions, which the engine records as a
+    daily record with flat equity and therefore as a literal ``0.0`` in its return series.
+    Kept, the excess is ``(-0.01, -0.01, +0.04)``; filtered out as "sessions it wasn't in the
+    market", it would be the single positive number — the flattering answer, and one that
+    every conditioner would enjoy equally.
     """
     days = [dt.date(2026, 4, day) for day in (20, 21, 22)]
     excess = _excess_series(
-        _series([days[2], days[2] + dt.timedelta(days=1)], [0.05, 0.0], "conditional"),
+        _series(days, [0.0, 0.0, 0.05], "conditional"),
         _series(days, [0.01, 0.01, 0.01], "benchmark"),
     )
     assert excess is not None
-    assert excess.dates == (days[0], days[1], days[2], days[2] + dt.timedelta(days=1))
-    assert excess.net == pytest.approx((-0.01, -0.01, 0.04, 0.0))
+    assert excess.dates == tuple(days)
+    assert excess.net == pytest.approx((-0.01, -0.01, 0.04))
+
+
+def test_two_series_over_different_sessions_are_refused_rather_than_zero_filled() -> None:
+    """Within the harness the dates agree by construction, so a mismatch is a defect.
+
+    Filling the difference would credit the candidate with a flat return on sessions nothing
+    ever measured it over, which is a number invented to complete an arithmetic rather than
+    an observation.
+    """
+    days = [dt.date(2026, 4, day) for day in (20, 21, 22)]
+    assert (
+        _excess_series(
+            _series([*days[:2], dt.date(2026, 4, 23)], [0.0, 0.0, 0.05], "candidate"),
+            _series(days, [0.01, 0.01, 0.01], "benchmark"),
+        )
+        is None
+    )
 
 
 # ---------------------------------------------------------------------------- ranking
 
 
 def _row(instance_id: str, alpha: float | None, max_drawdown: float) -> ScreenedInstance:
-    spec = CandidateSpec("short_atm_straddle_hold_n")
-    instance = spec.expand(default_registry())[0]
-    object.__setattr__(instance, "template_id", instance_id)
     return ScreenedInstance(
-        instance=instance,
+        instance=CandidateInstance(
+            template_id=instance_id,
+            underlying="NIFTY",
+            params={"hold_sessions": 1.0},
+            hold_sessions=1,
+        ),
         trial_id=f"trial-{instance_id}",
         outcome="screened",
         strategy_name="s",
@@ -215,8 +238,12 @@ def _run(store: SessionStore, log_path: Path, sessions, *, candidates) -> Screen
             window=DataWindow(sessions[0], sessions[-1]),
             benchmark=BENCHMARK,
             candidates=candidates,
-            config=BacktestConfig(underlying="NIFTY"),
-            feature_builder=FeatureBuilder(store, regime_lookback_sessions=20),
+            config=BacktestConfig(underlying="NIFTY", decision_time=DEFAULT_DECISION_TIME),
+            feature_builder=FeatureBuilder(
+                store,
+                decision_time=DEFAULT_DECISION_TIME,
+                regime_lookback_sessions=20,
+            ),
             clock=ManualClock(dt.datetime(2026, 5, 1, tzinfo=dt.UTC)),
             code_version=StaticCodeVersion("abc123", dirty=False),
         ).run()
@@ -510,3 +537,76 @@ def test_an_empty_gaps_reason_accepts_no_gaps(tmp_path: Path) -> None:
     path = tmp_path / "spec.toml"
     path.write_text(SPEC + '\ngaps_reason = "   "\n')
     assert load_screen_spec(path).gaps_reason is None
+
+
+def test_a_feature_builder_reading_a_later_minute_than_the_engine_is_refused(
+    corpus, tmp_path: Path
+) -> None:
+    """Features truncated after the decision minute are look-ahead on every instance alike."""
+    store, sessions = corpus
+    log = _log(tmp_path / "screen.db")
+    try:
+        with pytest.raises(ScreeningRunError, match="look-ahead"):
+            ScreeningRun(
+                store=store,
+                registry=default_registry(),
+                trial_log=log,
+                hypothesis=_hypothesis(),
+                window=DataWindow(sessions[0], sessions[-1]),
+                benchmark=BENCHMARK,
+                candidates=[CandidateSpec("short_atm_strangle_hold_n")],
+                config=BacktestConfig(underlying="NIFTY", decision_time=dt.time(9, 20)),
+                feature_builder=FeatureBuilder(store, decision_time=DEFAULT_DECISION_TIME),
+            )
+    finally:
+        log.close()
+
+
+def test_a_conditioned_instance_enters_when_its_feature_clears_the_threshold(
+    corpus, tmp_path: Path
+) -> None:
+    """The one path only the corpus-gated E2E covered: feature pass, series, entry gate."""
+    store, sessions = corpus
+    sheet = _run(
+        store,
+        tmp_path / "screen.db",
+        sessions,
+        candidates=[
+            CandidateSpec("short_atm_straddle_iv_rv", {"iv_rv_threshold": (0.0,)}),
+        ],
+    )
+    row = sheet.instances[0]
+    assert row.sessions_entered > 0
+    assert row.outcome != NEVER_ENTERED
+
+
+def test_an_instance_that_never_entered_is_reported_rather_than_ranked(
+    corpus, tmp_path: Path
+) -> None:
+    """Its own series is flat but its spread is not, so an alpha would be minus the benchmark's."""
+    store, sessions = corpus
+    sheet = _run(
+        store,
+        tmp_path / "screen.db",
+        sessions,
+        # A threshold no session in the fixture reaches: implied is 0.13 throughout.
+        candidates=[CandidateSpec("short_atm_straddle_iv_rv", {"iv_rv_threshold": (0.3,)})],
+    )
+    row = sheet.instances[0]
+    assert row.sessions_entered == 0
+    assert row.outcome == NEVER_ENTERED
+    assert row.alpha is None
+    assert row.measured is False
+    assert "never traded above every one that did" in row.reason
+
+
+def test_a_grid_point_a_conditioner_would_refuse_is_caught_before_a_trial_is_spent(
+    registry,
+) -> None:
+    """A band whose edges are the wrong way round passes every per-parameter range."""
+    spec = CandidateSpec(
+        "short_atm_straddle_expiry_distance",
+        {"expiry_distance_low": (5.0,), "expiry_distance_high": (1.0,)},
+    )
+    with pytest.raises(ValueError, match="upper edge is below its lower one"):
+        spec.expand(registry)

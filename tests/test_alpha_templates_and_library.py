@@ -27,9 +27,11 @@ from xman_research.alpha.library import (
     UnpassedEvidenceError,
 )
 from xman_research.alpha.templates import (
+    ATR_14,
     Comparator,
     ConditionerSpec,
     HoldNShortStraddle,
+    HoldNShortStrangle,
     ParameterRange,
     StrategyTemplate,
     TemplateRegistry,
@@ -353,9 +355,10 @@ def test_an_override_is_recorded_on_the_entry_and_carries_the_verdict_verbatim(
     assert entry.evidence.gate_status == "failed"
     assert entry.evidence.passed_gate is False
     assert entry.status is AdmissionStatus.ADMITTED
-    assert entry.notes is not None
-    assert OVERRIDE in entry.notes
-    assert "ADMITTED OVER UNPASSED EVIDENCE" in entry.notes
+    # A field of its own, not a sentence inside free-text notes: a reader scanning statuses
+    # must see it without reading prose.
+    assert entry.override_reason == OVERRIDE
+    assert entry.notes is None
 
 
 def test_the_evidence_card_takes_the_mean_return_net_of_costs(
@@ -677,6 +680,50 @@ def _short_position(symbol: str, expiry: dt.date):
 _LIVE_SHORT = (_short_position("NIFTY-WALK-CE", dt.date(2026, 12, 31)),)
 
 
+class _LadderUniverse:
+    """A strike ladder of a stated coarseness, and the contracts listed on it."""
+
+    def __init__(self, expiry: dt.date, spot: float, step: float) -> None:
+        self._expiry = expiry
+        self._step = step
+        self._spot = spot
+
+    def nearest_expiry(self, on: dt.date) -> dt.date:
+        del on
+        return self._expiry
+
+    def atm_strike(self, spot: float, expiry: dt.date) -> float:
+        del expiry
+        return round(spot / self._step) * self._step
+
+    def get(self, expiry: dt.date, strike: float, option_type: str):
+        return Contract(
+            trading_symbol=f"NIFTY-{expiry:%d%b%Y}-{strike:g}-{option_type}",
+            underlying="NIFTY",
+            expiry=expiry,
+            strike=strike,
+            option_type=option_type,
+            lot_size=65,
+            tick_size=0.05,
+        )
+
+    def by_symbol(self, trading_symbol: str):
+        return trading_symbol
+
+
+class _LadderSession:
+    """A session view with a coarse strike ladder and a flat spot."""
+
+    def __init__(self, session_date: dt.date, *, expiry: dt.date, spot: float, step: float) -> None:
+        self.session_date = session_date
+        self.universe = _LadderUniverse(expiry, spot, step)
+        self._spot = spot
+
+    def spot_at(self, minute) -> float:
+        del minute
+        return self._spot
+
+
 class _FakeBook:
     """The two members :meth:`HoldNShortStraddle.decide` reads of its book.
 
@@ -861,3 +908,64 @@ def test_the_exit_buys_back_every_short_as_one_group_and_skips_a_contract_expiri
     assert {intent.trading_symbol for intent in intents} == {"NIFTY-A-CE", "NIFTY-A-PE"}
     assert len({intent.leg_group for intent in intents}) == 1
     assert all(intent.side is Side.BUY for intent in intents)
+
+
+def test_a_single_point_band_needs_the_gate_only_shape(registry: TemplateRegistry) -> None:
+    """A depth-based strength over a band with no interior is identically zero forever."""
+    with pytest.raises(ValueError, match="single-point band"):
+        ConditionerSpec(
+            feature="day_of_week",
+            comparator=Comparator.WITHIN,
+            threshold=1.0,
+            upper_threshold=1.0,
+            saturation_span=1.0,
+            lookback_sessions=1,
+        )
+
+
+def test_the_weekday_conditioner_fires_at_full_strength_rather_than_at_zero(
+    registry: TemplateRegistry,
+) -> None:
+    """The ranker multiplies strength into the score, so a permanent zero is a mute template."""
+    spec = registry.get("short_atm_straddle_day_of_week").conditioner
+    assert spec is not None
+    assert spec.fires(1.0) is True
+    assert spec.strength(1.0) == 1.0
+    assert spec.fires(2.0) is False
+    assert spec.strength(2.0) == 0.0
+
+
+def test_two_legs_at_different_offsets_landing_on_one_strike_refuse_the_session() -> None:
+    """A strangle whose legs round onto the ATM rung is a straddle wearing another name."""
+    expiry = dt.date(2026, 5, 5)
+    session = _LadderSession(dt.date(2026, 4, 24), expiry=expiry, spot=23_000.0, step=500.0)
+    strangle = HoldNShortStrangle(
+        atr_multiple=0.5,
+        min_calendar_days_to_expiry=4,
+        # An average true range of 100 puts each leg 50 points from spot, well inside the
+        # 500-point ladder, so both round onto the at-the-money rung.
+        feature_series={ATR_14: {session.session_date: 100.0}},
+    )
+    assert strangle.decide(session=session, minute=None, book=_FakeBook()) == ()
+
+    # Four times as wide clears the rung and the structure trades.
+    wide = HoldNShortStrangle(
+        atr_multiple=0.5,
+        min_calendar_days_to_expiry=4,
+        feature_series={ATR_14: {session.session_date: 2_000.0}},
+    )
+    intents = wide.decide(session=session, minute=None, book=_FakeBook())
+    assert len(intents) == 2
+    assert len({intent.trading_symbol for intent in intents}) == 2
+
+
+def test_an_exit_skips_a_leg_the_session_no_longer_lists_and_closes_the_rest() -> None:
+    """No closing order can be expressed against a contract that is not in the universe."""
+    listed = _LIVE_SHORT[0]
+    delisted = _short_position("NIFTY-GONE-PE", dt.date(2026, 12, 31))
+    book = _FakeBook((listed, delisted))
+    # The universe holds only the first leg — the second has left the instrument master.
+    session = _FakeSession(dt.date(2026, 4, 24), (listed,))
+    intents = _exit_intents(session, book, "g")
+    assert [intent.trading_symbol for intent in intents] == [listed.contract.trading_symbol]
+    assert {intent.leg_group for intent in intents} == {"g"}

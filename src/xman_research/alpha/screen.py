@@ -23,15 +23,18 @@ gate: the question stage one asks is whether the conditioner or the structure ad
 over trading unconditionally, and a cost model that shifts both series equally cannot
 change that answer.
 
-**A session the candidate sat out is a zero, not a missing observation.** Both series are
-aligned on the union of their session dates and the absentee is filled with zero. Dropping
-those sessions instead would measure a conditional candidate only on the days it chose to
-trade, which flatters every conditioner by the same amount — and a bias that survives
-comparison is worse than noise.
+**A session the candidate sat out is a zero, not a missing observation.** A conditional
+instance that declines to enter still carries a daily record with flat equity, so it is
+present in its own return series as a real zero. That is what keeps the comparison honest:
+measuring a conditional candidate only on the days it chose to trade would flatter every
+conditioner by the same amount, and a bias that survives comparison is worse than noise.
+Because of it the two series cover identical sessions by construction, and
+:func:`_excess_series` refuses a pair that does not rather than filling the difference.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import itertools
 import json
@@ -86,6 +89,18 @@ SCREEN_SHEET_SCHEMA_VERSION = 1
 #: pass is deliberately not this one.
 SCREENED = "screened"
 
+#: The outcome of an instance whose entry rules refused every session in the window. Its own
+#: return series is flat, but its *spread* over a benchmark that moved is not, so without its
+#: own outcome it would rank as a measured row at minus the benchmark's Sharpe — and outrank
+#: every real candidate on any window the benchmark lost money over.
+NEVER_ENTERED = "never_entered"
+
+#: A backtest reports one daily record per session and no starting point, and a return series
+#: is the differences between them, so three sessions is the shortest run that can carry the
+#: two observations a dispersion needs. Derived from that chain rather than written down, so
+#: the trial log's outcome and the sheet's row cannot disagree about which runs are judgeable.
+MIN_SESSIONS_FOR_A_RETURN_SERIES = 3
+
 
 class ScreeningRunError(ValueError):
     """A screen that cannot be run as specified, refused before any trial is appended."""
@@ -133,8 +148,13 @@ class CandidateSpec:
         for point in itertools.product(*axes) if axes else [()]:
             params = dict(zip(names, point, strict=True))
             # Raises on an undeclared name or a value outside its declared range, including
-            # a hold outside one-to-five sessions.
+            # a hold outside one-to-five sessions. The strategy is then built and thrown
+            # away: a conditioner refuses some combinations its parameters each satisfy
+            # individually — a band whose edges are the wrong way round — and only the built
+            # object can see it. Discovering that inside the run would leave the log holding
+            # trials for a screen that never produced a sheet.
             template.resolve(params)
+            template.build(params, self.underlying, feature_series={})
             instances.append(
                 CandidateInstance(
                     template_id=self.template_id,
@@ -445,6 +465,17 @@ class ScreeningRun:
         # the run and the sheet cannot disagree about whether a holey window was accepted.
         self._config = replace_gap_reason(base, gaps_reason)
         self._gaps_reason = gaps_reason
+        if feature_builder is not None and (
+            feature_builder.decision_time != self._config.decision_time
+        ):
+            raise ScreeningRunError(
+                f"the feature builder reads its features at "
+                f"{feature_builder.decision_time.isoformat()} and the engine acts at "
+                f"{self._config.decision_time.isoformat()}. Features are truncated at the "
+                "builder's minute, so a later one puts prints the strategy had not seen into "
+                "every conditioner and every strike rule — look-ahead, in the flattering "
+                "direction, on every instance in the sheet equally."
+            )
         self._features = (
             feature_builder
             if feature_builder is not None
@@ -576,10 +607,10 @@ class ScreeningRun:
             result = run_backtest(trial, store=self._store, strategy=strategy, config=self._config)
             trial.record_metrics(result.metrics())
             trial.record_params(strategy_name=result.strategy_name)
-            if len(result.daily) < 2:
+            if len(result.daily) < MIN_SESSIONS_FOR_A_RETURN_SERIES:
                 trial.mark_not_evaluable(
-                    f"the run produced {len(result.daily)} daily record(s); a return series "
-                    "needs at least two observations to have a dispersion"
+                    f"the run produced {len(result.daily)} daily record(s) and a judgeable "
+                    f"return series needs {MIN_SESSIONS_FOR_A_RETURN_SERIES}"
                 )
         try:
             evidence = evidence_from_result(
@@ -626,17 +657,38 @@ class ScreeningRun:
                 risk_matched=None,
                 regime_breakdown={},
                 reason=(
-                    f"the run covered {len(result.daily)} session(s) of {self._window}; a "
-                    "return series needs at least two observations to have a dispersion"
+                    f"the run covered {len(result.daily)} session(s) of {self._window} and a "
+                    f"judgeable return series needs {MIN_SESSIONS_FOR_A_RETURN_SERIES}"
                 ),
                 **common,
             )
 
         returns = evidence.returns
+        if entries == 0:
+            refusals = {verdict: n for verdict, n in result.feasibility_counts().items() if n}
+            return ScreenedInstance(
+                outcome=NEVER_ENTERED,
+                alpha=None,
+                annualised_sharpe=None,
+                mean_return_per_session=0.0,
+                mean_return_at_hold=0.0,
+                max_drawdown=0.0,
+                n_observations=len(returns),
+                risk_matched=None,
+                regime_breakdown={},
+                reason=(
+                    "the instance's entry rules refused every session in the window, so it "
+                    "measured nothing. Its spread over a benchmark that did trade is not "
+                    "flat, and reporting that spread as an alpha would rank a strategy that "
+                    "never traded above every one that did, on any window the benchmark lost "
+                    f"money over. What the engine recorded: {refusals or 'no intents at all'}."
+                ),
+                **common,
+            )
         mean_per_session = math.fsum(returns.net) / len(returns)
         facts = drawdown(returns)
         excess = _excess_series(returns, benchmark.returns) if benchmark is not None else None
-        if excess is None:
+        if benchmark is None:
             alpha, reason = (
                 None,
                 ("no benchmark series was measurable, so there is no spread to take"),
@@ -707,40 +759,31 @@ class ScreeningRun:
 
 
 def replace_gap_reason(config: BacktestConfig, gaps_reason: str | None) -> BacktestConfig:
-    """``config`` with its gap policy set to ``gaps_reason``.
-
-    Written out rather than ``dataclasses.replace`` because :class:`BacktestConfig` is
-    frozen with slots and carries model objects the copy must not rebuild.
-    """
+    """``config`` with its gap policy set to ``gaps_reason``, and every other field kept."""
     if config.gap_reason == gaps_reason:
         return config
-    return BacktestConfig(
-        underlying=config.underlying,
-        decision_time=config.decision_time,
-        starting_cash=config.starting_cash,
-        limits=config.limits,
-        fill_model=config.fill_model,
-        margin_model=config.margin_model,
-        cost_stack=config.cost_stack,
-        settlement_rules=config.settlement_rules,
-        gap_reason=gaps_reason,
-        verify_checksums=config.verify_checksums,
-        decision_times=config.decision_times,
-    )
+    return dataclasses.replace(config, gap_reason=gaps_reason)
 
 
-def _excess_series(candidate: ReturnSeries, benchmark: ReturnSeries) -> ReturnSeries:
+def _excess_series(candidate: ReturnSeries, benchmark: ReturnSeries) -> ReturnSeries | None:
     """The candidate's per-session return minus the benchmark's, aligned on both.
 
-    A session present in one series and not the other is a session that series was not in
-    the market — a zero return, not an absent observation. See the module docstring for why
-    dropping it instead would flatter every conditioner equally.
+    **Both series must cover the identical sessions, and a mismatch is refused rather than
+    filled.** Every instance in a screen runs the same window against the same store, and a
+    session an instance sat out already carries a flat daily record, so the two date sets
+    agree by construction — a disagreement means the two runs were not comparable, and
+    zero-filling would credit the candidate with a flat return on sessions nothing measured
+    it over. ``None`` is returned so the row carries a stated reason instead of a number.
 
     The excess carries **no cost drag of its own**: both inputs are already net, so the
     difference has no separable cost component, and reporting one would invite a
     cost-multiple counterfactual that means nothing on a spread.
     """
-    days = sorted(set(candidate.dates) | set(benchmark.dates))
+    if set(candidate.dates) != set(benchmark.dates):
+        return None
+    if candidate.periods_per_year != benchmark.periods_per_year:
+        return None
+    days = sorted(candidate.dates)
     left = dict(zip(candidate.dates, candidate.net, strict=True))
     right = dict(zip(benchmark.dates, benchmark.net, strict=True))
     return ReturnSeries(
@@ -761,10 +804,13 @@ def _sharpe_or_none(series: ReturnSeries, *, undefined: str) -> tuple[float | No
     has an identically flat spread. Reporting ``None`` keeps such a row out of the ranking
     instead of seating it in the middle at a fabricated zero.
     """
-    try:
-        return annualised_sharpe_ratio(series), None
-    except ValueError:
+    # Checked rather than caught: `annualised_sharpe_ratio` raises `ValueError` for zero
+    # dispersion today, and catching that would also swallow any future `ValueError` from the
+    # moment calculation and report it under this reason — a wrong explanation attached to a
+    # missing number, which is worse than either alone.
+    if len(set(series.net)) == 1:
         return None, undefined
+    return annualised_sharpe_ratio(series), None
 
 
 def _risk_matched(candidate: RunEvidence, benchmark: RunEvidence | None) -> dict[str, Any] | None:

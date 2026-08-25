@@ -47,6 +47,7 @@ from typing import Any
 
 from xman_research.alpha.templates import StrategyTemplate
 from xman_research.clock import Clock, SystemClock
+from xman_research.validation.decision import GateStatus, Outcome
 
 __all__ = [
     "DEFAULT_LIBRARY_PATH",
@@ -60,6 +61,7 @@ __all__ = [
     "DecisionRecordError",
     "EvidenceCard",
     "LibraryFileError",
+    "MeasuredHoldMismatchError",
     "TemplateLibrary",
     "UnpassedEvidenceError",
 ]
@@ -96,6 +98,15 @@ class AppendOnlyLibraryError(RuntimeError):
     """The stored library is not a prefix of what is about to be written."""
 
 
+class MeasuredHoldMismatchError(ValueError):
+    """A decision record measured a hold the template the ranker would build does not trade.
+
+    Distinct from :class:`UnpassedEvidenceError`: the evidence may have passed everything
+    it was graded against and still describe a different trade from the one about to carry
+    it. Admitting anyway would put a hold-N record's numbers behind hold-M proposals.
+    """
+
+
 class UnpassedEvidenceError(ValueError):
     """An admission whose evidence did not clear its gate, with no written override.
 
@@ -108,11 +119,12 @@ class UnpassedEvidenceError(ValueError):
 
 #: What the sole passing outcome of a decision record is called. A record reporting anything
 #: else — a failed threshold, a failed holdout, a run that could not be evaluated — is not a
-#: pass, and there is no fifth value that quietly counts as one.
-PASSING_OUTCOME = "passes_survives_holdout"
+#: pass, and there is no fifth value that quietly counts as one. Read off the enum the
+#: validation layer writes, so a rename there cannot leave this reading a value nothing emits.
+PASSING_OUTCOME = str(Outcome.PASSES_SURVIVES_HOLDOUT)
 
 #: What the sole passing gate status is called, on the in-sample metrics of a decision record.
-PASSING_GATE_STATUS = "passed"
+PASSING_GATE_STATUS = str(GateStatus.PASSED)
 
 #: The ``decision_outcome`` a screening-sheet entry carries. Spelled unlike any of the four
 #: outcomes a decision record can report, so a reader scanning statuses cannot mistake a
@@ -354,6 +366,13 @@ class AdmissionRecord:
     admitted_by: str
     reason: str
     notes: str | None = None
+    override_reason: str | None = None
+    """Why this admission was made over evidence that did not pass its gate.
+
+    A field rather than a sentence inside :attr:`notes`, because a reader scanning statuses
+    must be able to see it without reading prose: an entry reading ADMITTED with nothing
+    beside it is exactly the state the override policy exists to prevent.
+    """
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -368,6 +387,7 @@ class AdmissionRecord:
             "admitted_by": self.admitted_by,
             "reason": self.reason,
             "notes": self.notes,
+            "override_reason": self.override_reason,
         }
 
     @classmethod
@@ -384,6 +404,7 @@ class AdmissionRecord:
             admitted_by=str(payload["admitted_by"]),
             reason=str(payload.get("reason") or ""),
             notes=_as_str(payload.get("notes")),
+            override_reason=_as_str(payload.get("override_reason")),
         )
 
 
@@ -497,10 +518,22 @@ class TemplateLibrary:
 
         source = Path(decision_path)
         payload = _read_decision_record(source)
+        measured_hold = _measured_hold(payload)
+        if measured_hold is not None and measured_hold != template.hold_sessions:
+            raise MeasuredHoldMismatchError(
+                f"{source} measured a {measured_hold}-session hold and the ranker builds "
+                f"{template.template_id} at {template.hold_sessions}. An admission attaches "
+                "this record's numbers to the trades the ranker will propose, and those are "
+                "two different trades: the mean return at hold, the expiry invalidator and "
+                "the drawdown all describe the measured one."
+            )
         evidence = EvidenceCard.from_decision_record(
-            payload, hold_sessions=template.hold_sessions, source=str(source)
+            payload,
+            hold_sessions=measured_hold if measured_hold is not None else template.hold_sessions,
+            source=str(source),
         )
         outcome = _as_str(payload.get("outcome"))
+        recorded_override: str | None = None
         if status is AdmissionStatus.ADMITTED and not _passes(outcome, evidence):
             if override_reason is None or not override_reason.strip():
                 raise UnpassedEvidenceError(
@@ -510,7 +543,7 @@ class TemplateLibrary:
                     "requires a written `override_reason`. File it as a CANDIDATE instead "
                     "if the intent is to record what was measured."
                 )
-            notes = _with_override(notes, outcome, evidence.gate_status, override_reason)
+            recorded_override = override_reason.strip()
 
         entry = AdmissionRecord(
             template_id=template.template_id,
@@ -524,6 +557,7 @@ class TemplateLibrary:
             admitted_by=by,
             reason=reason,
             notes=notes,
+            override_reason=recorded_override,
         )
         self._entries.append(entry)
         return entry
@@ -657,14 +691,19 @@ def _passes(outcome: str | None, evidence: EvidenceCard) -> bool:
     return outcome == PASSING_OUTCOME and evidence.gate_status == PASSING_GATE_STATUS
 
 
-def _with_override(
-    notes: str | None, outcome: str | None, gate_status: str | None, override_reason: str
-) -> str:
-    stated = (
-        f"ADMITTED OVER UNPASSED EVIDENCE (outcome={outcome!r}, gate={gate_status!r}): "
-        f"{override_reason}"
-    )
-    return stated if not notes else f"{notes}; {stated}"
+def _measured_hold(payload: Mapping[str, Any]) -> int | None:
+    """The hold the record's in-sample run actually traded, if it reports one.
+
+    ``None`` when the record measured a strategy with no hold at all — one held to cash
+    settlement, say — which is a different shape of evidence rather than a disagreement, and
+    is left for the human reading ``measured_strategy`` on the card to judge.
+    """
+    runs = payload.get("runs")
+    run = runs.get("in_sample") if isinstance(runs, Mapping) else None
+    parameters = run.get("strategy_parameters") if isinstance(run, Mapping) else None
+    if not isinstance(parameters, Mapping):
+        return None
+    return _as_int(parameters.get("hold_sessions"))
 
 
 def _read_decision_record(source: Path) -> Mapping[str, Any]:
