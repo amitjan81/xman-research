@@ -255,6 +255,15 @@ class ScreenedInstance:
     risk_matched: Mapping[str, Any] | None
     regime_breakdown: Mapping[str, Mapping[str, Any]]
     reason: str | None = None
+    round_trips: int = 0
+    mean_return_per_round_trip: float | None = None
+    """Net profit per position opened, over the run's capital base.
+
+    Not a restatement of :attr:`mean_return_at_hold`: that figure is the per-session
+    mean scaled by the hold, and the two agree only for an instance in position every
+    session. An instance that trades on a minority of them earns this much per trade and
+    the smaller number per session.
+    """
 
     @property
     def measured(self) -> bool:
@@ -276,6 +285,8 @@ class ScreenedInstance:
             "max_drawdown": self.max_drawdown,
             "n_observations": self.n_observations,
             "sessions_entered": self.sessions_entered,
+            "round_trips": self.round_trips,
+            "mean_return_per_round_trip": self.mean_return_per_round_trip,
             "feasibility": dict(self.feasibility),
             "cost_stamps": list(self.cost_stamps),
             "risk_matched": dict(self.risk_matched) if self.risk_matched else None,
@@ -303,6 +314,8 @@ class ScreenedInstance:
                 None if payload.get("n_observations") is None else int(payload["n_observations"])
             ),
             sessions_entered=int(payload["sessions_entered"]),
+            round_trips=int(payload.get("round_trips") or 0),
+            mean_return_per_round_trip=_optional_float(payload.get("mean_return_per_round_trip")),
             feasibility={str(k): int(v) for k, v in (payload.get("feasibility") or {}).items()},
             cost_stamps=tuple(str(stamp) for stamp in payload.get("cost_stamps") or ()),
             risk_matched=(dict(payload["risk_matched"]) if payload.get("risk_matched") else None),
@@ -632,6 +645,8 @@ class ScreeningRun:
             "strategy_parameters": dict(result.strategy_parameters),
             "fingerprint": result.fingerprint(),
             "sessions_entered": entries,
+            "round_trips": result.round_trips,
+            "mean_return_per_round_trip": result.mean_return_per_round_trip,
             "feasibility": result.feasibility_counts(),
             "cost_stamps": tuple(result.unverified_inputs),
         }
@@ -932,6 +947,8 @@ def evidence_card_from_screen(
         hit_rate=None,
         mean_return_per_session=row.mean_return_per_session,
         mean_return_at_hold=row.mean_return_at_hold,
+        mean_return_per_round_trip=row.mean_return_per_round_trip,
+        round_trips=row.round_trips,
         hold_sessions=row.instance.hold_sessions,
         gate_status=None,
         outcome=row.outcome,
@@ -957,6 +974,11 @@ def evidence_card_from_screen(
                 f"({row.instance.hold_sessions}); the screened run held exactly that many "
                 "sessions, so this is a restatement rather than an extrapolation"
             ),
+            "mean_return_per_round_trip": (
+                f"{source}:instances[{instance_id}].mean_return_per_round_trip — net profit "
+                "per position opened, over the run's capital base"
+            ),
+            "round_trips": f"{source}:instances[{instance_id}].round_trips",
             "gate_status": (
                 "absent: a screening sheet applies no threshold and pre-registers none, so "
                 "there is no gate for this instance to have passed or failed"

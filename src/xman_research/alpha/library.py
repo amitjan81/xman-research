@@ -45,7 +45,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from xman_research.alpha.templates import StrategyTemplate, parameter_key
+from xman_research.alpha.templates import StrategyTemplate, parameter_key, parameter_value_key
 from xman_research.clock import Clock, SystemClock
 from xman_research.validation.decision import GateStatus, Outcome
 
@@ -185,6 +185,19 @@ class EvidenceCard:
     regime_table: Mapping[str, float] | None
     provenance: Mapping[str, str]
     parameters: Mapping[str, float] | None = None
+    mean_return_per_round_trip: float | None = None
+    """Net profit per position the measured run opened, over its capital base.
+
+    The figure a *single* live trade's profit over the same base is comparable to.
+    :attr:`mean_return_at_hold` is not that figure unless the run held a position on
+    every session of its window, and :mod:`xman_research.alpha.tracking` is where the
+    difference decides whether a template looks like it is drifting.
+
+    ``None`` where the source reports no round-trip count — a record written by a runner
+    that does not report one, or a run that never entered.
+    """
+    round_trips: int | None = None
+    """How many positions the measured run opened. ``None`` where the source is silent."""
     """The resolved template parameter point this evidence was measured at, if it names one.
 
     ``None`` means the source could not state a point — a decision record written by a
@@ -219,6 +232,8 @@ class EvidenceCard:
             "hit_rate": self.hit_rate,
             "mean_return_per_session": self.mean_return_per_session,
             "mean_return_at_hold": self.mean_return_at_hold,
+            "mean_return_per_round_trip": self.mean_return_per_round_trip,
+            "round_trips": self.round_trips,
             "hold_sessions": self.hold_sessions,
             "gate_status": self.gate_status,
             "outcome": self.outcome,
@@ -238,11 +253,11 @@ class EvidenceCard:
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> EvidenceCard:
         table = payload.get("regime_table")
-        point = payload.get("parameters")
         return cls(
-            parameters=(
-                {str(k): float(v) for k, v in point.items()} if isinstance(point, Mapping) else None
-            ),
+            # Through the same reader `from_decision_record` uses, so one document field has
+            # one behaviour: a point carrying a non-numeric value is not a point, and reads
+            # back as absent rather than raising here and returning None there.
+            parameters=_parameter_point(payload.get("parameters")),
             n_observations=payload.get("n_observations"),
             annualised_sharpe=payload.get("annualised_sharpe"),
             deflated_sharpe=payload.get("deflated_sharpe"),
@@ -250,6 +265,8 @@ class EvidenceCard:
             hit_rate=payload.get("hit_rate"),
             mean_return_per_session=payload.get("mean_return_per_session"),
             mean_return_at_hold=payload.get("mean_return_at_hold"),
+            mean_return_per_round_trip=_as_float(payload.get("mean_return_per_round_trip")),
+            round_trips=_as_int(payload.get("round_trips")),
             hold_sessions=int(payload["hold_sessions"]),
             gate_status=payload.get("gate_status"),
             outcome=payload.get("outcome"),
@@ -314,6 +331,8 @@ class EvidenceCard:
         if not isinstance(metrics, Mapping):
             raise DecisionRecordError(f"{source} has no `in_sample.metrics` to read")
 
+        run_metrics = measured.get("metrics")
+        run_metrics = run_metrics if isinstance(run_metrics, Mapping) else {}
         gross = _as_float(metrics.get("mean_gross_return"))
         drag = _as_float(metrics.get("mean_cost_drag"))
         # Both inputs are required. Treating an absent drag as zero would produce a "net"
@@ -336,6 +355,19 @@ class EvidenceCard:
                 f"derived: mean_return_per_session x hold_sessions ({hold_sessions}); the "
                 "source record measured a hold to cash settlement, so this assumes the "
                 "per-session mean is flat across the hold"
+            ),
+            "mean_return_per_round_trip": (
+                f"{source}:runs.in_sample.metrics.mean_return_per_round_trip"
+                if _as_float(run_metrics.get("mean_return_per_round_trip")) is not None
+                else (
+                    "absent: the source record reports no per-position figure, so the only "
+                    "expectation recoverable here is the per-session one scaled by the hold"
+                )
+            ),
+            "round_trips": (
+                f"{source}:runs.in_sample.metrics.round_trips"
+                if _as_int(run_metrics.get("round_trips")) is not None
+                else "absent: the source record does not say how many positions it opened"
             ),
             "gate_status": f"{source}:in_sample.metrics.gate_status",
             "outcome": f"{source}:outcome",
@@ -364,6 +396,8 @@ class EvidenceCard:
             hit_rate=None,
             mean_return_per_session=net,
             mean_return_at_hold=at_hold,
+            mean_return_per_round_trip=_as_float(run_metrics.get("mean_return_per_round_trip")),
+            round_trips=_as_int(run_metrics.get("round_trips")),
             hold_sessions=hold_sessions,
             gate_status=_as_str(metrics.get("gate_status")),
             outcome=_as_str(payload.get("outcome")),
@@ -532,18 +566,22 @@ class TemplateLibrary:
         selector that names two different trades, and :meth:`current` refuses it rather than
         picking the later one.
 
-        Values are compared as floats, so a hold read back from JSON as ``3.0`` selects the
-        entry stored from an integer ``3``.
+        Values are compared through :func:`~xman_research.alpha.templates.parameter_value_key`,
+        the same normalisation :attr:`AdmissionRecord.parameter_key` is built from. A hold
+        read back from JSON as ``3.0`` therefore selects the entry stored from an integer
+        ``3``, and — the property that matters — a point recovered by reading a
+        ``parameter_key`` apart selects the entry that key was made from, for every value
+        the range allows rather than only for the short ones.
         """
         rows = tuple(entry for entry in self._entries if entry.template_id == template_id)
         if parameters is None:
             return rows
-        wanted = {str(name): float(value) for name, value in parameters.items()}
+        wanted = {str(name): parameter_value_key(value) for name, value in parameters.items()}
         return tuple(
             entry
             for entry in rows
             if all(
-                name in entry.parameters and float(entry.parameters[name]) == value
+                name in entry.parameters and parameter_value_key(entry.parameters[name]) == value
                 for name, value in wanted.items()
             )
         )

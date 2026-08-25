@@ -91,21 +91,39 @@ SESSIONS_TO_NEAREST_EXPIRY = "sessions_to_nearest_expiry"
 DAY_OF_WEEK = "day_of_week"
 
 
+def parameter_value_key(value: float) -> str:
+    """One parameter value as it appears inside a :func:`parameter_key`.
+
+    ``repr`` of the float, which is its shortest round-tripping spelling: the string
+    parses back to the identical float, so a key can be read apart into the point it names
+    and that point keys back to the same string. A fixed-precision format cannot promise
+    that — six significant digits maps ``1234567.0`` and ``1234568.0`` onto one key, and
+    ``target_notional`` ranges over rupee values where that collision is reachable.
+
+    It is also what an equality test on a parameter value must go through, so that "the
+    same point" means one thing in the library, the ledger and the ranker rather than
+    three.
+    """
+    return repr(float(value))
+
+
 def parameter_key(params: Mapping[str, float]) -> str:
     """A canonical name for one parameter point, stable across dict orderings.
 
     **The identity of an admission is the template id plus this key**, so the same string
     has to come out of a screened instance, an admission record and a nightly candidate.
-    Spelled once here, and formatted with ``%g`` so that a point read back from JSON as
-    ``3.0`` names the same key as the ``3`` that was written — two spellings of one hold
-    would otherwise register as two admissions of one template.
+    Spelled once here, through :func:`parameter_value_key`, so that a point read back from
+    JSON as ``3.0`` names the same key as the ``3`` that was written — two spellings of one
+    hold would otherwise register as two admissions of one template.
 
     Compare only points that have been through :meth:`StrategyTemplate.resolve`. A grid
     point carries the names the researcher listed and a resolved one carries every declared
     parameter, so keying the two against each other reports a mismatch that is an artefact
     of which defaults were spelled out.
     """
-    return ",".join(f"{name}={float(value):g}" for name, value in sorted(params.items()))
+    return ",".join(
+        f"{name}={parameter_value_key(value)}" for name, value in sorted(params.items())
+    )
 
 
 class UnknownTemplateError(KeyError):

@@ -274,9 +274,7 @@ def holdout_validator(tmp_path: Path, db_path: Path, record: HypothesisRecord) -
     write_gate(tmp_path / "gate.toml", hypothesis_id=record.id)
     config_path = tmp_path / "validation.toml"
     config_path.write_text(
-        f'trial_log_path = "{db_path}"\n'
-        'gate_path = "gate.toml"\n'
-        "holdout_first_date = 2026-03-01\n"
+        f'trial_log_path = "{db_path}"\ngate_path = "gate.toml"\nholdout_first_date = 2026-03-01\n'
     )
     return Validator(ValidationConfig.from_file(config_path))
 

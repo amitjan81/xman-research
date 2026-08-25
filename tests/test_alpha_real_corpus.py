@@ -24,6 +24,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -232,8 +233,7 @@ def test_library_list_reports_every_registered_template_and_its_status(
     # The listing names the point, not just the template: one template can be admitted at
     # two points at once, and a line carrying only the id would hide whichever the ranker is
     # also proposing tonight.
-    assert "short_atm_straddle_hold_n[" in out
-    assert "]: admitted" in out
+    assert re.search(r"short_atm_straddle_hold_n\[[^\]]+\]: admitted", out)
     assert "short_atm_straddle_iv_rv: unfiled" in out
 
 

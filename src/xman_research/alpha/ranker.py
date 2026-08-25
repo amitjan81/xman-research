@@ -149,7 +149,22 @@ class Idea:
     rank: int
     template_id: str
     parameters: Mapping[str, float]
-    """The admitted point this idea was built at — the trade, not the template's default."""
+    """The admitted point this idea's evidence stands on — its identity, not its size.
+
+    This is the point the library filed the admission at, and it is what
+    :attr:`parameter_key` names. The ledger keys its rows on that key and looks the
+    admission card up by it, so an idea whose identity were the point actually *built* —
+    which a scan may size differently, see :attr:`built_parameters` — would find no card
+    and could never be demoted.
+    """
+    built_parameters: Mapping[str, float]
+    """The point the trade was actually built at: the admitted point under any size override.
+
+    Equal to :attr:`parameters` unless the scan was given ``--target-notional``. It is the
+    point the strategy resolved and therefore the one that describes the legs below; it is
+    deliberately not the identity, because the card's returns sit on a fixed capital base
+    and a different size scales them.
+    """
     underlying: str
     score: float
     expected_edge: float
@@ -177,12 +192,20 @@ class Idea:
     def parameter_key(self) -> str:
         return parameter_key(self.parameters)
 
+    @property
+    def built_parameter_key(self) -> str:
+        return parameter_key(self.built_parameters)
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "rank": self.rank,
             "template_id": self.template_id,
             "parameters": {name: float(value) for name, value in sorted(self.parameters.items())},
             "parameter_key": self.parameter_key,
+            "built_parameters": {
+                name: float(value) for name, value in sorted(self.built_parameters.items())
+            },
+            "built_parameter_key": self.built_parameter_key,
             "underlying": self.underlying,
             "score": self.score,
             "expected_edge": self.expected_edge,
@@ -461,10 +484,10 @@ class NightlyScan:
                 ),
             )
 
-        point = self._parameters(template, admission)
-        hold_sessions = template.hold_for(point)
+        point, built = self._parameters(template, admission)
+        hold_sessions = template.hold_for(built)
         strategy = template.build(
-            point,
+            built,
             underlying,
             feature_series=self._feature_series(frame),
         )
@@ -555,12 +578,12 @@ class NightlyScan:
                 hold_sessions=hold_sessions,
             ),
             regime=frame.regime,
-            parameters=point,
+            parameters=built,
             extra_provenance={
                 "parameters": (
-                    f"the point this template is admitted at [{parameter_key(point)}], read "
-                    f"from {admission.decision_path}; the ranker builds the trade there and "
-                    "nowhere else"
+                    f"admitted at [{parameter_key(point)}], read from "
+                    f"{admission.decision_path}; built at [{parameter_key(built)}], which "
+                    "differs only where this scan was given a target notional of its own"
                 ),
                 "expected_edge": (
                     "admission card mean_return_at_hold x regime factor "
@@ -585,6 +608,7 @@ class NightlyScan:
             rank=0,
             template_id=template_id,
             parameters=point,
+            built_parameters=built,
             underlying=underlying,
             score=score,
             expected_edge=expected_edge,
@@ -601,24 +625,34 @@ class NightlyScan:
 
     def _parameters(
         self, template: StrategyTemplate, admission: AdmissionRecord
-    ) -> dict[str, float]:
-        """The admitted parameter point, with the scan's notional override applied.
+    ) -> tuple[dict[str, float], dict[str, float]]:
+        """The admitted point and the point to build at, which a sized scan separates.
 
         **The point comes from the admission, not from the template's defaults.** The
         evidence card's expected edge was measured at one point, and building at any other
         would attach that number to a trade nothing measured — a hold-3 mean return behind a
-        hold-1 proposal. An entry filed before points were recorded carries none, and the
-        declared defaults are then the only point available.
+        hold-1 proposal. An entry that carries no point builds at the declared defaults,
+        which is then the only point available.
 
-        ``target_notional`` is the one parameter a scan may move: it scales the position
-        without changing the trade, and every headline statistic on the card is a return
-        rather than an amount. The override goes through :meth:`StrategyTemplate.resolve`,
-        so a size outside the declared range is refused rather than silently built.
+        ``target_notional`` is the one parameter a scan may move. It does not change *which*
+        contracts are traded — the structure, the strikes and the hold are all decided
+        elsewhere in the point — but it does change the realised return, because every
+        headline statistic on the card is a profit over a fixed capital base and a position
+        of a different size earns a different fraction of it. So the admitted point stays
+        the identity and the sized point travels beside it: the ledger looks the card up by
+        the first and marks the trade described by the second. The override goes through
+        :meth:`StrategyTemplate.resolve`, so a size outside the declared range is refused
+        rather than silently built.
         """
         supplied = dict(admission.parameters)
+        built = dict(supplied)
         if self._target_notional is not None and "target_notional" in template.parameters:
-            supplied["target_notional"] = self._target_notional
-        return template.resolve(supplied)
+            built["target_notional"] = self._target_notional
+        # An admission filed with no point has nothing to be the identity, so the resolved
+        # defaults stand in for both. A point of `{}` would key as the empty string, which
+        # selects every entry the template has.
+        identity = supplied if supplied else template.resolve(supplied)
+        return dict(identity), template.resolve(built)
 
     def _feature_series(self, frame: FeatureFrame) -> dict[str, dict[dt.date, float]]:
         """Every computable feature on the frame, as a one-session series each.

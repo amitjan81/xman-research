@@ -19,7 +19,16 @@ writes quotes ``trial_log.family_trial_count_at_decision`` back from it.
 every numeric threshold the hypothesis registered can never grade it, and discovering that
 from inside the grading would leave the log holding runs for a decision that was never
 reached. :func:`run_stage_two_gate` reads the gate and the hypothesis first, calls
-``check_binding``, and only then runs anything.
+``check_binding``, and only then runs anything. So does the seal check on the window.
+
+**Two refusals remain that cost trials, and they are named rather than implied.** A gate
+whose ``recorded_at`` is not before the run it grades is refused from inside the grading, by
+which point the run is logged; the check needs the run's own timestamp, which the log writes
+when the trial closes. And a window carrying too few sessions to form a return series is
+refused by :func:`~xman_research.adapter.evidence_from_result` after the backtest, which is
+where a one-month holdout for a template that enters weekly lands. Both leave logged trials
+and no decision record. Neither is reachable without the log already holding the run, so
+neither is pre-checkable here; what is available is that they are stated.
 
 **The holdout window is an argument, and it is required.** Where the unseen months end is a
 pre-registration, and defaulting it would be choosing the most consequential window in the
@@ -38,6 +47,7 @@ from typing import Any
 
 from xman_research.adapter import evidence_from_result
 from xman_research.alpha.features import FeatureBuilder
+from xman_research.alpha.holdout import HOLDOUT_FIRST_DATE, require_unsealed
 from xman_research.alpha.screen import (
     CandidateInstance,
     ScreenedInstance,
@@ -84,9 +94,13 @@ class GateRun:
     gate_path: Path
     in_sample_result: BacktestResult
     benchmark_result: BacktestResult
+    benchmark_parameters: dict[str, float]
+    """The point the sheet's benchmark was built at — it is a template instance too."""
     holdout_result: BacktestResult | None
     trial_rows: tuple[dict[str, Any], ...]
     holdout_spent: bool
+    seal_override: str | None = None
+    """Why this run was allowed to read past the corpus-wide seal, where it did."""
 
     @property
     def screen_trials(self) -> int:
@@ -127,7 +141,7 @@ class GateRun:
         }
         payload["runs"] = {
             "in_sample": _run_summary(self.in_sample_result, parameters=self.parameters),
-            "benchmark": _run_summary(self.benchmark_result, parameters=None),
+            "benchmark": _run_summary(self.benchmark_result, parameters=self.benchmark_parameters),
             "holdout": (
                 _run_summary(self.holdout_result, parameters=self.parameters)
                 if self.holdout_result is not None
@@ -139,6 +153,10 @@ class GateRun:
             "rows": list(self.trial_rows),
         }
         payload["holdout_spent"] = self.holdout_spent
+        payload["holdout_seal"] = {
+            "first_sealed_session": HOLDOUT_FIRST_DATE.isoformat(),
+            "override_reason": self.seal_override,
+        }
         payload["stage_one"] = {
             "sheet": str(self.sheet_path),
             "instance_id": self.instance.instance_id,
@@ -185,18 +203,27 @@ def run_stage_two_gate(
     holdout_first: dt.date | None = None,
     trial_log_path: Path | str | None = None,
     gaps_reason: str | None = None,
+    seal_override: str | None = None,
 ) -> GateRun:
     """Grade one ranked instance from ``sheet_path`` and write its decision record.
 
     ``holdout_first`` defaults to the session after the screen's window, which is what makes
     the graded window and the sealed one abut without overlapping. ``gaps_reason`` defaults
     to the sheet's own policy, so the gate run accepts exactly the holes the screen did.
+
+    ``seal_override`` is the written reason for a ``holdout_end`` at or past
+    :data:`~xman_research.alpha.holdout.HOLDOUT_FIRST_DATE`; without one such a window is
+    refused before any trial is spent. Where it is given it is copied into the decision
+    record, so the months are answerable for afterwards.
     """
     sheet = load_screen_sheet(sheet_path)
     resolved_registry = registry if registry is not None else default_registry()
     row = _ranked_row(sheet, rank, Path(sheet_path))
     template = resolved_registry.get(row.instance.template_id)
     point = template.resolve(row.instance.params)
+    benchmark_point = resolved_registry.get(sheet.benchmark.instance.template_id).resolve(
+        sheet.benchmark.instance.params
+    )
 
     log_path = Path(trial_log_path) if trial_log_path is not None else _sheet_log_path(sheet)
     holdout_start = (
@@ -212,6 +239,14 @@ def run_stage_two_gate(
         raise StageTwoGateError(
             f"the holdout window {holdout_start}..{holdout_end} ends before it begins"
         )
+    # Before the gate file is even read: a window past the corpus-wide seal is refused here
+    # rather than after the screen's window has been re-measured and logged.
+    override = require_unsealed(
+        holdout_end, what="the gate's holdout window", override_reason=seal_override
+    )
+    require_unsealed(
+        sheet.window.end, what="the screened window this run re-measures", override_reason=override
+    )
 
     config = ValidationConfig(
         trial_log_path=log_path,
@@ -235,6 +270,7 @@ def run_stage_two_gate(
     validator = Validator(config)
 
     in_sample_result, benchmark_result, candidate, benchmark = _measure(
+        instance=row.instance,
         window=sheet.window,
         sheet=sheet,
         template=template,
@@ -255,6 +291,7 @@ def run_stage_two_gate(
     if in_sample_verdict.status is GateStatus.PASSED:
         holdout_window = DataWindow(holdout_start, holdout_end)
         holdout_result, _, holdout_candidate, holdout_benchmark = _measure(
+            instance=row.instance,
             window=holdout_window,
             sheet=sheet,
             template=template,
@@ -277,6 +314,17 @@ def run_stage_two_gate(
     with open_session(log_path) as session:
         rows = tuple(_trial_row(entry) for entry in session.family_trials(record))
         counted = session.count_family_trials(record)
+    logged = {row["trial_id"] for row in rows}
+    missing = [identifier for identifier in sheet.trial_ids if identifier not in logged]
+    if missing:
+        raise StageTwoGateError(
+            f"the family of {record.id} in {log_path} does not hold "
+            f"{len(missing)} of the {len(sheet.trial_ids)} trials the sheet at {sheet_path} "
+            f"was screened with (first missing: {missing[0]}). The hypothesis record is "
+            "content-addressed, so the same spec screened into two logs mints the same id in "
+            "both; deflating against a family that holds a different screen's trials would "
+            "let this record claim a screen it did not pay for."
+        )
     if counted != len(rows):
         raise StageTwoGateError(
             f"the log counts {counted} trials in the family of {record.id} but handed back "
@@ -294,9 +342,11 @@ def run_stage_two_gate(
         sheet=sheet,
         in_sample_result=in_sample_result,
         benchmark_result=benchmark_result,
+        benchmark_parameters=benchmark_point,
         holdout_result=holdout_result,
         trial_rows=rows,
         holdout_spent=holdout_verdict is not None,
+        seal_override=override,
     )
     _write(run, Path(out_dir))
     return run
@@ -307,6 +357,7 @@ def run_stage_two_gate(
 
 def _measure(
     *,
+    instance: CandidateInstance,
     window: DataWindow,
     sheet: ScreenSheet,
     template: StrategyTemplate,
@@ -349,7 +400,10 @@ def _measure(
             config=engine_config,
             strategy=template.build(point, sheet.underlying, feature_series=series),
             params={
-                "instance_id": _instance_id_of(template, point, sheet.underlying),
+                # The screen's own id for this instance, so a reader joining the gate's rows
+                # to the sheet's is joining on one string. Keying the resolved point instead
+                # would name the same instance differently in the two sets of rows.
+                "instance_id": instance.instance_id,
                 "template_id": template.template_id,
                 "stage": f"stage 2 {label} candidate",
                 **point,
@@ -409,10 +463,6 @@ def _one_run(
 ) -> BacktestResult:
     with session.trial(record, data_window=window, params=params, notes=notes) as trial:
         return run_backtest(trial, store=store, strategy=strategy, config=config)
-
-
-def _instance_id_of(template: StrategyTemplate, point: dict[str, float], underlying: str) -> str:
-    return f"{template.template_id}@{underlying}[{parameter_key(point)}]"
 
 
 def _ranked_row(sheet: ScreenSheet, rank: int, source: Path) -> ScreenedInstance:

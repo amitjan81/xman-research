@@ -1194,3 +1194,66 @@ def test_one_template_admitted_at_two_points_is_two_admissions(tmp_path: Path) -
     survivors = library.admitted()
     assert len(survivors) == 1
     assert survivors[0].parameters["hold_sessions"] == 3
+
+
+def test_a_key_recovers_the_point_it_was_made_from_at_full_precision() -> None:
+    """Six significant digits is not enough for a rupee notional, so the key uses none.
+
+    ``1234567.0`` and ``1234568.0`` are two different sizes inside ``target_notional``'s
+    declared range. A key that collapsed them would let a settlement row select the wrong
+    admission, and a key that lost digits would let it select none at all.
+    """
+    left = {"target_notional": 1_234_567.0, "hold_sessions": 3.0}
+    right = {"target_notional": 1_234_568.0, "hold_sessions": 3.0}
+
+    assert parameter_key(left) != parameter_key(right)
+    recovered = {
+        name: float(value)
+        for name, _, value in (pair.partition("=") for pair in parameter_key(left).split(","))
+    }
+    assert recovered == left
+    assert parameter_key(recovered) == parameter_key(left)
+
+
+def test_history_selects_on_the_same_normalisation_the_key_is_built_from(
+    tmp_path: Path, clock: ManualClock
+) -> None:
+    """A point read back out of a key must select the entry that key was made from."""
+    library = TemplateLibrary(tmp_path / "templates.json", clock=clock)
+    registry = default_registry()
+    template = registry.get("short_atm_straddle_hold_n")
+    point = template.resolve({"hold_sessions": 3.0, "target_notional": 1_234_567.0})
+    library.seed_from_screen(
+        template=template,
+        evidence=EvidenceCard(
+            n_observations=100,
+            annualised_sharpe=1.0,
+            deflated_sharpe=None,
+            max_drawdown=0.05,
+            hit_rate=None,
+            mean_return_per_session=0.001,
+            mean_return_at_hold=0.003,
+            hold_sessions=3,
+            gate_status=None,
+            outcome="screened_stage_1_not_gated",
+            window="2026-01-01..2026-03-31",
+            measured_strategy="short_atm_straddle",
+            measured_strategy_parameters=dict(point),
+            cost_stamps=(),
+            regime_table=None,
+            provenance={},
+            parameters=point,
+        ),
+        sheet_path="sheet.json",
+        parameters=point,
+        by="tester",
+        reason="a point with more than six significant digits in it",
+    )
+
+    key = parameter_key(point)
+    recovered = {
+        name: float(value) for name, _, value in (pair.partition("=") for pair in key.split(","))
+    }
+
+    assert library.history(template.template_id, parameters=recovered)
+    assert library.current(template.template_id, parameters=recovered) is not None

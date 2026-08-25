@@ -20,6 +20,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -154,7 +155,13 @@ def test_scan_record_settle_report_over_the_captured_corpus(
     # words an operator reads rather than by printing nothing.
     assert "not enough settled ideas to judge" in printed
     assert f"{len(settled)} of 10" in printed
-    assert "realised" in printed
+    # The card was found. Asserting only that the word "realised" appears would pass just as
+    # happily against a report that could not find the admission — which is what a broken
+    # ledger-to-library identity looks like, and the only symptom it has.
+    assert re.search(r"admitted mean return at hold: [+-]", printed)
+    report = IdeaLedger.load(ledger_path).drift(TemplateLibrary.load(library_path))[0]
+    assert report.card_mean_return_at_hold is not None
+    assert report.card_mean_return_per_round_trip is not None
 
 
 def test_settling_before_the_hold_elapses_leaves_the_idea_open(

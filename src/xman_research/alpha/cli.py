@@ -188,6 +188,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", required=True, type=Path, help=f"directory to write {DECISION_RECORD_NAME} into"
     )
     stage_two.add_argument(
+        "--seal-override",
+        help=(
+            "written reason for grading a holdout that ends on or after the corpus-wide "
+            "seal; recorded in the decision record. Without it such a window is refused"
+        ),
+    )
+    stage_two.add_argument(
         "--holdout-end",
         required=True,
         help=(
@@ -298,6 +305,13 @@ def build_parser() -> argparse.ArgumentParser:
         "settle", help="mark every open idea whose hold has elapsed"
     )
     track_settle.add_argument(
+        "--seal-override",
+        help=(
+            "written reason for settling through a date on or after the corpus-wide seal; "
+            "recorded on every row it allowed. Without it such a date is refused"
+        ),
+    )
+    track_settle.add_argument(
         "--through",
         required=True,
         help=(
@@ -340,6 +354,14 @@ def _add_drift_arguments(parser: argparse.ArgumentParser) -> None:
 
     Both are shared rather than defaulted per command so that a settle and the report that
     follows it cannot silently judge the same ledger over two different windows.
+
+    ``--min-settled`` may only be raised. The demotion rule's claim is that it was written
+    before the first observation, and a floor an operator could lower on the night is a floor
+    that can be argued down after seeing a bad month — ``--min-settled 1`` would demote a
+    template on one idea. ``--window`` stays free in both directions: it changes how much
+    evidence is looked at, not how little is enough to act. Both land in every report's
+    :meth:`~xman_research.alpha.tracking.DriftReport.summary`, which is what a demotion's
+    recorded reason is made of.
     """
     parser.add_argument(
         "--window",
@@ -353,7 +375,7 @@ def _add_drift_arguments(parser: argparse.ArgumentParser) -> None:
         default=DEFAULT_MIN_SETTLED,
         help=(
             "settled ideas below which no demotion may fire, however bad the numbers "
-            f"(default: {DEFAULT_MIN_SETTLED})"
+            f"(default and floor: {DEFAULT_MIN_SETTLED}; a smaller value is refused)"
         ),
     )
 
@@ -361,6 +383,12 @@ def _add_drift_arguments(parser: argparse.ArgumentParser) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "min_settled", DEFAULT_MIN_SETTLED) < DEFAULT_MIN_SETTLED:
+        parser.error(
+            f"--min-settled {args.min_settled} is below the floor {DEFAULT_MIN_SETTLED}. The "
+            "rule this feeds claims it cannot be retuned after seeing a bad month, and a "
+            "floor that can be lowered on the night is exactly that retuning."
+        )
     try:
         if args.command == "scan":
             return _scan(args)
@@ -485,6 +513,7 @@ def _gate(args: argparse.Namespace) -> int:
         store=SessionStore(root=args.corpus_root) if args.corpus_root else None,
         trial_log_path=args.trial_log,
         gaps_reason=args.gaps_reason,
+        seal_override=args.seal_override,
     )
     print(run.decision.summary())
     print()
@@ -519,6 +548,7 @@ def _track(args: argparse.Namespace) -> int:
             store=SessionStore(root=args.corpus_root) if args.corpus_root else SessionStore(),
             decision_time=dt.time.fromisoformat(args.decision_time),
             gaps_reason=args.gaps_reason,
+            seal_override=args.seal_override,
         )
         ledger.save()
         marked = sum(1 for entry in settled if entry.status == STATUS_SETTLED)
@@ -568,6 +598,12 @@ def _track(args: argparse.Namespace) -> int:
         print(
             f"    admitted mean return at hold: "
             f"{'none on the card' if card is None else format(card, '+.6g')}"
+        )
+        per_trip = report.card_mean_return_per_round_trip
+        print(
+            f"    admitted mean return per round trip: "
+            f"{'none on the card' if per_trip is None else format(per_trip, '+.6g')}"
+            f" (each promised edge scaled by {report.expected_scale:.4g} to reach it)"
         )
         if report.realised_hit_rate is not None:
             deviation = report.hit_rate_deviation

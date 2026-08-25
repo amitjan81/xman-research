@@ -109,13 +109,13 @@ hypothesis_id = "__HYPOTHESIS_ID__"
 recorded_at = 2026-04-01T00:00:00Z
 
 [thresholds]
-deflated_sharpe = {{ at_least = 0.90 }}
-cost_breakeven_multiple = {{ at_least = 2.0 }}
-max_drawdown = {{ at_most = 0.10 }}
-risk_matched_increment = {{ at_least = 0.0 }}
+deflated_sharpe = { at_least = 0.90 }
+cost_breakeven_multiple = { at_least = 2.0 }
+max_drawdown = { at_most = 0.10 }
+risk_matched_increment = { at_least = 0.0 }
 
 [holdout_thresholds]
-deflated_sharpe = {{ at_least = 0.50 }}
+deflated_sharpe = { at_least = 0.50 }
 """
 
 
@@ -167,9 +167,7 @@ def test_the_whole_loop_screens_gates_admits_and_ranks_at_the_screened_point(
 
     # ---------------------------------------------------------------- stage two
     gate_path = tmp_path / "gate.toml"
-    gate_path.write_text(
-        GATE.format().replace("__HYPOTHESIS_ID__", sheet.provenance["hypothesis_id"])
-    )
+    gate_path.write_text(GATE.replace("__HYPOTHESIS_ID__", sheet.provenance["hypothesis_id"]))
     out_dir = tmp_path / "decision"
     assert (
         main(
@@ -306,9 +304,7 @@ def test_the_gate_refuses_a_rank_the_sheet_does_not_rank(tmp_path: Path) -> None
     )
     gate_path = tmp_path / "gate.toml"
     sheet = load_screen_sheet(sheet_path)
-    gate_path.write_text(
-        GATE.format().replace("__HYPOTHESIS_ID__", sheet.provenance["hypothesis_id"])
-    )
+    gate_path.write_text(GATE.replace("__HYPOTHESIS_ID__", sheet.provenance["hypothesis_id"]))
     assert (
         main(
             [

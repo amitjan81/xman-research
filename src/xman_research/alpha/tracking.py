@@ -37,21 +37,36 @@ on a given evening; a re-scan after a code change that quietly overwrote that wo
 drift statistics be computed against a night that never happened. A genuine re-scan gets a
 new as-of date or a new ledger.
 
-**The base every return is expressed on.** :attr:`EvidenceCard.mean_return_at_hold` is
-``mean_return_per_session x hold_sessions`` (:mod:`xman_research.alpha.screen`), and
-``mean_return_per_session`` is a per-session simple return on a **fixed capital base** —
-``BacktestConfig.starting_cash``, the denominator
-:func:`xman_research.validation.series.ReturnSeries.from_equity_curve` divides every equity
-change by. A ledger row's realised return is therefore one trade's profit and loss over that
-same capital base, and the two are directly comparable **because the hold-n templates enter
-only from flat**: :meth:`HoldNSpread.decide` opens a position only when the book is flat, so a
-window of ``S`` sessions holding ``N`` at a time contains about ``S / N`` trades, and
-``mean_per_session x N`` is the mean profit of one of them over the capital base. A template
-that entered on every session would run ``N`` positions at once, its per-session equity change
-would be a whole trade's profit, and ``mean_return_at_hold`` would be ``N`` times one trade's
-return — comparing a single trade against it would manufacture a large phantom shortfall and
-demote a healthy template. The flat-only entry rule is what makes this comparison sound, and
-a template that abandons it needs this scaling revisited.
+**The base every return is expressed on.** A ledger row's realised return is one trade's
+profit and loss over a **fixed capital base** — ``BacktestConfig.starting_cash``, the
+denominator :func:`xman_research.validation.series.ReturnSeries.from_equity_curve` divides
+every equity change by. The admission card's comparable figure is
+:attr:`~xman_research.alpha.library.EvidenceCard.mean_return_per_round_trip`: the measured
+run's net profit per position opened, over that same base.
+
+``mean_return_at_hold`` is **not** that figure. It is ``mean_return_per_session x
+hold_sessions``, and ``mean_return_per_session`` divides by every session in the window
+including the ones the template sat flat through. A template in position on a fraction ``f``
+of sessions therefore earns ``mean_return_at_hold / f`` per trade, and the shipped templates
+are nowhere near ``f = 1``: a hold-3 template enters only on the session furthest from
+expiry, and every conditioned template fires on a minority of sessions. Comparing one trade
+against the hold-scaled figure would leave every drift biased by ``(1 - f)`` of a trade's
+expectation — a permanent phantom shortfall on exactly the templates that trade selectively.
+
+A sheet's ``expected_edge`` is the hold-scaled figure times that night's regime factor, so
+each promised edge is carried onto the per-position base by the **ratio of the card's two
+figures**, which leaves the regime factor untouched. Where the card reports no per-position
+figure — a decision record whose runner does not report one — the promised edge stands
+unscaled and the report says so in its reason rather than quietly comparing the two bases.
+
+**Realised is normalised to the size the evidence was measured at.** A ledger row's profit
+is earned at the lots the scan was granted, which the participation caps may have cut below
+what ``target_notional`` implies, while the card's figure comes from a run sized at that
+target. Left alone, a capped idea's realised return would be scaled down purely by sizing,
+and for a positive expectation that bias points *toward* demotion — the one direction the
+rest of this module's biases do not point. So realised is multiplied by
+``target_notional / notional``, both of which the sheet already carries on the trade, and an
+idea missing either is settled unscaled with that stated on the row.
 
 **Marks are gross of costs, which biases against demotion.** The admission card's figure is
 net of the statutory cost drag; a ledger row's is not. The realised number is therefore
@@ -92,13 +107,18 @@ says so, rather than treating any shortfall as an infinite breach.
 The CUSUM has **no slack term**. A slack parameter is a second free knob, and the whole claim
 this rule makes is that it cannot be retuned after seeing a bad month.
 
-**The second rule never fires alone, and is checked first anyway.** The whole window is itself
-a contiguous run, so the CUSUM is at most the window's total shortfall ``n * (mean - expected)``;
-a mean that reaches a t of ``-2`` has already carried that total past ``3 * sigma`` for any
-``n >= 3``. Rule 2 is therefore a naming device rather than an independent trigger, and it is
-evaluated first so that a template which is simply **losing money** is reported as that rather
-than as having drifted. Both are demotions; they are not the same diagnosis, and a report that
-collapsed them would send a reader looking for a regime change where there is a dead strategy.
+**The second rule is checked first, so that a losing template is named as one.** Where the
+expectation is constant across the window and ``n >= 3``, rule 2 cannot fire alone: the whole
+window is itself a contiguous run, so the CUSUM is at most the window's total shortfall
+``n * (mean - expected)``, and a mean that reaches a t of ``-2`` has already carried that
+total past ``3 * sigma``. That is the case the bound is proved for and it is narrower than
+what the code allows — ``min_settled`` may be as low as one on a direct call, and a regime
+factor scaled per idea makes the drift dispersion differ from the realised dispersion — so
+rule 2 is a naming device in the ordinary case rather than a proven-redundant trigger in
+every case. It is evaluated first so that a template which is simply **losing money** is
+reported as that rather than as having drifted. Both are demotions; they are not the same
+diagnosis, and a report that collapsed them would send a reader looking for a regime change
+where there is a dead strategy.
 
 Nothing is demoted on fewer than ``min_settled`` settled ideas, and a template below that line
 is reported as unjudged with its count rather than passed over in silence — "no demotion" and
@@ -126,6 +146,7 @@ from pathlib import Path
 from typing import Any
 
 from xman_research.alpha.features import DEFAULT_DECISION_TIME
+from xman_research.alpha.holdout import require_unsealed
 from xman_research.alpha.library import TemplateLibrary
 from xman_research.alpha.templates import parameter_key
 from xman_research.backtest.engine import BacktestConfig
@@ -153,6 +174,7 @@ __all__ = [
     "UNMARKABLE_NO_ENTRY_PRICE",
     "UNMARKABLE_NO_EXIT_SESSION",
     "UNMARKABLE_NO_PRINT",
+    "UNMARKABLE_NO_REFDATA",
     "UNMARKABLE_NO_SETTLEMENT_VALUE",
     "AppendOnlyLedgerError",
     "ConflictingSheetError",
@@ -208,6 +230,11 @@ UNMARKABLE_NO_PRINT = "listed_but_no_print_at_decision_minute"
 #: The corpus holds no session view for a date the hold window needs.
 UNMARKABLE_NO_EXIT_SESSION = "no_session_view_for_exit_date"
 
+#: The corpus holds the session but no instrument master for it, so nothing on it can be
+#: identified. A capture limit like :data:`UNMARKABLE_NO_EXIT_SESSION`, and a different one:
+#: the session was captured and its reference data was not.
+UNMARKABLE_NO_REFDATA = "session_holds_no_refdata"
+
 #: The expiry session's underlying could not be settled under the rule in force that day.
 UNMARKABLE_NO_SETTLEMENT_VALUE = "expiry_session_has_no_settlement_value"
 
@@ -260,6 +287,22 @@ class PresentedIdea:
     legs: tuple[Mapping[str, Any], ...]
     generated_at: str
     code_version: str
+    target_notional: float | None = None
+    """The notional the admission's evidence was measured at, as the sheet reported it."""
+    notional: float | None = None
+    """The notional the scan could actually size, after the participation caps bound."""
+
+    @property
+    def size_scale(self) -> float:
+        """What a realised return must be multiplied by to be comparable with the card's.
+
+        ``1.0`` where the sheet reports no target or no achieved notional, or where the
+        scan was granted nothing: an idea that could not be sized has no ratio, and
+        inventing one would put a made-up number into the drift series.
+        """
+        if self.target_notional is None or self.notional is None or self.notional <= 0.0:
+            return 1.0
+        return self.target_notional / self.notional
 
     @property
     def parameter_key(self) -> str:
@@ -292,6 +335,8 @@ class PresentedIdea:
             "expected_edge": self.expected_edge,
             "granted_lots": self.granted_lots,
             "hold_sessions": self.hold_sessions,
+            "target_notional": self.target_notional,
+            "notional": self.notional,
             "legs": [dict(leg) for leg in self.legs],
             "generated_at": self.generated_at,
             "code_version": self.code_version,
@@ -309,6 +354,8 @@ class PresentedIdea:
             expected_edge=float(payload["expected_edge"]),
             granted_lots=int(payload["granted_lots"]),
             hold_sessions=int(payload["hold_sessions"]),
+            target_notional=_optional_float(payload.get("target_notional")),
+            notional=_optional_float(payload.get("notional")),
             legs=tuple(dict(leg) for leg in payload.get("legs") or ()),
             generated_at=str(payload["generated_at"]),
             code_version=str(payload["code_version"]),
@@ -391,6 +438,7 @@ class Settlement:
     legs: tuple[LegMark, ...]
     reason: str
     settled_at: str
+    size_scale: float = 1.0
 
     @property
     def key(self) -> tuple[str, str, str, str]:
@@ -427,6 +475,7 @@ class Settlement:
             "exit_as_of": self.exit_as_of,
             "hold_sessions": self.hold_sessions,
             "capital_base": self.capital_base,
+            "size_scale": self.size_scale,
             "pnl": self.pnl,
             "realised_return": self.realised_return,
             "expected_return": self.expected_return,
@@ -448,6 +497,7 @@ class Settlement:
             exit_as_of=_optional_str(payload.get("exit_as_of")),
             hold_sessions=int(payload["hold_sessions"]),
             capital_base=float(payload["capital_base"]),
+            size_scale=float(payload.get("size_scale", 1.0)),
             pnl=_optional_float(payload.get("pnl")),
             realised_return=_optional_float(payload.get("realised_return")),
             expected_return=float(payload["expected_return"]),
@@ -483,6 +533,13 @@ class DriftReport:
     t_statistic: float | None
     verdict: str
     reason: str
+    card_mean_return_per_round_trip: float | None = None
+    expected_scale: float = 1.0
+    """What each idea's promised edge was multiplied by to reach a per-trade expectation.
+
+    ``1.0`` means the card carried no per-position figure to rescale onto and the comparison
+    is the promised per-session-scaled one; :attr:`reason` says so when that happens.
+    """
 
     @property
     def identity(self) -> tuple[str, str]:
@@ -503,6 +560,8 @@ class DriftReport:
             "realised_mean": self.realised_mean,
             "expected_mean": self.expected_mean,
             "card_mean_return_at_hold": self.card_mean_return_at_hold,
+            "card_mean_return_per_round_trip": self.card_mean_return_per_round_trip,
+            "expected_scale": self.expected_scale,
             "card_hit_rate": self.card_hit_rate,
             "realised_hit_rate": self.realised_hit_rate,
             "hit_rate_deviation": self.hit_rate_deviation,
@@ -515,15 +574,22 @@ class DriftReport:
         }
 
     def summary(self) -> str:
-        """One line an operator can read without opening the JSON."""
+        """One line an operator can read without opening the JSON.
+
+        It names the rule's two per-invocation settings as well as its verdict. A demotion
+        reason that said only "the CUSUM breached" could not be checked afterwards: over how
+        many settled ideas, and above what floor, are what decide whether it should have.
+        """
         point = self.parameter_key or "(no parameters)"
         head = f"{self.template_id} [{point}]: {self.verdict}"
+        rule = f"window {self.window}, min_settled {self.min_settled}"
         if self.realised_mean is None:
-            return f"{head} — {self.reason}"
+            return f"{head} — {self.reason} [{rule}]"
         expected = "none" if self.expected_mean is None else f"{self.expected_mean:+.6g}"
         return (
             f"{head} — realised {self.realised_mean:+.6g} vs expected {expected} over "
-            f"{self.n_settled} settled ({self.n_unmarkable} unmarkable) — {self.reason}"
+            f"{self.n_settled} settled ({self.n_unmarkable} unmarkable) — {self.reason} "
+            f"[{rule}]"
         )
 
 
@@ -697,9 +763,9 @@ class IdeaLedger:
         as_of_end: dt.date,
         store: SessionStore,
         decision_time: dt.time = DEFAULT_DECISION_TIME,
-        capital_base: float = DEFAULT_CAPITAL_BASE,
         settlement_rules: tuple[SettlementRule, ...] = SETTLEMENT_RULES,
         gaps_reason: str | None = None,
+        seal_override: str | None = None,
     ) -> tuple[Settlement, ...]:
         """Mark every open idea whose hold window has elapsed by ``as_of_end``.
 
@@ -727,12 +793,20 @@ class IdeaLedger:
         sits after the decision minute by construction. Reading a truncated view here would
         make every expiry unmarkable for want of the bars that decide it.
 
-        ``capital_base`` is the denominator realised returns are expressed over and must match
-        the one the admission evidence was measured on; see the module docstring for why they
-        are the same number and what stops them drifting apart.
+        The denominator realised returns are expressed over is
+        :data:`DEFAULT_CAPITAL_BASE`, read off the engine's own default rather than accepted
+        from the caller: it must equal the base the admission evidence was measured on, and a
+        parameter through which it could differ is a parameter through which the whole
+        comparison this module makes can be made meaningless without anything noticing.
+
+        ``as_of_end`` at or past :data:`~xman_research.alpha.holdout.HOLDOUT_FIRST_DATE`
+        needs a written ``seal_override``. Settling reads sessions, and a session read here
+        is spent for ``research/h1`` too.
         """
-        if capital_base <= 0.0:
-            raise LedgerError(f"capital_base must be positive, got {capital_base}")
+        override = require_unsealed(
+            as_of_end, what="the settlement window", override_reason=seal_override
+        )
+        capital_base = DEFAULT_CAPITAL_BASE
         due = [idea for idea in self.open_ideas() if idea.as_of_date <= as_of_end]
         if not due:
             return ()
@@ -761,6 +835,7 @@ class IdeaLedger:
                 decision_time=decision_time,
                 capital_base=capital_base,
                 settlement_rules=settlement_rules,
+                seal_override=override,
             )
             if entry is None:
                 continue
@@ -776,6 +851,7 @@ class IdeaLedger:
         decision_time: dt.time,
         capital_base: float,
         settlement_rules: tuple[SettlementRule, ...],
+        seal_override: str | None,
     ) -> Settlement | None:
         after = [day for day in reader.session_dates if day > idea.as_of_date]
         if len(after) < idea.hold_sessions:
@@ -802,6 +878,7 @@ class IdeaLedger:
                 exit_as_of=exit_date.isoformat(),
                 hold_sessions=idea.hold_sessions,
                 capital_base=capital_base,
+                size_scale=idea.size_scale,
                 pnl=None,
                 realised_return=None,
                 expected_return=idea.expected_edge,
@@ -813,7 +890,8 @@ class IdeaLedger:
                 settled_at=self._now(),
             )
         pnl = math.fsum(leg.pnl or 0.0 for leg in marks)
-        realised = pnl / capital_base
+        scale = idea.size_scale
+        realised = (pnl / capital_base) * scale
         return Settlement(
             as_of=idea.as_of,
             template_id=idea.template_id,
@@ -823,6 +901,7 @@ class IdeaLedger:
             exit_as_of=exit_date.isoformat(),
             hold_sessions=idea.hold_sessions,
             capital_base=capital_base,
+            size_scale=scale,
             pnl=pnl,
             realised_return=realised,
             expected_return=idea.expected_edge,
@@ -831,6 +910,15 @@ class IdeaLedger:
                 f"entered {idea.as_of}, exited {exit_date.isoformat()} after "
                 f"{idea.hold_sessions} session(s); {pnl:+.2f} on a capital base of "
                 f"{capital_base:.0f}"
+                + (
+                    ""
+                    if scale == 1.0
+                    else (
+                        f", scaled by {scale:.4g} to the notional the evidence was measured "
+                        "at rather than the one the caps granted"
+                    )
+                )
+                + ("" if seal_override is None else f"; past the corpus seal: {seal_override}")
             ),
             settled_at=self._now(),
         )
@@ -879,7 +967,7 @@ class IdeaLedger:
                         strike=float(leg["strike"]),
                         option_type=str(leg["option_type"]),
                         expiry=expiry,
-                        view=reader.view(expiry),
+                        reader=reader,
                         settlement_rules=settlement_rules,
                     )
                 )
@@ -891,7 +979,7 @@ class IdeaLedger:
                     units=units,
                     entry_price=entry_price,
                     exit_date=exit_date,
-                    view=reader.view(exit_date),
+                    reader=reader,
                     decision_time=decision_time,
                 )
             )
@@ -1021,9 +1109,16 @@ def _drift_report(
     template_id, key = identity
     marked = [entry for entry in entries if entry.status == STATUS_SETTLED][-window:]
     n_unmarkable = sum(1 for entry in entries if entry.status == STATUS_UNMARKABLE)
-    record = library.current(template_id, parameters=_parameters_from_key(key))
+    # An empty key is not a selector for "the template's only point" — it matches every
+    # entry, so a library holding the template at two points would refuse the lookup and
+    # fail the whole run over one hand-built row. It carries no point, so it finds no card.
+    point = _parameters_from_key(key)
+    record = library.current(template_id, parameters=point) if point else None
     card_mean = record.evidence.mean_return_at_hold if record is not None else None
+    card_per_trip = record.evidence.mean_return_per_round_trip if record is not None else None
     card_hit = record.evidence.hit_rate if record is not None else None
+    scale, scale_note = _expected_scale(card_mean, card_per_trip)
+    base_note = f" — {scale_note}" if scale_note else ""
     common: dict[str, Any] = {
         "template_id": template_id,
         "parameter_key": key,
@@ -1032,6 +1127,8 @@ def _drift_report(
         "window": window,
         "min_settled": min_settled,
         "card_mean_return_at_hold": card_mean,
+        "card_mean_return_per_round_trip": card_per_trip,
+        "expected_scale": scale,
         "card_hit_rate": card_hit,
     }
     if not marked:
@@ -1052,7 +1149,7 @@ def _drift_report(
             **common,
         )
     realised = [entry.realised_return or 0.0 for entry in marked]
-    expected = [entry.expected_return for entry in marked]
+    expected = [entry.expected_return * scale for entry in marked]
     drifts = [r - e for r, e in zip(realised, expected, strict=True)]
     realised_mean = math.fsum(realised) / len(realised)
     expected_mean = math.fsum(expected) / len(expected)
@@ -1080,7 +1177,7 @@ def _drift_report(
             reason=(
                 f"not enough settled ideas to judge: {len(marked)} of {min_settled}. The "
                 "statistics are reported so the trend is visible, and no demotion may fire "
-                "on them."
+                f"on them.{base_note}"
             ),
             **common,
         )
@@ -1090,7 +1187,9 @@ def _drift_report(
     # a t of -2 has already carried that total past three sigma. Checking the CUSUM first
     # would therefore report every losing template as "drifted" and leave "losing money"
     # unreachable, which is the one distinction an operator most needs from this report.
-    reference = card_mean if card_mean is not None else expected_mean
+    reference = card_per_trip if card_per_trip is not None else card_mean
+    if reference is None:
+        reference = expected_mean
     if (
         realised_mean < 0.0
         and reference is not None
@@ -1103,7 +1202,7 @@ def _drift_report(
             reason=(
                 f"realised mean {realised_mean:.6g} over {len(marked)} settled ideas is below "
                 f"zero against an admitted {reference:.6g}, at a one-sided t of "
-                f"{t_statistic:.4g} (threshold {T_STATISTIC_THRESHOLD:g})"
+                f"{t_statistic:.4g} (threshold {T_STATISTIC_THRESHOLD:g}){base_note}"
             ),
             **common,
         )
@@ -1113,6 +1212,7 @@ def _drift_report(
             reason=(
                 f"the drift CUSUM reached {cusum:.6g}, at or below {CUSUM_K:g} sigma "
                 f"({threshold:.6g}, sigma={sigma:.6g}) over {len(marked)} settled ideas"
+                f"{base_note}"
             ),
             **common,
         )
@@ -1121,7 +1221,10 @@ def _drift_report(
             verdict=VERDICT_WITHIN_TOLERANCE,
             reason=(
                 f"the drift series over {len(marked)} settled ideas has no dispersion, so the "
-                "CUSUM has no sigma to breach and only the negative-mean rule could fire here"
+                "CUSUM has no sigma to breach. Where the expectation is constant across the "
+                "window that also makes the realised series constant, its t-statistic "
+                "undefined and the negative-mean rule unreachable — ten identical losses "
+                f"land here{base_note}"
             ),
             **common,
         )
@@ -1129,10 +1232,43 @@ def _drift_report(
         verdict=VERDICT_WITHIN_TOLERANCE,
         reason=(
             f"CUSUM {cusum:.6g} is above {threshold:.6g} and the realised mean "
-            f"{realised_mean:+.6g} does not breach"
+            f"{realised_mean:+.6g} does not breach{base_note}"
         ),
         **common,
     )
+
+
+def _expected_scale(
+    mean_return_at_hold: float | None, mean_return_per_round_trip: float | None
+) -> tuple[float, str]:
+    """What to multiply a promised edge by to make it one trade's expectation.
+
+    A sheet's ``expected_edge`` is the card's ``mean_return_at_hold`` times a regime factor,
+    and both card figures describe the same measured run, so their ratio converts the first
+    into ``mean_return_per_round_trip`` and carries the regime factor through untouched.
+
+    The ratio is refused — and the promised edge left alone — when either figure is absent,
+    when the hold-scaled figure is zero, or when the two disagree in sign. A negative ratio
+    would flip every drift, which is a larger error than the one being corrected.
+    """
+    if mean_return_at_hold is None or mean_return_per_round_trip is None:
+        return 1.0, (
+            "the admission card reports no per-position return, so the comparison is against "
+            "the per-session mean scaled by the hold, which overstates a template's per-trade "
+            "shortfall by however often it sits flat"
+        )
+    if mean_return_at_hold == 0.0:
+        return 1.0, (
+            "the admission card's mean return at hold is zero, so there is no ratio to carry "
+            "the per-position figure onto each idea's promised edge"
+        )
+    if (mean_return_at_hold > 0.0) != (mean_return_per_round_trip > 0.0):
+        return 1.0, (
+            f"the admission card's per-session mean scaled by the hold "
+            f"({mean_return_at_hold:.6g}) and its per-position mean "
+            f"({mean_return_per_round_trip:.6g}) disagree in sign, so no rescaling is applied"
+        )
+    return mean_return_per_round_trip / mean_return_at_hold, ""
 
 
 def _intrinsic_mark(
@@ -1144,7 +1280,7 @@ def _intrinsic_mark(
     strike: float,
     option_type: str,
     expiry: dt.date,
-    view: SessionView | None,
+    reader: _SessionReader,
     settlement_rules: tuple[SettlementRule, ...],
 ) -> LegMark:
     """Cash-settle one expired leg at intrinsic, on the engine's own settlement value."""
@@ -1157,12 +1293,13 @@ def _intrinsic_mark(
         exit_source=None,
         exit_as_of=expiry.isoformat(),
     )
+    view = reader.view(expiry)
     if view is None:
+        cause, detail = reader.absence(expiry)
         return _with_cause(
             unmarkable,
-            UNMARKABLE_NO_EXIT_SESSION,
-            f"the corpus holds no session for {expiry.isoformat()}, the leg's expiry date, "
-            "so it cannot be settled at intrinsic",
+            cause,
+            f"{detail}, and it is the leg's expiry date, so it cannot be settled at intrinsic",
         )
     try:
         settled = settlement_value(view, rules=settlement_rules)
@@ -1201,7 +1338,7 @@ def _close_mark(
     units: int,
     entry_price: float,
     exit_date: dt.date,
-    view: SessionView | None,
+    reader: _SessionReader,
     decision_time: dt.time,
 ) -> LegMark:
     """Mark one leg at the bar close on the exit session's decision minute."""
@@ -1214,12 +1351,11 @@ def _close_mark(
         exit_source=None,
         exit_as_of=exit_date.isoformat(),
     )
+    view = reader.view(exit_date)
     if view is None:
+        cause, detail = reader.absence(exit_date)
         return _with_cause(
-            unmarkable,
-            UNMARKABLE_NO_EXIT_SESSION,
-            f"the corpus holds no session for {exit_date.isoformat()}, where this leg's hold "
-            "window ends",
+            unmarkable, cause, f"{detail}, and it is where this leg's hold window ends"
         )
     if view.universe.by_symbol(symbol) is None:
         return _with_cause(
@@ -1305,6 +1441,26 @@ class _SessionReader:
     def session_dates(self) -> tuple[dt.date, ...]:
         return tuple(sorted(self._refs))
 
+    def absence(self, day: dt.date) -> tuple[str, str]:
+        """Why :meth:`view` has nothing for ``day`` — two capture limits, not one.
+
+        A date the store never resolved is a session the corpus does not hold. A date it
+        resolved without reference data is a session the corpus *does* hold and cannot
+        identify an instrument on, which is a different hole in the capture and sends an
+        operator looking somewhere else.
+        """
+        ref = self._refs.get(day)
+        if ref is None:
+            return (
+                UNMARKABLE_NO_EXIT_SESSION,
+                f"the corpus holds no session for {day.isoformat()}",
+            )
+        return (
+            UNMARKABLE_NO_REFDATA,
+            f"the corpus holds {day.isoformat()} but no instrument master for it, so no "
+            "contract on that session can be identified",
+        )
+
     def view(self, day: dt.date) -> SessionView | None:
         if day in self._views:
             return self._views[day]
@@ -1340,6 +1496,8 @@ def _presented_from_sheet_row(
         expected_edge=float(row["expected_edge"]),
         granted_lots=int(row["granted_lots"]),
         hold_sessions=int(trade["hold_sessions"]),
+        target_notional=_optional_float(trade.get("target_notional")),
+        notional=_optional_float(trade.get("notional")),
         legs=tuple(dict(leg) for leg in trade.get("legs") or ()),
         generated_at=generated_at,
         code_version=code_version,

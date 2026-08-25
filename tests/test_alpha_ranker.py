@@ -734,3 +734,43 @@ def test_a_sheet_says_when_its_as_of_session_was_part_of_the_sample(
     sheet = _scan(store, library, sessions[-1])
     assert sheet.rests_on_in_sample_evidence is True
     assert sheet.ideas[0].as_of_inside_evidence_window is True
+
+
+def test_a_sized_scan_keeps_the_admitted_point_as_the_ideas_identity(
+    corpus, tmp_path: Path, clock: ManualClock
+) -> None:
+    """``--target-notional`` sizes the trade; it does not rename the admission.
+
+    The ledger keys its rows on the idea's ``parameter_key`` and looks the admission card up
+    by it. An idea whose identity moved with the size would find no card, and the drift
+    report would then quietly say "none on the card" forever — the failure has no other
+    symptom, which is why this is asserted on the key rather than on a demotion.
+    """
+    store, sessions = corpus
+    library = _library(tmp_path, clock, "short_atm_straddle_hold_n")
+    admission = library.admitted()[0]
+
+    sized = _scan(store, library, sessions[-1], target_notional=3_000_000.0)
+
+    assert sized.ideas, "the sized scan proposed nothing to compare"
+    idea = sized.ideas[0]
+    assert idea.parameter_key == admission.parameter_key
+    assert idea.parameters == pytest.approx(dict(admission.parameters))
+    assert idea.built_parameters["target_notional"] == 3_000_000.0
+    assert idea.built_parameter_key != idea.parameter_key
+    assert (
+        library.current("short_atm_straddle_hold_n", parameters=dict(idea.parameters)) is not None
+    )
+
+
+def test_the_sheet_carries_both_points_so_a_reader_can_see_the_size(
+    corpus, tmp_path: Path, clock: ManualClock
+) -> None:
+    store, sessions = corpus
+    library = _library(tmp_path, clock, "short_atm_straddle_hold_n")
+
+    row = _scan(store, library, sessions[-1], target_notional=3_000_000.0).as_dict()["ideas"][0]
+
+    assert row["parameters"]["target_notional"] != row["built_parameters"]["target_notional"]
+    assert row["built_parameters"]["target_notional"] == 3_000_000.0
+    assert row["rationale"]["trade"]["target_notional"] == 3_000_000.0

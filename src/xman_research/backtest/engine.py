@@ -502,6 +502,39 @@ class BacktestResult:
         return self.final_equity - float(self.config_provenance["starting_cash"])
 
     @property
+    def round_trips(self) -> int:
+        """How many times the strategy opened a position over the window.
+
+        Counted as the number of *sessions* carrying a filled entry, not the number of
+        entry fills: a straddle enters two legs at once and is one position, and counting
+        fills would halve every per-position figure derived from this.
+
+        A position still on the book when the window closed is counted here as well — it
+        was opened — so a run that ends holding one has a denominator one larger than the
+        trips it actually completed. :attr:`open_at_end` says whether that applies.
+        """
+        return len(
+            {fill.session_date for fill in self.fills if fill.tag == "entry" and fill.filled}
+        )
+
+    @property
+    def mean_return_per_round_trip(self) -> float | None:
+        """Net profit per position opened, as a fraction of the starting cash.
+
+        ``None`` when the strategy never entered: a return per trade over no trades is not
+        zero, it is not a number.
+
+        This is what a *single* live trade's profit over the same base is comparable to.
+        The per-session mean is not, and multiplying it by the hold length only recovers
+        this figure for a strategy that is in position every session — see
+        :mod:`xman_research.alpha.tracking`, which is what the difference costs.
+        """
+        trips = self.round_trips
+        if trips == 0:
+            return None
+        return self.net_pnl / trips / float(self.config_provenance["starting_cash"])
+
+    @property
     def peak_margin(self) -> float:
         return max((record.margin.total for record in self.daily), default=0.0)
 
@@ -567,6 +600,8 @@ class BacktestResult:
                 1 for record in self.daily if record.unmargined_shorts
             ),
             "settlements": len(self.settlements),
+            "round_trips": self.round_trips,
+            "mean_return_per_round_trip": self.mean_return_per_round_trip,
             "net_pnl": self.net_pnl,
             "final_equity": self.final_equity,
             "total_costs": self.total_costs.total,
