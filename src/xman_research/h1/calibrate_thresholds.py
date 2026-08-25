@@ -13,6 +13,7 @@ Run: ``uv run python research/h1/calibrate_thresholds.py``
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import math
 import random
@@ -30,7 +31,11 @@ from xman_research.validation import ReturnSeries, SelectionUniverse, deflated_s
 
 SEEDS = 40
 DAILY_VOL = 0.01
-TRUE_SHARPES = (0.5, 1.0, 1.5, 2.0, 2.5, 3.0)
+#: 0.0 is the null and the most important row: a bar is chosen on the rate at which
+#: NOISE clears it, and every other row only says what the bar then costs in power.
+#: It was absent while H1 and H26 were graded, so both bars were argued from the
+#: power side alone. Adding it changes no number already published.
+TRUE_SHARPES = (0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0)
 #: (sessions, logged trials) — the in-sample case and the holdout case.
 #: The holdout is graded with three family trials (the in-sample run, the touch row the
 #: read itself writes, and the holdout run), so N=2 and N=5 bracket it.
@@ -85,7 +90,32 @@ def _universe_of_size(trials: int) -> SelectionUniverse:
 
 
 def main() -> None:
-    for sessions, trials in CASES:
+    """Print the grid.
+
+    ``--case n:N`` is an EXTENSION, not a fork. M1 and M2 are graded on a window an order
+    of magnitude longer than H1's, against a family trial count that has grown, and the
+    only honest way to set their bars is to run this same code at the realised shape. A
+    second copy of this script under a new package would be a second thing that can drift
+    from ``deflated_sharpe_ratio``; a flag is not.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--case",
+        action="append",
+        default=None,
+        metavar="N_OBS:N_TRIALS",
+        help="override the default grid, e.g. --case 384:6 --case 384:8",
+    )
+    parser.add_argument(
+        "--bar",
+        action="append",
+        type=float,
+        default=None,
+        help="also report the share of seeds clearing this bar, per true Sharpe",
+    )
+    arguments = parser.parse_args()
+    cases = CASES if not arguments.case else tuple(_parse_case(item) for item in arguments.case)
+    for sessions, trials in cases:
         universe = _universe_of_size(trials)
         print(f"--- n={sessions} sessions, N={universe.size} logged trials")
         for sharpe in TRUE_SHARPES:
@@ -97,10 +127,24 @@ def main() -> None:
             )
             median = values[len(values) // 2]
             lower_quartile = values[len(values) // 4]
+            clearance = ""
+            if arguments.bar:
+                shares = "  ".join(
+                    f">={bar:.2f}: {sum(1 for v in values if v >= bar) / len(values):5.1%}"
+                    for bar in arguments.bar
+                )
+                clearance = f"   {shares}"
             print(
                 f"   true annualised Sharpe {sharpe:4.1f}: "
-                f"median DSR {median:.3f}   p25 {lower_quartile:.3f}"
+                f"median DSR {median:.3f}   p25 {lower_quartile:.3f}{clearance}"
             )
+
+
+def _parse_case(item: str) -> tuple[int, int]:
+    observations, _, trials = item.partition(":")
+    if not trials:
+        raise ValueError(f"--case wants N_OBS:N_TRIALS, got {item!r}")
+    return int(observations), int(trials)
 
 
 if __name__ == "__main__":

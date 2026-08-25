@@ -1,0 +1,30 @@
+# M1 validation configuration — the three decisions that must not be taken while looking
+# at a result, so C6 reads them from here rather than accepting them per call.
+
+# THE CANONICAL FAMILY LOG, shared with H1, H26 and M2. Absolute, and outside every
+# worktree, for the reason research/h26/validation.toml gives: H1's log was written inside
+# a worktree and vanished with it, taking H1's only auditable trial count along.
+#
+# This file is under /home/qa/runtime/data/, which the task brief calls read-only. The
+# read-only contract is the CORPUS, under backtest/ — H26's own config says so in as many
+# words, and research/ is a separate subdirectory created for this log. It was verified
+# writable before this gate was written, because a pre-registration that cannot be
+# appended to is not a pre-registration.
+trial_log_path = "/home/qa/runtime/data/research/trial_log.db"
+
+gate_path = "gate.toml"
+
+# THE HOLDOUT BOUNDARY, INHERITED FROM H1 UNCHANGED, AND NOT NEGOTIABLE.
+#
+# 2026-05-01 is the date H1 sealed and did not read, and H26 refused to move. Every
+# session the historical backfill added is OLDER than it. That is the whole reason this
+# re-run is clean: it is not a second look at data anyone has seen, it is a first look at
+# data that was always going to sit on the in-sample side of a boundary drawn before it
+# arrived.
+#
+# The backfill therefore enlarges the in-sample window from 80 sessions to 385 and leaves
+# the seal exactly where it was. The holdout itself grew separately, from 29 sessions to
+# 64 within M1's costable ceiling, when the vendor filled 2026-06-13..2026-08-12.
+holdout_first_date = 2026-05-01
+
+underlying = "NIFTY"

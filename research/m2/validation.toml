@@ -1,0 +1,15 @@
+# M2 validation configuration. See research/m1/validation.toml — every field below is the
+# same decision, taken the same way, and the log is deliberately the SAME FILE: M2 is an
+# amendment in H1's family, so its deflation must read the count that spans H1, both H26
+# records, M1 and itself.
+trial_log_path = "/home/qa/runtime/data/research/trial_log.db"
+
+gate_path = "gate.toml"
+
+# INHERITED FROM H1 UNCHANGED, through H26, which already refused to move it once. The
+# refusal is restated rather than assumed: holdout_first_date is per-config, editable and
+# bound to no content-addressed record, so it is the one field through which a
+# disappointing verdict could be rescued by buying more in-sample data.
+holdout_first_date = 2026-05-01
+
+underlying = "NIFTY"

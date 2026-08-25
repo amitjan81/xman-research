@@ -1,0 +1,582 @@
+{
+  "epoch_breakdown": {
+    "slices": [
+      {
+        "annualised_sharpe": 2.0987752231333756,
+        "end": "2024-11-19",
+        "epoch": "stt_rise_2024",
+        "kurtosis": 9.890027503398386,
+        "max_drawdown": 0.029204650729146686,
+        "mean_net_per_session": 0.000994828538629652,
+        "net_return_on_capital": 0.031834513236148866,
+        "sessions": 32,
+        "skew": -1.817040810786589,
+        "start": "2024-10-03"
+      },
+      {
+        "annualised_sharpe": 2.516097645743899,
+        "end": "2025-02-07",
+        "epoch": "weekly_expiry_cull_2024",
+        "kurtosis": 3.6126501615602438,
+        "max_drawdown": 0.032238789876869775,
+        "mean_net_per_session": 0.0011907195898930244,
+        "net_return_on_capital": 0.06668029703400936,
+        "sessions": 56,
+        "skew": -0.3253539717996407,
+        "start": "2024-11-21"
+      },
+      {
+        "annualised_sharpe": -2.078930132012159,
+        "end": "2025-03-28",
+        "epoch": "calendar_spread_relief_removed_2025",
+        "kurtosis": 4.263526783078938,
+        "max_drawdown": 0.04809710936926724,
+        "mean_net_per_session": -0.0007852656710061499,
+        "net_return_on_capital": -0.025913767143202947,
+        "sessions": 33,
+        "skew": -1.1236351428362774,
+        "start": "2025-02-10"
+      },
+      {
+        "annualised_sharpe": -1.6331696839781884,
+        "end": "2025-08-29",
+        "epoch": "intraday_position_limits_2025",
+        "kurtosis": 41.177665792769034,
+        "max_drawdown": 0.07187235159121064,
+        "mean_net_per_session": -0.0004978789455728931,
+        "net_return_on_capital": -0.0502857735028622,
+        "sessions": 101,
+        "skew": -5.156110696578047,
+        "start": "2025-04-01"
+      },
+      {
+        "annualised_sharpe": null,
+        "end": "2026-03-30",
+        "epoch": "nse_expiry_tuesday_2025",
+        "kurtosis": null,
+        "max_drawdown": null,
+        "mean_net_per_session": 0.0,
+        "net_return_on_capital": 0.0,
+        "sessions": 142,
+        "skew": null,
+        "start": "2025-09-01"
+      },
+      {
+        "annualised_sharpe": null,
+        "end": "2026-04-30",
+        "epoch": "stt_rise_2026",
+        "kurtosis": null,
+        "max_drawdown": null,
+        "mean_net_per_session": 0.0,
+        "net_return_on_capital": 0.0,
+        "sessions": 20,
+        "skew": null,
+        "start": "2026-04-01"
+      }
+    ],
+    "status": "DESCRIPTIVE, UNGRADED. Pre-registered in the gate file before it was computed. No threshold reads it and it cannot change the outcome."
+  },
+  "gap_policy": "M1/M2 decision run over 2024-10-01..2026-04-30. Three sessions the NSE calendar expects are absent from the corpus: 2024-11-20, 2025-04-30 and 2025-05-08. The decision is taken over the 385 sessions that exist. The window is NOT narrowed to avoid them: narrowing to a hole-free sub-range would either fragment one pre-registered trial into three, or discard roughly 140 sessions including the 2024-11-20 regime change the per-epoch analysis exists to look at. 2024-11-20 is itself an epoch boundary (SEBI weekly-expiry cull, contract size increase, expiry-day ELM), and losing it costs little for a reason worth stating: it was a Wednesday, and pre-Tuesday-change expiries fell on Thursdays, so no settlement is lost. The boundary merely lacks its first day's marks, which biases neither side of it. 2025-04-30 and 2025-05-08 are interior single-session holes in the intraday_position_limits_2025 regime with no structural significance.",
+  "holdout": null,
+  "holdout_spent": false,
+  "hypothesis": {
+    "id": "h_0b2ecbbc4bddb543599add3968e0cf88",
+    "mechanism": "Intermediation rent. One side of the Indian index-option market persistently demands convexity \u2014 index hedgers and retail buyers of protection \u2014 and the capacity-constrained intermediaries who absorb that flow cannot lay it off. They are paid for three frictions they carry rather than for a preference they hold: inventory risk in a book they cannot fully hedge, jump exposure that no dynamic hedge replicates because the underlying gaps, and margin that binds hardest at precisely the moment the payout is owed. The premium is therefore the rent on scarce risk-bearing capacity, and it should be observable as implied variance sitting systematically above the variance subsequently realised. Selling variance collects that rent.",
+    "name": "M1 \u2014 near-week short ATM straddle, notional-sized (H1 expression, backfilled)",
+    "null_hypothesis": "The short-variance position's mean excess return is not positive after the full statutory cost stack, and it does not beat the naive always-on short-variance benchmark on a risk-matched basis over the same window, the same data and the identical cost model.",
+    "predictors": [
+      "atm_implied_variance_at_entry",
+      "continuous_realised_variance_trailing"
+    ],
+    "thresholds": {
+      "cost_breakeven_multiple": 2.0,
+      "deflated_sharpe": 0.9,
+      "holdout.cost_breakeven_multiple": 2.0,
+      "holdout.deflated_sharpe": 0.5,
+      "holdout.max_drawdown": 0.1,
+      "holdout.risk_matched_increment": 0.0,
+      "max_drawdown": 0.1,
+      "risk_matched_increment": 0.0
+    }
+  },
+  "hypothesis_id": "h_0b2ecbbc4bddb543599add3968e0cf88",
+  "in_sample": {
+    "candidate_window": "2024-10-03..2026-04-30",
+    "epochs": {
+      "boundaries_crossed": [
+        {
+          "confidence": "secondary",
+          "description": "Weekly expiries cut to one per exchange, contract size raised, and extra margin applied on expiry day.",
+          "effective_from": "2024-11-20",
+          "name": "weekly_expiry_cull_2024",
+          "source": "SEBI measures on index derivatives, October 2024, as reported"
+        },
+        {
+          "confidence": "secondary",
+          "description": "Calendar-spread margin relief withdrawn on expiry-day positions.",
+          "effective_from": "2025-02-10",
+          "name": "calendar_spread_relief_removed_2025",
+          "source": "SEBI measures on index derivatives, phase 2, as reported"
+        },
+        {
+          "confidence": "secondary",
+          "description": "Intraday monitoring of index-derivative position limits began.",
+          "effective_from": "2025-04-01",
+          "name": "intraday_position_limits_2025",
+          "source": "SEBI measures on index derivatives, phase 3, as reported"
+        },
+        {
+          "confidence": "secondary",
+          "description": "NSE weekly and monthly expiry moved from Thursday to Tuesday.",
+          "effective_from": "2025-09-01",
+          "name": "nse_expiry_tuesday_2025",
+          "source": "NSE circular on expiry-day change, as reported"
+        },
+        {
+          "confidence": "secondary",
+          "description": "Securities transaction tax on options raised again.",
+          "effective_from": "2026-04-01",
+          "name": "stt_rise_2026",
+          "source": "Finance Act 2026, as reported in broker rate cards"
+        }
+      ],
+      "cross_epoch_justification": "H1'S ARGUMENT DOES NOT COVER THIS WINDOW, and stretching it would be dishonest. H1's gate\npermitted one boundary \u2014 stt_rise_2026, a change in a RATE \u2014 and stated in terms that this\n\"does NOT justify a window crossing weekly_expiry_cull_2024 or nse_expiry_tuesday_2025.\nThose changed the traded object.\" This window crosses both of those and three more:\n\n  stt_rise_2024                        2024-10-01  (the window opens on it)\n  weekly_expiry_cull_2024              2024-11-20  weekly expiries culled, contract size\n                                                   raised, expiry-day ELM added\n  calendar_spread_relief_removed_2025  2025-02-10\n  intraday_position_limits_2025        2025-04-01\n  nse_expiry_tuesday_2025              2025-09-01  expiry moved Thursday -> Tuesday\n  stt_rise_2026                        2026-04-01\n\nTwo of those changed the traded object itself. A single pooled number over this window\ndescribes a market that never existed, and no argument makes it describe one.\n\nSO WHY POOL AT ALL. Because the alternative is worse, and because the pooled number is\nstill the answer to a question worth asking. Splitting the window into six graded\nsub-windows would burn six trials against a family already carrying five, deflate every\none of the six Sharpes accordingly, hand the researcher a post-hoc choice of which regime\nto believe, and leave the largest sub-window with fewer sessions than H1 already showed\nwere too few. The pooled verdict is the honest form of \"does this premium survive being\ntraded through everything the regulator did to this market\", which is a real question with\na real answer, and it is the question a single unconditional model can be graded on.\n\nTHE POOLED VERDICT IS THE GRADED ONE. The per-epoch breakdown below is DESCRIPTIVE and\nUNGRADED. That assignment is made here, before any number exists, precisely because it is\nthe assignment a disappointing pooled result would most want to revisit.\n\nWhat the pooled number therefore means, stated in advance: it is a statement about the\naverage of six regimes weighted by their session counts, and it is NOT a statement about\nany one of them. If the per-epoch table shows the effect living in one regime, that is the\nfinding, and it is a finding this gate cannot grade.\n",
+      "epoch_provenance": "epochs.dates_not_primary_sourced",
+      "regimes": [
+        "2024-10-03..2024-11-19",
+        "2024-11-20..2025-02-09",
+        "2025-02-10..2025-03-31",
+        "2025-04-01..2025-08-31",
+        "2025-09-01..2026-03-31",
+        "2026-04-01..2026-04-30"
+      ],
+      "window": "2024-10-03..2026-04-30"
+    },
+    "graded_at": "2026-08-19T18:08:05.599096+00:00",
+    "holdout": null,
+    "hypothesis_id": "h_0b2ecbbc4bddb543599add3968e0cf88",
+    "judged_series": "the whole window, 384 sessions, no walk-forward",
+    "label": "H1 short ATM straddle (candidate)",
+    "metrics": {
+      "adjusted_sharpe_per_period": 0.012273327228176827,
+      "annualised_adjusted_sharpe": 0.19483302963044147,
+      "annualised_sharpe": 0.19574200078348408,
+      "benchmark_annualised_return": 0.014644395690811081,
+      "benchmark_exposure": 0.3515625,
+      "benchmark_scale": 1.0,
+      "calmar": 0.15522083741661452,
+      "candidate_annualised_return": 0.014644395690811081,
+      "candidate_exposure": 0.3515625,
+      "cost_breakeven_multiple": 9.986085624644465,
+      "cost_share_of_gross": 0.10013933763316825,
+      "deflated_sharpe": 0.11486826882360536,
+      "epochs": [
+        "2024-10-03..2024-11-19",
+        "2024-11-20..2025-02-09",
+        "2025-02-10..2025-03-31",
+        "2025-04-01..2025-08-31",
+        "2025-09-01..2026-03-31",
+        "2026-04-01..2026-04-30"
+      ],
+      "expected_max_sharpe": 0.07455213673555233,
+      "expected_shortfall_05": -0.014730655553184492,
+      "gate_status": "not_evaluable",
+      "kurtosis": 21.52191209107233,
+      "leverage_caveat": null,
+      "max_drawdown": 0.09434555266252916,
+      "mean_cost_drag": 6.466962784481771e-06,
+      "mean_gross_return": 6.457964409722416e-05,
+      "observed_sharpe_per_period": 0.012330587028650216,
+      "overlapping_periods": 384,
+      "probabilistic_sharpe": 0.5940642664788505,
+      "risk_matched_increment": 0.0,
+      "ruined": false,
+      "sample_length": 384,
+      "selection_size": 8,
+      "sessions_under_water": 361,
+      "sharpe_difference": 0.0,
+      "sharpe_variance": 0.0026109660574412533,
+      "skew": -2.20251394112953,
+      "unverified_inputs": [
+        "corpus.declared_lot_size_contradicted:unverified",
+        "corpus.open_interest_not_divisible_by_lot_size:unverified",
+        "gst.broking_services:corroborated",
+        "margin.simplified_approximation:unverified",
+        "nse.transaction_charge.options:corroborated",
+        "sebi.turnover_fee:corroborated",
+        "settlement.exchange_charge_assumed_not_levied:unverified",
+        "settlement.mean_of_underlying_minute_close_over_window:corroborated",
+        "stt.sell_option_premium:corroborated",
+        "benchmark:corpus.declared_lot_size_contradicted:unverified",
+        "benchmark:corpus.open_interest_not_divisible_by_lot_size:unverified",
+        "benchmark:gst.broking_services:corroborated",
+        "benchmark:margin.simplified_approximation:unverified",
+        "benchmark:nse.transaction_charge.options:corroborated",
+        "benchmark:sebi.turnover_fee:corroborated",
+        "benchmark:settlement.exchange_charge_assumed_not_levied:unverified",
+        "benchmark:settlement.mean_of_underlying_minute_close_over_window:corroborated",
+        "benchmark:stt.sell_option_premium:corroborated",
+        "dsr.sharpe_variance_assumed",
+        "epochs.dates_not_primary_sourced"
+      ],
+      "variance_basis": "dsr.sharpe_variance_assumed",
+      "worst_period": -0.038652671044374934
+    },
+    "not_evaluable_reasons": [
+      "64.7% of sessions carried a position at a stale mark (limit 20.0%); the equity curve is partly an estimate"
+    ],
+    "status": "not_evaluable",
+    "thresholds": [
+      {
+        "direction": "at_least",
+        "metric": "deflated_sharpe",
+        "missing": false,
+        "observed": 0.11486826882360536,
+        "passed": false,
+        "required": 0.9
+      },
+      {
+        "direction": "at_least",
+        "metric": "cost_breakeven_multiple",
+        "missing": false,
+        "observed": 9.986085624644465,
+        "passed": true,
+        "required": 2.0
+      },
+      {
+        "direction": "at_most",
+        "metric": "max_drawdown",
+        "missing": false,
+        "observed": 0.09434555266252916,
+        "passed": true,
+        "required": 0.1
+      },
+      {
+        "direction": "at_least",
+        "metric": "risk_matched_increment",
+        "missing": false,
+        "observed": 0.0,
+        "passed": true,
+        "required": 0.0
+      }
+    ],
+    "trial_id": "t_72b286a900c849d1a14fd49fbad5f5de",
+    "walk_forward": null,
+    "window": "2024-10-03..2026-04-30"
+  },
+  "next_step": "The answer is about execution \u2014 resolve the quote-data question before continuing.",
+  "outcome": "not_evaluable",
+  "runs": {
+    "holdout": null,
+    "in_sample": {
+      "feasibility_counts": {
+        "capped_to_zero": 0,
+        "fillable": 62,
+        "group_incomplete": 0,
+        "no_bar": 0,
+        "no_liquidity": 0,
+        "resized": 0,
+        "settled": 60
+      },
+      "fingerprint": "29d452d36913ac7fa6b9b319b91da34c910e1713baad3cde921b3f87b75e9f7f",
+      "metrics": {
+        "cost_stt": 729.9272500000003,
+        "cost_stt_on_exercise": 0.0,
+        "fills_attempted": 62,
+        "fills_filled": 62,
+        "fills_group_bound": 0,
+        "fills_infeasible": 0,
+        "fills_resized": 0,
+        "final_equity": 1026658.6204699756,
+        "fingerprint": "29d452d36913ac7fa6b9b319b91da34c910e1713baad3cde921b3f87b75e9f7f",
+        "net_pnl": 26658.620469975634,
+        "peak_margin": 459841.19999999995,
+        "return_on_peak_margin": 0.057973536233759906,
+        "sessions_run": 385,
+        "sessions_with_unmargined_shorts": 0,
+        "settlements": 60,
+        "total_costs": 2550.2128633585003,
+        "unverified_inputs": [
+          "corpus.declared_lot_size_contradicted:unverified",
+          "corpus.open_interest_not_divisible_by_lot_size:unverified",
+          "gst.broking_services:corroborated",
+          "margin.simplified_approximation:unverified",
+          "nse.transaction_charge.options:corroborated",
+          "sebi.turnover_fee:corroborated",
+          "settlement.exchange_charge_assumed_not_levied:unverified",
+          "settlement.mean_of_underlying_minute_close_over_window:corroborated",
+          "stt.sell_option_premium:corroborated"
+        ]
+      },
+      "strategy": "short_atm_straddle",
+      "strategy_parameters": {
+        "min_days_to_expiry": 1,
+        "target_notional": 1500000.0
+      },
+      "trial_id": "t_72b286a900c849d1a14fd49fbad5f5de",
+      "unverified_inputs": [
+        "corpus.declared_lot_size_contradicted:unverified",
+        "corpus.open_interest_not_divisible_by_lot_size:unverified",
+        "gst.broking_services:corroborated",
+        "margin.simplified_approximation:unverified",
+        "nse.transaction_charge.options:corroborated",
+        "sebi.turnover_fee:corroborated",
+        "settlement.exchange_charge_assumed_not_levied:unverified",
+        "settlement.mean_of_underlying_minute_close_over_window:corroborated",
+        "stt.sell_option_premium:corroborated"
+      ],
+      "window": "2024-10-01..2026-04-30"
+    }
+  },
+  "trial_log": {
+    "family_trial_count_at_decision": 8,
+    "rows": [
+      {
+        "created_at": "2026-08-13T09:20:27.852898+00:00",
+        "data_window": "2025-12-31..2026-04-30",
+        "hypothesis_id": "h_817b33ff6b9f68e288161f5990739744",
+        "metrics": {
+          "cost_stt": 547.6006249999999,
+          "cost_stt_on_exercise": 0.0,
+          "fills_attempted": 36,
+          "fills_filled": 36,
+          "fills_group_bound": 0,
+          "fills_infeasible": 0,
+          "fills_resized": 0,
+          "final_equity": 1016159.4215171223,
+          "fingerprint": "2e0bb9e178e72cc6d04059eed2cf410c45dc5bf0df4bae1a15667f5815ce2d97",
+          "net_pnl": 16159.421517122304,
+          "peak_margin": 476378.63,
+          "return_on_peak_margin": 0.0339213820677101,
+          "sessions_run": 80,
+          "sessions_with_unmargined_shorts": 0,
+          "settlements": 34,
+          "total_costs": 1624.1451495448332,
+          "unverified_inputs": [
+            "corpus.open_interest_not_divisible_by_lot_size:unverified",
+            "gst.broking_services:corroborated",
+            "margin.simplified_approximation:unverified",
+            "nse.transaction_charge.options:corroborated",
+            "sebi.turnover_fee:corroborated",
+            "settlement.exchange_charge_assumed_not_levied:unverified",
+            "settlement.mean_of_underlying_minute_close_over_window:corroborated",
+            "stt.sell_option_premium:corroborated"
+          ]
+        },
+        "notes": "REPLAYED from decision.json because H1's canonical log was lost (gitignored, worktree gone) and its cited trial_log_export.json was never committed. This row preserves H1's trial COUNT and identity, not its provenance: original created_at was '2026-08-13T01:31:38.769791+00:00'; this row's created_at, code_sha and code_dirty are stamped by the replaying process and are wrong for H1; the export carried no code_sha or error field to restore. research/h1/decision.json is authoritative. Original notes: 'H1 in-sample decision run. Unconditional short ATM straddle, one lot, held to cash settlement. Thresholds pre-registered in research/h1/gate.toml.; computed with unverified inputs: corpus.open_interest_not_divisible_by_lot_size:unverified, gst.broking_services:corroborated, margin.simplified_approximation:unverified, nse.transaction_charge.options:corroborated, sebi.turnover_fee:corroborated, settlement.exchange_charge_assumed_not_levied:unverified, settlement.mean_of_underlying_minute_close_over_window:corroborated, stt.sell_option_premium:corroborated'",
+        "outcome": "completed",
+        "params": {
+          "backtest_token_consumed": true,
+          "strategy": "short_atm_straddle",
+          "strategy.lots": 1,
+          "strategy.min_days_to_expiry": 1
+        },
+        "trial_id": "t_1e98d041f6b344628ab50d401e8d302f"
+      },
+      {
+        "created_at": "2026-08-13T09:20:28.288769+00:00",
+        "data_window": "2025-12-31..2026-04-30",
+        "hypothesis_id": "h_4095cf35d1443d87c0199a2441d158ab",
+        "metrics": {},
+        "notes": "H26 in-sample CANDIDATE. Short ATM straddle sold at the close decision and bought back at the next open decision, so it holds only non-trading time. Thresholds pre-registered in research/h26/gate.toml.",
+        "outcome": "error",
+        "params": {},
+        "trial_id": "t_78e63a635de341e39798d58b2b8fb82b"
+      },
+      {
+        "created_at": "2026-08-13T09:21:26.355101+00:00",
+        "data_window": "2025-12-31..2026-04-30",
+        "hypothesis_id": "h_4095cf35d1443d87c0199a2441d158ab",
+        "metrics": {},
+        "notes": "H26 in-sample CANDIDATE. Short ATM straddle sold at the close decision and bought back at the next open decision, so it holds only non-trading time. Thresholds pre-registered in research/h26/gate.toml.",
+        "outcome": "error",
+        "params": {},
+        "trial_id": "t_26ddf64a12734d65b47ae9c9215bee74"
+      },
+      {
+        "created_at": "2026-08-13T09:30:09.728543+00:00",
+        "data_window": "2025-12-31..2026-04-30",
+        "hypothesis_id": "h_cacfc556d38a2bda25efef59eb5544cf",
+        "metrics": {
+          "cost_stt": 1287.8677500000003,
+          "cost_stt_on_exercise": 0.0,
+          "fills_attempted": 190,
+          "fills_filled": 188,
+          "fills_group_bound": 0,
+          "fills_infeasible": 2,
+          "fills_resized": 0,
+          "final_equity": 1018089.5879867844,
+          "fingerprint": "bd520ab4319637bf51056fb19edec29373374f9e2f1537cc20c427275b190d66",
+          "net_pnl": 18089.587986784405,
+          "peak_margin": 459260.6200000001,
+          "return_on_peak_margin": 0.03938850229916164,
+          "sessions_run": 80,
+          "sessions_with_unmargined_shorts": 0,
+          "settlements": 10,
+          "total_costs": 6632.295346548834,
+          "unverified_inputs": [
+            "corpus.open_interest_not_divisible_by_lot_size:unverified",
+            "gst.broking_services:corroborated",
+            "margin.simplified_approximation:unverified",
+            "nse.transaction_charge.options:corroborated",
+            "sebi.turnover_fee:corroborated",
+            "settlement.exchange_charge_assumed_not_levied:unverified",
+            "settlement.mean_of_underlying_minute_close_over_window:corroborated",
+            "stt.sell_option_premium:corroborated"
+          ]
+        },
+        "notes": "H26 in-sample CANDIDATE. Short ATM straddle sold at the close decision and bought back at the next open decision, so it holds only non-trading time. Thresholds pre-registered in research/h26/gate.toml.; computed with unverified inputs: corpus.open_interest_not_divisible_by_lot_size:unverified, gst.broking_services:corroborated, margin.simplified_approximation:unverified, nse.transaction_charge.options:corroborated, sebi.turnover_fee:corroborated, settlement.exchange_charge_assumed_not_levied:unverified, settlement.mean_of_underlying_minute_close_over_window:corroborated, stt.sell_option_premium:corroborated",
+        "outcome": "completed",
+        "params": {
+          "backtest_token_consumed": true,
+          "strategy": "clock_split_short_straddle:gap",
+          "strategy.close_time": "15:29:00",
+          "strategy.hold": "gap",
+          "strategy.lots": 1,
+          "strategy.min_calendar_days_to_expiry": 2,
+          "strategy.open_time": "09:20:00"
+        },
+        "trial_id": "t_afca6799f0384ae7b8e157e8bb65fa96"
+      },
+      {
+        "created_at": "2026-08-13T09:30:26.491504+00:00",
+        "data_window": "2025-12-31..2026-04-30",
+        "hypothesis_id": "h_cacfc556d38a2bda25efef59eb5544cf",
+        "metrics": {
+          "cost_stt": 1353.0058749999994,
+          "cost_stt_on_exercise": 0.0,
+          "fills_attempted": 200,
+          "fills_filled": 200,
+          "fills_group_bound": 0,
+          "fills_infeasible": 0,
+          "fills_resized": 0,
+          "final_equity": 973210.2026731899,
+          "fingerprint": "2e1342be59f2302369af205de510e79f438d37b4afea79373534af6b6199b720",
+          "net_pnl": -26789.797326810076,
+          "peak_margin": 410836.92000000004,
+          "return_on_peak_margin": -0.06520786234793619,
+          "sessions_run": 80,
+          "sessions_with_unmargined_shorts": 0,
+          "settlements": 0,
+          "total_costs": 7088.297326811,
+          "unverified_inputs": [
+            "corpus.open_interest_not_divisible_by_lot_size:unverified",
+            "gst.broking_services:corroborated",
+            "margin.simplified_approximation:unverified",
+            "nse.transaction_charge.options:corroborated",
+            "sebi.turnover_fee:corroborated",
+            "stt.sell_option_premium:corroborated"
+          ]
+        },
+        "notes": "H26 in-sample BENCHMARK. The identical straddle held open-to-close, so it holds only trading time. A separate backtest and therefore a separate trial, logged in H26's family: it inflates N and makes the verdict harder, which is the correct direction.; computed with unverified inputs: corpus.open_interest_not_divisible_by_lot_size:unverified, gst.broking_services:corroborated, margin.simplified_approximation:unverified, nse.transaction_charge.options:corroborated, sebi.turnover_fee:corroborated, stt.sell_option_premium:corroborated",
+        "outcome": "completed",
+        "params": {
+          "backtest_token_consumed": true,
+          "strategy": "clock_split_short_straddle:session",
+          "strategy.close_time": "15:29:00",
+          "strategy.hold": "session",
+          "strategy.lots": 1,
+          "strategy.min_calendar_days_to_expiry": 2,
+          "strategy.open_time": "09:20:00"
+        },
+        "trial_id": "t_16abd0ac98234c38b24537794b23bfdd"
+      },
+      {
+        "created_at": "2026-08-19T18:04:48.995480+00:00",
+        "data_window": "2024-10-01..2026-04-30",
+        "hypothesis_id": "h_0b2ecbbc4bddb543599add3968e0cf88",
+        "metrics": {
+          "cost_stt": 729.9272500000003,
+          "cost_stt_on_exercise": 0.0,
+          "fills_attempted": 62,
+          "fills_filled": 62,
+          "fills_group_bound": 0,
+          "fills_infeasible": 0,
+          "fills_resized": 0,
+          "final_equity": 1026658.6204699756,
+          "fingerprint": "29d452d36913ac7fa6b9b319b91da34c910e1713baad3cde921b3f87b75e9f7f",
+          "net_pnl": 26658.620469975634,
+          "peak_margin": 459841.19999999995,
+          "return_on_peak_margin": 0.057973536233759906,
+          "sessions_run": 385,
+          "sessions_with_unmargined_shorts": 0,
+          "settlements": 60,
+          "total_costs": 2550.2128633585003,
+          "unverified_inputs": [
+            "corpus.declared_lot_size_contradicted:unverified",
+            "corpus.open_interest_not_divisible_by_lot_size:unverified",
+            "gst.broking_services:corroborated",
+            "margin.simplified_approximation:unverified",
+            "nse.transaction_charge.options:corroborated",
+            "sebi.turnover_fee:corroborated",
+            "settlement.exchange_charge_assumed_not_levied:unverified",
+            "settlement.mean_of_underlying_minute_close_over_window:corroborated",
+            "stt.sell_option_premium:corroborated"
+          ]
+        },
+        "notes": "H1 in-sample decision run. Unconditional short ATM straddle, one lot, held to cash settlement. Thresholds pre-registered in research/h1/gate.toml.; computed with unverified inputs: corpus.declared_lot_size_contradicted:unverified, corpus.open_interest_not_divisible_by_lot_size:unverified, gst.broking_services:corroborated, margin.simplified_approximation:unverified, nse.transaction_charge.options:corroborated, sebi.turnover_fee:corroborated, settlement.exchange_charge_assumed_not_levied:unverified, settlement.mean_of_underlying_minute_close_over_window:corroborated, stt.sell_option_premium:corroborated",
+        "outcome": "completed",
+        "params": {
+          "backtest_token_consumed": true,
+          "strategy": "short_atm_straddle",
+          "strategy.min_days_to_expiry": 1,
+          "strategy.target_notional": 1500000.0
+        },
+        "trial_id": "t_628ca519a13f4439aac19994e555059a"
+      },
+      {
+        "created_at": "2026-08-19T18:05:15.910766+00:00",
+        "data_window": "2024-10-01..2026-04-30",
+        "hypothesis_id": "h_a63a756ae984683a60176fe41e2acf7a",
+        "metrics": {},
+        "notes": "H26 in-sample CANDIDATE. Short ATM straddle sold at the close decision and bought back at the next open decision, so it holds only non-trading time. Thresholds pre-registered in research/h26/gate.toml.",
+        "outcome": "error",
+        "params": {},
+        "trial_id": "t_ba74b7d8e6694f36b43046876eacdeda"
+      },
+      {
+        "created_at": "2026-08-19T18:08:05.484301+00:00",
+        "data_window": "2024-10-01..2026-04-30",
+        "hypothesis_id": "h_0b2ecbbc4bddb543599add3968e0cf88",
+        "metrics": {
+          "cost_stt": 729.9272500000003,
+          "cost_stt_on_exercise": 0.0,
+          "fills_attempted": 62,
+          "fills_filled": 62,
+          "fills_group_bound": 0,
+          "fills_infeasible": 0,
+          "fills_resized": 0,
+          "final_equity": 1026658.6204699756,
+          "fingerprint": "29d452d36913ac7fa6b9b319b91da34c910e1713baad3cde921b3f87b75e9f7f",
+          "net_pnl": 26658.620469975634,
+          "peak_margin": 459841.19999999995,
+          "return_on_peak_margin": 0.057973536233759906,
+          "sessions_run": 385,
+          "sessions_with_unmargined_shorts": 0,
+          "settlements": 60,
+          "total_costs": 2550.2128633585003,
+          "unverified_inputs": [
+            "corpus.declared_lot_size_contradicted:unverified",
+            "corpus.open_interest_not_divisible_by_lot_size:unverified",
+            "gst.broking_services:corroborated",
+            "margin.simplified_approximation:unverified",
+            "nse.transaction_charge.options:corroborated",
+            "sebi.turnover_fee:corroborated",
+            "settlement.exchange_charge_assumed_not_levied:unverified",
+            "settlement.mean_of_underlying_minute_close_over_window:corroborated",
+            "stt.sell_option_premium:corroborated"
+          ]
+        },
+        "notes": "H1 in-sample decision run. Unconditional short ATM straddle, one lot, held to cash settlement. Thresholds pre-registered in research/h1/gate.toml.; computed with unverified inputs: corpus.declared_lot_size_contradicted:unverified, corpus.open_interest_not_divisible_by_lot_size:unverified, gst.broking_services:corroborated, margin.simplified_approximation:unverified, nse.transaction_charge.options:corroborated, sebi.turnover_fee:corroborated, settlement.exchange_charge_assumed_not_levied:unverified, settlement.mean_of_underlying_minute_close_over_window:corroborated, stt.sell_option_premium:corroborated",
+        "outcome": "completed",
+        "params": {
+          "backtest_token_consumed": true,
+          "strategy": "short_atm_straddle",
+          "strategy.min_days_to_expiry": 1,
+          "strategy.target_notional": 1500000.0
+        },
+        "trial_id": "t_72b286a900c849d1a14fd49fbad5f5de"
+      }
+    ]
+  }
+}

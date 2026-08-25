@@ -140,16 +140,24 @@ def _backtest(
     underlying: str,
     strategy: ClockSplitShortStraddle,
     notes: str,
+    gap_reason_override: str | None = None,
 ) -> BacktestResult:
     """One backtest, through the log, over a window the store has confirmed complete."""
     resolution = store.resolve(underlying, window.start, window.end)
-    gap_reason = (
+    # An override is the RESEARCH decision about a known-holey window, and it belongs to
+    # the caller: the reason must name the missing dates and say why the window was not
+    # narrowed around them, which is knowledge the runner does not have. Left None, the
+    # generic reason below applies and behaviour is exactly what it always was.
+    generic = (
         None
         if resolution.is_complete
         else (
-            "H26 decision run: the range has known holes and the decision is being taken "
-            f"anyway. {resolution.summary()}"
+            "H26 decision run: the range has known holes and the decision is being "
+            f"taken anyway. {resolution.summary()}"
         )
+    )
+    gap_reason = (
+        generic if resolution.is_complete or gap_reason_override is None else (gap_reason_override)
     )
     with session.trial(hypothesis, data_window=window, notes=notes) as trial:
         return run_backtest(
@@ -202,6 +210,7 @@ def run_h26_decision(
     in_sample_start: dt.date = IN_SAMPLE_START,
     holdout_end: dt.date = CORPUS_END,
     hypothesis: HypothesisRecord | None = None,
+    gap_reason: str | None = None,
 ) -> DecisionRun:
     """Run the loop and return the decision, with everything it rested on attached."""
     config = ValidationConfig.from_file(config_path)
@@ -222,6 +231,13 @@ def run_h26_decision(
         # parent the log has never seen, and a family count taken before the chain is
         # complete would be short. H1 -> H26 v1 (pre-registered, superseded) -> H26 v2.
         session.register(_h26_v1_record())
+        # v2 explicitly, because ``record`` may be an AMENDMENT of it — M2 is — and an
+        # amendment cannot be registered against a parent the log has never seen. When
+        # ``record`` IS v2 the guard skips the duplicate rather than relying on the log's
+        # upsert semantics.
+        canonical_v2 = h26_record()
+        if record.id != canonical_v2.id:
+            session.register(canonical_v2)
         session.register(record)
 
         candidate_result = _backtest(
@@ -231,6 +247,7 @@ def run_h26_decision(
             window=in_sample_window,
             underlying=config.underlying,
             strategy=candidate_arm,
+            gap_reason_override=gap_reason,
             notes=(
                 "H26 in-sample CANDIDATE. Short ATM straddle sold at the close decision "
                 "and bought back at the next open decision, so it holds only non-trading "
@@ -244,6 +261,7 @@ def run_h26_decision(
             window=in_sample_window,
             underlying=config.underlying,
             strategy=benchmark_arm,
+            gap_reason_override=gap_reason,
             notes=(
                 "H26 in-sample BENCHMARK. The identical straddle held open-to-close, so "
                 "it holds only trading time. A separate backtest and therefore a separate "
