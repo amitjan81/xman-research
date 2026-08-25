@@ -36,8 +36,8 @@ that rule could be retrieved from this host — NSE's settlement page times out 
 SEBI circular URL 404s, as they have for weeks — so nothing here claims to implement it.
 What *is* implemented is a different, measurable thing: the last print the index makes
 inside a stated closing window (:data:`METHOD_LAST_UNDERLYING_PRINT`), which the corpus
-does carry, and which is checked on every use against an independent witness before it is
-returned. See :func:`option_implied_settlement` for the witness and
+does carry, and which no expiry settles on until an independent witness has agreed with
+it. See :func:`option_implied_settlement` for the witness and
 :data:`SETTLEMENT_RULES` for what the measurement showed. The rule is stamped
 ``UNVERIFIED`` for the honest reason: the proxy tracks whatever the exchange used, and
 that is not the same as knowing what the exchange's rule says.
@@ -85,6 +85,13 @@ METHOD_LAST_UNDERLYING_PRINT = "last_underlying_print_in_closing_window"
 #: a witness at all. Three is enough that one stale quote cannot carry the median, and low
 #: enough that a thin chain still corroborates. The real corpus offers 21.
 MINIMUM_CORROBORATING_PAIRS = 3
+
+#: The witness is time-bounded for the same reason the settled value is. The corpus carries
+#: rows stamped hours after the close — 2026-08-19 has an index row at 18:40 — and a stray
+#: out-of-hours chain print would otherwise become the opinion a real closing print is
+#: judged against. Later than the rules' closing windows, because a witness printing after
+#: the close is exactly what the post-auction regime produces.
+LATEST_WITNESS_MINUTE = dt.time(16, 0)
 
 
 class SettlementWindowError(Exception):
@@ -144,7 +151,7 @@ class SettlementRule:
 #: ``tests/test_settlement_real_corpus.py``:
 #:
 #: 1. The 15:00-15:30 index feed degrades at exactly this boundary. Before 3 August a
-#:    session's 30 window bars carry 28-30 *distinct* closes; from 3 August they carry
+#:    session's 30 window bars carry 25-30 *distinct* closes; from 3 August they carry
 #:    15-17, the feed freezing for ten-plus minutes and then catching up in one jump. The
 #:    old statistic is therefore not merely superseded — it is no longer computable from
 #:    this feed, because most of its inputs are repeats rather than observations.
@@ -209,8 +216,10 @@ SETTLEMENT_RULES: tuple[SettlementRule, ...] = (
             "against the real thing and trades at pure intrinsic in the post-close window "
             "this regime opened — agrees with it to a quarter of a point on every expiry "
             "the corpus reaches, while disagreeing with the superseded 30-minute mean by "
-            "17 to 146. Every settled value under this rule is checked against that "
-            "witness before it is returned, and every result computed through it carries "
+            "17 to 146. No expiry settles under this rule until that witness has agreed "
+            "with the closing print — an expiry whose chain cannot provide one refuses "
+            "rather than settling uncorroborated — and every result computed through it "
+            "carries "
             "settlement.last_underlying_print_in_closing_window:unverified. The tier is "
             "UNVERIFIED because no source states the rule: the measurement shows the proxy "
             "tracks whatever the exchange used, which is not the same as knowing what it "
@@ -229,7 +238,10 @@ class OptionImpliedSettlement:
     left to argue about: ``C - P = S - K`` exactly, so every strike that quotes both sides
     is an independent estimate of ``S``. The median across strikes is taken rather than
     the mean because the far wings quote the 0.05 tick floor, and a floor is a censored
-    observation rather than a wrong one — it biases a mean and cannot move a median.
+    observation rather than a wrong one. The floor pushes every in-the-money estimate down
+    by a tick and every out-of-the-money one up by a tick, so a mean inherits whichever wing
+    the chain is longer on while the median lands within half a tick of the settled value
+    whatever the chain's shape. Half a tick is 0.025 points against a tolerance of five.
 
     This is a **witness, not a source**. It says what the market that settles against the
     exchange's number believed that number to be, minutes before it was published. That is
@@ -328,6 +340,8 @@ def option_implied_settlement(
         return None
 
     for minute in reversed(session.minutes()):
+        if minute.replace(tzinfo=None).time() > LATEST_WITNESS_MINUTE:
+            continue
         implied: list[float] = []
         for strike, call_symbol, put_symbol in pairs:
             call_bar = session.bar(call_symbol, minute)
@@ -365,6 +379,14 @@ def settlement_value(
             f"from {rule.effective_from.isoformat()} is '{rule.method}', which this "
             f"component does not implement — {rule.note} Settling this session under the "
             f"superseded rule would produce a number the exchange does not pay."
+        )
+    if rule.corroboration_tolerance is not None and rule.method != METHOD_LAST_UNDERLYING_PRINT:
+        raise SettlementWindowError(
+            f"the settlement rule effective {rule.effective_from.isoformat()} carries a "
+            f"corroboration tolerance of {rule.corroboration_tolerance} but computes "
+            f"'{rule.method}', which does not check one. A tolerance nobody honours is a "
+            f"guard that reports itself installed and is not — the table is wrong, not "
+            f"the session."
         )
     window = _window_bars(session, rule)
     if rule.method == METHOD_LAST_UNDERLYING_PRINT:
@@ -418,24 +440,39 @@ def _settle_on_last_print(
     feed stopped before the window cannot settle rather than settling on whatever it
     stopped at.
     """
-    required = rule.expected_bars if minimum_bars is None else minimum_bars
+    # `max(1, ...)` rather than the caller's number alone: a closing print is one bar by
+    # definition, so `minimum_bars=0` cannot mean "settle on an empty window" — it would
+    # reach `window[-1]` and raise IndexError instead of the refusal the caller deserves.
+    required = max(1, rule.expected_bars if minimum_bars is None else minimum_bars)
     if len(window) < required:
         total_bars = len(session.underlying_bars())
         raise SettlementWindowError(
             f"{session.underlying} {session.session_date}: the closing window "
             f"{rule.window_start}..{rule.window_end} holds {len(window)} underlying bars, "
             f"fewer than the {required} the rule requires (the session printed "
-            f"{total_bars} underlying bars in total). Under "
-            f"'{METHOD_CLOSING_AUCTION_EQUILIBRIUM}' the settled value is a closing print; "
-            f"a print from outside the closing window is not a late one, it is a different "
+            f"{total_bars} underlying bars in total). Under '{rule.method}' the settled "
+            f"value is a closing print; a print from outside the closing window is not a "
+            f"late one, it is a different "
             f"observation, and settling on it would put an arbitrary minute's price into "
             f"every payoff of the day."
         )
     settled = window[-1]
     corroboration = option_implied_settlement(session)
-    if rule.corroboration_tolerance is not None and corroboration is not None:
-        residual = abs(settled.close - corroboration.value)
-        if residual > rule.corroboration_tolerance:
+    if rule.corroboration_tolerance is not None:
+        if corroboration is None:
+            if session.session_date in session.universe.expiries():
+                raise SettlementWindowError(
+                    f"{session.underlying} {session.session_date}: the chain expiring today "
+                    f"offers no put-call pair to witness the closing print "
+                    f"{settled.close} at {settled.minute.time()}, so nothing here can tell "
+                    f"a closing print from a frozen one — and this feed freezes. The proxy "
+                    f"is licensed by that agreement and by nothing else, so an expiry "
+                    f"without a witness does not settle. A session with nothing expiring is "
+                    f"a different case: it settles, because the engine never pays anything "
+                    f"on it."
+                )
+        elif abs(settled.close - corroboration.value) > rule.corroboration_tolerance:
+            residual = abs(settled.close - corroboration.value)
             raise SettlementWindowError(
                 f"{session.underlying} {session.session_date}: the closing print "
                 f"{settled.close} at {settled.minute.time()} misses the expiring chain's "

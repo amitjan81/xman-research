@@ -122,17 +122,23 @@ def _index_rows(
     return rows
 
 
-def _chain_rows(session_date: dt.date, settled: float) -> list[dict[str, object]]:
+def _chain_rows(
+    session_date: dt.date,
+    settled: float,
+    *,
+    minutes: tuple[dt.time, ...] | None = None,
+    strikes: tuple[float, ...] = STRIKES,
+) -> list[dict[str, object]]:
     """The expiring chain, trading at pure intrinsic from 15:30 to 15:39.
 
     The wings sit on the 0.05 tick floor exactly as the corpus's do, which is why the
     module takes a median across strikes rather than a mean.
     """
     rows: list[dict[str, object]] = []
-    for offset in range(10):
-        moment = dt.time(15, 30 + offset)
+    moments = minutes if minutes is not None else tuple(dt.time(15, 30 + o) for o in range(10))
+    for moment in moments:
         stamp = _stamp(session_date, moment)
-        for strike in STRIKES:
+        for strike in strikes:
             rows.append(_row(stamp, _symbol(strike, OptionType.CALL), max(0.05, settled - strike)))
             rows.append(_row(stamp, _symbol(strike, OptionType.PUT), max(0.05, strike - settled)))
     return rows
@@ -143,9 +149,12 @@ def _session(
     *,
     index_rows: list[dict[str, object]] | None = None,
     chain_settled: float | None = CLOSING_PRINT,
+    chain_rows: list[dict[str, object]] | None = None,
 ) -> SessionView:
     rows = _index_rows(session_date) if index_rows is None else index_rows
-    if chain_settled is not None:
+    if chain_rows is not None:
+        rows = rows + chain_rows
+    elif chain_settled is not None:
         rows = rows + _chain_rows(session_date, chain_settled)
     return SessionView.from_frame(session_date, "NIFTY", pd.DataFrame(rows), _refdata(session_date))
 
@@ -321,11 +330,102 @@ def test_a_session_with_no_expiring_chain_has_no_witness_and_still_settles() -> 
     assert "corroborated_by_option_parity" not in settled.provenance()
 
 
-def test_the_witness_ignores_a_minute_too_thin_to_be_one() -> None:
-    """One strike quoting both sides is an anecdote; the median needs a chain."""
-    session = _session()
+def test_the_witness_falls_back_past_a_minute_too_thin_to_be_one() -> None:
+    """One strike quoting both sides is an anecdote; the median needs a chain.
 
+    The last minute here quotes two strikes and the one before it quotes all eight, so the
+    assertion is not merely that the thin minute is rejected but that the witness keeps
+    looking. A chain thins out at the very end of a session — the wings stop quoting first —
+    and taking the last minute unconditionally would hand the guard a two-strike opinion on
+    exactly the sessions where the chain is worst.
+    """
+    session = _session(
+        chain_rows=_chain_rows(
+            EXPIRY,
+            CLOSING_PRINT,
+            minutes=tuple(dt.time(15, 30 + offset) for offset in range(9)),
+        )
+        + _chain_rows(EXPIRY, CLOSING_PRINT, minutes=(dt.time(15, 39),), strikes=STRIKES[:2]),
+    )
+
+    implied = option_implied_settlement(session)
+
+    assert implied is not None
+    assert implied.minute.time() == dt.time(15, 38)
+    assert implied.pairs == len(STRIKES)
+    # And the precondition still holds when no minute anywhere is thick enough.
     assert option_implied_settlement(session, minimum_pairs=len(STRIKES) + 1) is None
+
+
+def test_an_expiry_whose_chain_cannot_witness_the_close_does_not_settle() -> None:
+    """The guard is not optional on the one kind of session the engine settles.
+
+    ``_settle_expiring`` is the only caller, and it fires only when a position expires that
+    session — so in production every settled session is an expiry. Letting a thin chain
+    mean "no check" would leave the proxy uncorroborated on exactly the sessions that pay,
+    with nothing but an absent provenance key to say so. It refuses instead, and says which
+    of the two cases it is in.
+    """
+    session = _session(
+        chain_rows=_chain_rows(EXPIRY, CLOSING_PRINT, strikes=STRIKES[:2]),
+    )
+
+    assert option_implied_settlement(session) is None
+    assert session.session_date in session.universe.expiries()
+
+    with pytest.raises(SettlementWindowError, match="no put-call pair to witness"):
+        settlement_value(session)
+
+
+def test_an_out_of_hours_chain_print_is_not_the_witness() -> None:
+    """The witness is time-bounded for the same reason the settled value is.
+
+    A stray 18:45 chain row would otherwise become the opinion that a real closing print is
+    judged against — and because the guard refuses on disagreement, a witness read from a
+    junk row does not produce a wrong number, it kills the run.
+    """
+    session = _session(
+        chain_rows=_chain_rows(EXPIRY, CLOSING_PRINT)
+        + _chain_rows(EXPIRY, CLOSING_PRINT + 500.0, minutes=(dt.time(18, 45),)),
+    )
+
+    implied = option_implied_settlement(session)
+    assert implied is not None
+    assert implied.minute.time() == dt.time(15, 39)
+    assert settlement_value(session).value == pytest.approx(CLOSING_PRINT)
+
+
+def test_a_tolerance_no_method_honours_is_refused_as_a_table_defect() -> None:
+    """A guard that reports itself installed and is not is worse than no guard.
+
+    ``corroboration_tolerance`` is a field on every rule but only the closing-print method
+    reads it. A future row pairing it with the window-mean method would look guarded in the
+    table and be unguarded in fact, which is the failure mode this whole module is shaped
+    against — so it is refused where it can still be seen, at the point of use.
+    """
+    guarded_mean = SettlementRule(
+        effective_from=dt.date(2010, 1, 1),
+        method="mean_of_underlying_minute_close_over_window",
+        window_start=dt.time(15, 0),
+        window_end=dt.time(15, 30),
+        expected_bars=30,
+        source="the pre-auction rule, with a tolerance nothing reads",
+        source_url="https://example.invalid/rule",
+        confidence=Confidence.CORROBORATED,
+        corroboration_tolerance=5.0,
+    )
+    session = _session(dt.date(2026, 6, 9))
+
+    with pytest.raises(SettlementWindowError, match="does not check one"):
+        settlement_value(session, rules=(guarded_mean,))
+
+
+def test_a_caller_who_asks_for_no_bars_at_all_is_still_refused() -> None:
+    """``minimum_bars=0`` is not "settle on an empty window"; there is no such value."""
+    session = _session(index_rows=_index_rows(EXPIRY, last_index_minute=dt.time(15, 20)))
+
+    with pytest.raises(SettlementWindowError, match="closing window"):
+        settlement_value(session, minimum_bars=0)
 
 
 # --------------------------------------------------------- the pre-auction rule is intact

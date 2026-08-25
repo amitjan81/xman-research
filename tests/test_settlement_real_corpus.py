@@ -6,7 +6,7 @@ three facts only the real corpus can state, and it is why
 than a refusal:
 
 1. **The 15:00-15:30 index feed degrades at exactly the auction boundary.** Before
-   3 August 2026 a session's thirty window bars carry 28-30 distinct closes; from
+   3 August 2026 a session's thirty window bars carry 25-30 distinct closes; from
    3 August they carry 15-17, the feed freezing for ten minutes at a time. The superseded
    statistic is therefore not merely out of date — most of its inputs stopped being
    observations.
@@ -18,8 +18,14 @@ than a refusal:
    consistent with "the chain always tracks the last print", which would say nothing about
    settlement at all.
 
-The expiries are discovered from refdata rather than listed, so the corpus growing
-overnight extends the measurement instead of leaving it pinned to three dates.
+**The measurement's far end is discovered, not written down.** The expiries come from
+refdata rather than a list, and the span they are looked for in runs to whatever session
+the store last holds — so tonight's capture is measured tomorrow instead of the file
+staying pinned to the three expiries that happened to exist when it was written. That
+matters more than it sounds: the tolerance the proxy runs on is a gap observed across
+three expiries, and the only thing that widens that sample is this file noticing new ones.
+The read is capped at the most recent :data:`MEASURED_SESSIONS` sessions so the file's
+parquet volume stays flat as the corpus grows.
 
 Everything here is read-only: the corpus is irreplaceable and nothing in this package
 opens it for writing.
@@ -45,6 +51,7 @@ from xman_research.backtest import (
 )
 from xman_research.backtest.strategies import ShortAtmStraddle
 from xman_research.session_store import DEFAULT_CORPUS_ROOT, SessionStore
+from xman_research.session_store.trading_calendar import TradingCalendar
 
 CORPUS_ROOT = Path(os.environ.get("XMAN_RESEARCH_CORPUS_ROOT") or DEFAULT_CORPUS_ROOT)
 UNDERLYING = "NIFTY"
@@ -52,10 +59,18 @@ UNDERLYING = "NIFTY"
 #: The day the Closing Auction Session went live, and the day the feed changed shape.
 AUCTION_START = dt.date(2026, 8, 3)
 
-#: A month of sessions either side of the boundary — enough expiries for the claim, few
-#: enough to keep the file's parquet reads in the low tens.
+#: The pre-boundary control: a month of sessions, fixed, because that regime is closed and
+#: its numbers will not change again.
 BEFORE = (dt.date(2026, 7, 1), AUCTION_START - dt.timedelta(days=1))
-AFTER = (AUCTION_START, dt.date(2026, 8, 18))
+
+#: How many post-boundary sessions to read, counted back from the newest the store holds.
+#: Enough for several expiry cycles; flat as the corpus grows.
+MEASURED_SESSIONS = 45
+
+#: The end-to-end run's window is **fixed on purpose**, unlike the measurement's. A run
+#: asserts on settlement counts and needs a span whose contents do not change underneath
+#: it; a measurement asserts a relationship and wants every session it can get.
+E2E_WINDOW = (AUCTION_START, dt.date(2026, 8, 18))
 
 pytestmark = pytest.mark.skipif(
     not (CORPUS_ROOT / UNDERLYING).is_dir(),
@@ -68,13 +83,22 @@ def store() -> SessionStore:
     return SessionStore(root=CORPUS_ROOT)
 
 
-def _sessions(store: SessionStore, span: tuple[dt.date, dt.date]) -> list[SessionView]:
+def _refs(store: SessionStore, span: tuple[dt.date, dt.date]):
     resolution = store.resolve(UNDERLYING, *span)
-    refs = (
-        resolution.sessions()
-        if resolution.is_complete
-        else resolution.accept_gaps("settlement measurement: the shape of the feed, not a P&L")
-    )
+    if resolution.is_complete:
+        return list(resolution.sessions())
+    # A span reaching for "whatever exists now" is incomplete by construction — the
+    # sessions after the last capture have not been captured. That is the answer being
+    # asked for here, not a hole to refuse over.
+    return list(resolution.accept_gaps("settlement measurement: the shape of the feed, not a P&L"))
+
+
+def _sessions(
+    store: SessionStore, span: tuple[dt.date, dt.date], *, limit: int | None = None
+) -> list[SessionView]:
+    refs = _refs(store, span)
+    if limit is not None:
+        refs = refs[-limit:]
     return [
         SessionView.from_frame(
             ref.session_date, UNDERLYING, store.load_session(ref), store.load_refdata(ref)
@@ -121,7 +145,22 @@ def before(store: SessionStore) -> list[SessionView]:
 
 @pytest.fixture(scope="module")
 def after(store: SessionStore) -> list[SessionView]:
-    return _sessions(store, AFTER)
+    """Every post-boundary session the store holds, back to at most ``MEASURED_SESSIONS``.
+
+    The far end is the corpus's own, found by resolving a span that deliberately overshoots
+    into sessions that have not happened yet and keeping what came back.
+    """
+    # The overshoot stops at the calendar's own coverage end: past it the store refuses
+    # the range outright rather than mistake unlisted holidays for capture gaps, and that
+    # refusal is a guard worth keeping rather than one to route around.
+    horizon = TradingCalendar().coverage_end
+    refs = _refs(store, (AUCTION_START, horizon))
+    assert refs, "no sessions captured on or after the auction boundary"
+    latest = max(ref.session_date for ref in refs)
+    assert latest >= dt.date(2026, 8, 18), (
+        f"the corpus stops at {latest}, before the three expiries this measurement needs"
+    )
+    return _sessions(store, (AUCTION_START, latest), limit=MEASURED_SESSIONS)
 
 
 def test_the_index_feed_stops_observing_at_the_auction_boundary(
@@ -238,7 +277,7 @@ def test_a_hold_to_expiry_run_crosses_the_boundary_and_stamps_the_proxy(
     from xman_research import StaticCodeVersion, TrialLog
     from xman_research.clock import ManualClock
 
-    window = DataWindow(*AFTER)
+    window = DataWindow(*E2E_WINDOW)
     log = TrialLog(
         Path(tempfile.mkdtemp(prefix="xman_research_cas_e2e_")) / "research.db",
         clock=ManualClock(dt.datetime(2026, 8, 25, 9, 15, tzinfo=dt.UTC)),
