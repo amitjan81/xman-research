@@ -312,7 +312,7 @@ class FeatureBuilder:
 
         A date whose feature is ``None`` is **absent** rather than present with a filler, so
         a conditioned strategy reading this series declines to enter on it — which is the
-        behaviour :class:`~xman_research.alpha.templates.ConditionedShortStraddle` documents.
+        behaviour :class:`~xman_research.alpha.templates.HoldNSpread` documents.
         """
         series: dict[dt.date, float] = {}
         for session_date in sessions:
@@ -636,6 +636,14 @@ def _compute(
     if latest.close is not None and ema is not None and atr is not None and atr > 0:
         z = (latest.close - ema) / (2.0 * atr)
 
+    # Per-session standard deviation, from the annualised twenty-session figure. The gap is
+    # a single overnight move, so measuring it against an annualised number would understate
+    # it by a factor of sixteen; the conversion divides by the same 252 every other
+    # annualisation in this repository multiplies by.
+    gap_sigmas: float | None = None
+    if gap is not None and rv_long is not None and rv_long > 0:
+        gap_sigmas = abs(gap) / (rv_long / math.sqrt(ANNUALISATION_SESSIONS))
+
     sessions_to_expiry = _sessions_to_expiry(calendar, as_of, latest.nearest_expiry)
     values: list[FeatureValue] = [
         FeatureValue(
@@ -739,6 +747,48 @@ def _compute(
             reason=None
             if z is not None
             else _missing("a close, an exponential average and a positive average true range"),
+        ),
+        FeatureValue(
+            name="ema20_z_abs",
+            value=None if z is None else abs(z),
+            lookback_sessions=max(ema_warmup, _ATR_SESSIONS),
+            unit="ATR multiples",
+            description=(
+                "Magnitude of the index's distance from its twenty-session exponential "
+                "average, in units of twice the fourteen-session average true range. "
+                "Direction is discarded: a short-volatility conditioner asks how far the "
+                "index has travelled from its own average, and a move of either sign is "
+                "the same amount of travel."
+            ),
+            reason=None
+            if z is not None
+            else _missing("a close, an exponential average and a positive average true range"),
+        ),
+        FeatureValue(
+            name="overnight_gap_sigmas",
+            value=gap_sigmas,
+            lookback_sessions=max(_RV_LONG_SESSIONS, 2),
+            unit="per-session standard deviations",
+            description=(
+                "Magnitude of the overnight gap against the per-session standard deviation "
+                "implied by twenty-session realised volatility. Unitless, so a threshold on "
+                "it means the same thing in a calm market and a violent one."
+            ),
+            reason=None
+            if gap_sigmas is not None
+            else _missing("an overnight gap and a positive twenty-session realised volatility"),
+        ),
+        FeatureValue(
+            name="day_of_week",
+            value=float(as_of.weekday()),
+            lookback_sessions=1,
+            unit="weekday index, Monday 0",
+            description=(
+                "The as-of session's weekday. Present as a feature because the NSE expiry "
+                "cycle is weekly, so the weekday and the position of a session inside that "
+                "cycle are the same fact seen twice."
+            ),
+            reason=None,
         ),
         FeatureValue(
             name="overnight_gap_return",

@@ -27,7 +27,6 @@ from xman_research.alpha.library import (
 )
 from xman_research.alpha.templates import (
     Comparator,
-    ConditionedShortStraddle,
     ConditionerSpec,
     HoldNShortStraddle,
     ParameterRange,
@@ -60,12 +59,20 @@ def library(tmp_path: Path, clock: ManualClock) -> TemplateLibrary:
 # ------------------------------------------------------------------------------- registry
 
 
-def test_the_shipped_registry_holds_the_benchmark_family_and_its_conditional_sibling(
+def test_the_shipped_registry_holds_every_shape_unconditioned_and_conditioned(
     registry: TemplateRegistry,
 ) -> None:
-    assert registry.ids() == ("short_atm_straddle_hold_n", "short_atm_straddle_iv_rv")
-    assert registry.get("short_atm_straddle_hold_n").conditioner is None
-    assert registry.get("short_atm_straddle_iv_rv").conditioner is not None
+    """Each structure ships as its own benchmark family plus one template per conditioner."""
+    shapes = ("short_atm_straddle", "short_atm_strangle", "iron_condor")
+    kinds = ("iv_rv", "ema_atr_band", "post_gap", "expiry_distance", "day_of_week")
+    expected = tuple(
+        f"{shape}_{suffix}" for shape in shapes for suffix in ("hold_n", *kinds)
+    )
+    assert registry.ids() == expected
+    for shape in shapes:
+        assert registry.get(f"{shape}_hold_n").conditioner is None
+        for kind in kinds:
+            assert registry.get(f"{shape}_{kind}").conditioner is not None
 
 
 def test_two_registries_do_not_share_state(registry: TemplateRegistry) -> None:
@@ -80,7 +87,7 @@ def test_two_registries_do_not_share_state(registry: TemplateRegistry) -> None:
             hold_sessions=1,
             parameters={},
             conditioner=None,
-            builder=lambda params, underlying, signal: HoldNShortStraddle(),
+            builder=lambda params, underlying, series: HoldNShortStraddle(),
         )
     )
     assert "extra" in other
@@ -100,7 +107,7 @@ def test_an_unregistered_id_names_what_is_registered(registry: TemplateRegistry)
 
 
 def test_for_product_selects_only_templates_declaring_it(registry: TemplateRegistry) -> None:
-    assert len(registry.for_product("NIFTY")) == 2
+    assert len(registry.for_product("NIFTY")) == len(registry)
     assert registry.for_product("BANKNIFTY") == ()
 
 
@@ -111,7 +118,14 @@ def test_every_shipped_template_builds_something_satisfying_the_engine_protocol(
     registry: TemplateRegistry,
 ) -> None:
     for template in registry:
-        built = template.build(None, "NIFTY", signal_by_session={dt.date(2026, 4, 24): 0.5})
+        built = template.build(
+            None,
+            "NIFTY",
+            feature_series={
+                name: {dt.date(2026, 4, 24): 0.5}
+                for name in ("iv_minus_rv_20", "atr_14", "ema20_z_abs", "overnight_gap_sigmas")
+            },
+        )
         assert isinstance(built, Strategy)
         assert built.name
         assert dict(built.parameters())
@@ -142,7 +156,11 @@ def test_build_refuses_a_parameter_the_template_does_not_declare(
 
 def test_resolve_fills_declared_defaults(registry: TemplateRegistry) -> None:
     resolved = registry.get("short_atm_straddle_iv_rv").resolve({})
-    assert resolved == {"target_notional": 1_500_000.0, "iv_rv_threshold": 0.03}
+    assert resolved == {
+        "hold_sessions": 1.0,
+        "target_notional": 1_500_000.0,
+        "iv_rv_threshold": 0.03,
+    }
 
 
 def test_a_parameter_range_refuses_a_default_outside_itself() -> None:
@@ -165,7 +183,7 @@ def test_a_template_with_no_thesis_is_refused() -> None:
             hold_sessions=1,
             parameters={},
             conditioner=None,
-            builder=lambda params, underlying, signal: HoldNShortStraddle(),
+            builder=lambda params, underlying, series: HoldNShortStraddle(),
         )
 
 
@@ -203,9 +221,10 @@ def test_an_at_most_conditioner_measures_strength_in_the_other_direction() -> No
     assert spec.strength(-1.0) == pytest.approx(0.5)
 
 
-def test_a_conditioned_strategy_with_no_signal_series_declines_to_enter() -> None:
+def test_a_conditioned_strategy_with_no_feature_series_declines_to_enter() -> None:
     """The unsafe direction is a conditional strategy silently trading unconditionally."""
-    strategy = ConditionedShortStraddle(
+    session_date = dt.date(2026, 4, 24)
+    strategy = HoldNShortStraddle(
         conditioner=ConditionerSpec(
             feature="iv_minus_rv_20",
             comparator=Comparator.AT_LEAST,
@@ -214,9 +233,9 @@ def test_a_conditioned_strategy_with_no_signal_series_declines_to_enter() -> Non
             lookback_sessions=20,
         )
     )
-    assert strategy._may_enter(session=_FakeSession(dt.date(2026, 4, 24)), minute=None) is False
-    strategy.signal_by_session = {dt.date(2026, 4, 24): 0.1}
-    assert strategy._may_enter(session=_FakeSession(dt.date(2026, 4, 24)), minute=None) is True
+    assert strategy._may_enter(session_date) is False
+    strategy.feature_series = {"iv_minus_rv_20": {session_date: 0.1}}
+    assert strategy._may_enter(session_date) is True
 
 
 # -------------------------------------------------------------------------------- library

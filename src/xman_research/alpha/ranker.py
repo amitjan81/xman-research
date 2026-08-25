@@ -442,7 +442,7 @@ class NightlyScan:
         strategy = template.build(
             self._parameters(template),
             underlying,
-            signal_by_session=self._signal(template, frame),
+            feature_series=self._feature_series(frame),
         )
         intents = strategy.decide(session=view, minute=minute, book=_EMPTY_BOOK)
         if not intents:
@@ -579,19 +579,24 @@ class NightlyScan:
             supplied["target_notional"] = self._target_notional
         return template.resolve(supplied)
 
-    def _signal(
-        self, template: StrategyTemplate, frame: FeatureFrame
-    ) -> dict[dt.date, float] | None:
-        """The conditioner's feature for the as-of session alone.
+    def _feature_series(self, frame: FeatureFrame) -> dict[str, dict[dt.date, float]]:
+        """Every computable feature on the frame, as a one-session series each.
 
-        The scan opens one position on one session, so one entry is all a conditioned
-        strategy needs — and taking it from the frame that was already built keeps the value
-        the trigger reported and the value the strategy acts on the same number.
+        The scan opens one position on one session, so one entry per feature is all a
+        strategy needs — and taking them from the frame that was already built keeps the
+        values the rationale reports and the values the strategy acts on the same numbers.
+
+        Every feature is offered rather than only the conditioner's, because a strike rule
+        reads one too: an at-the-money straddle needs none, and a structure widthed in
+        average true ranges needs ``atr_14``. A feature whose value is ``None`` is left out
+        entirely, which is what makes the strategy decline the session rather than width a
+        position from a filler.
         """
-        if template.conditioner is None:
-            return None
-        value = frame.value(template.conditioner.feature)
-        return {} if value is None else {frame.as_of: value}
+        return {
+            name: {frame.as_of: feature.value}
+            for name, feature in frame.features.items()
+            if feature.value is not None
+        }
 
     def _position(
         self,

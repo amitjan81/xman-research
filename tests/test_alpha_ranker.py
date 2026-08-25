@@ -131,7 +131,7 @@ def _two_templates_of_different_strength(
                 saturation_span=1.0,
                 lookback_sessions=1,
             ),
-            builder=lambda params, underlying, signal: HoldNShortStraddle(
+            builder=lambda params, underlying, series: HoldNShortStraddle(
                 min_calendar_days_to_expiry=4
             ),
         )
