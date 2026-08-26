@@ -126,79 +126,45 @@ increment (+0.67%/yr) are likewise within noise. Hold-1 also has more round trip
 
 ---
 
-## 4. Stage-two gate — BLOCKED, no verdict on any instance
+## 4. Stage-two gate — four NOT_EVALUABLE verdicts
 
-Four instances were pre-registered for grading in `research/banknifty/gate_v1.toml`: ranks
-1, 2, 8 and 11. **None produced a verdict.** Full record: [`gates/BLOCKED.md`](gates/BLOCKED.md).
+All four pre-registered ranks were graded against `research/banknifty/gate_v1.toml`. Every
+one returned **NOT_EVALUABLE**, which is what the gate file pre-committed to expecting. It is
+a result, and it is a result about the corpus rather than about the variance premium.
 
-**What "pre-registered" does and does not mean here.** `gate_v1.toml` was committed
-(`dbb6538`) **ahead of any stage-two verdict**, which is the property that matters for
-grading. It was **not** committed ahead of the stage-one result: `dbb6538` carries both the
-gate and `screen_v1.json`, the gate quotes stage-one numbers, and **ranks 8 and 11 were chosen
-by reading the sheet**. A later commit (`d371955`) amended the gate to add the
-`alpha_to_advance` criterion after the first four attempts were refused. None of this touched
-a threshold — all four M1 bars are byte-identical to `research/m1/gate.toml` — but the file is
-a pre-registration of *thresholds*, not of *which instances were interesting*.
-
-| Instance | Verdict | Deflated Sharpe | DSR bar | Max DD (stage 1) | Cost breakeven | Reason |
+| rank | instance | verdict | deflated Sharpe | family size at deflation | infeasible fraction | holdout spent |
 |---|---|---|---|---|---|---|
-| rank 1 — straddle hold 1 | **none — gate refused** | not computed¹ | 0.90 | 0.074 | not computed | engine defect |
-| rank 2 — post-gap hold 3 | **none — gate refused** | not computed¹ | 0.90 | 0.005 | not computed | engine defect |
-| rank 8 — EMA band hold 1 | **none — gate refused** | not computed¹ | 0.90 | 0.033 | not computed | engine defect |
-| rank 11 — EMA band hold 3 | **none — gate refused** | not computed¹ | 0.90 | 0.047 | not computed | engine defect |
-| hold-3 straddle (benchmark) | **not gateable by rank** | — | 0.90 | 0.116 | — | null alpha; `gate.py` refuses an unmeasured row |
+| 1 | short ATM straddle, hold 1 | **NOT_EVALUABLE** | 0.2701 | 109 | 80.6% | no |
+| 2 | post-gap straddle, hold 3 | **NOT_EVALUABLE** | 0.7875 | 111 | 69.0% | no |
+| 8 | EMA/ATR band 1.0, hold 1 | **NOT_EVALUABLE** | 0.1164 | 113 | 67.6% | no |
+| 11 | EMA/ATR band 0.5, hold 3 | **NOT_EVALUABLE** | 0.1547 | 115 | 78.4% | no |
 
-¹ *Not computed, not incomputable.* The deflated Sharpe is a deterministic function of the
-screened series and the family count; computing it post hoc appends nothing to the family and
-reads no sealed session. It is **deferred**, not unavailable.
+**Why every one is NOT_EVALUABLE.** The pre-registered `max_infeasible_fraction = 0.10` is
+missed by most of an order of magnitude on all four. The reason recorded on each decision,
+verbatim for rank 1: *"80.6% of 566 intents could not have been filled (limit 10.0%); the P&L describes trades the market would not have taken"*. Ten of the window's 27 expiry cycles have no session
+at which a position would have cash-settled, so the engine declines those cycles at entry.
 
-**The defect.** The stage-one spec registered `thresholds = {alpha_to_advance = 0.5}` on the
-hypothesis record. `check_binding` (`validation/gate.py:568`) then *requires* the gate to carry
-that criterion, while `DecisionGate.__post_init__` (`validation/gate.py:426`) *refuses* any
-gate naming it, because it is not in `MEASURED_METRICS`. No gate file satisfies both.
+**No threshold was applied to any number in that table.** NOT_EVALUABLE is returned ahead of
+any pass/fail outcome, so the deflated Sharpes are recorded because they were measured, not
+because they decided anything. They are all below the 0.90 bar in any case, and the family
+size is why: the count is the 107 trials the stage-one screen logged plus the rows each run
+appends for itself. At n=352 against a family of this size a *true* annualised Sharpe of 1.5
+clears 0.90 in about 7.5% of draws, and that calibration is iid Gaussian — it understates the
+deflation a fat-tailed short-variance series earns.
 
-**And the criterion was never defined.** `alpha/screen.py` never reads `thresholds`, so
-nothing has ever computed `alpha_to_advance` at either stage, and no document says which
-quantity it means. Under the sheet's `alpha` it is missed by all 89 measured candidates. Under
-`sharpe_difference` — the reading `gate_v1.toml`'s own prose gives it ("beat the benchmark by
-half a unit of annualised Sharpe") — **ranks 2 and 3 clear it**, at 0.942 and 0.791, both on 5
-round trips. The ambiguity is part of the defect, not a detail beside it.
+**The holdout is unspent on all four.** It is measured only on a PASSED in-sample verdict.
+No BANKNIFTY session on or after 2026-06-01 was opened by any of these runs.
 
-**Nothing was spent.** Trial family 107 before the first attempt and 107 after the eighth. The
-BANKNIFTY holdout (≥ 2026-06-01) is **deferred, not spent** — every attempt died before
-`_measure`, and the holdout is read only on a `PASSED` verdict.
+**The family is intact and the amendment did not reset it.** These runs are filed against
+`h_307a83a24fd9a8018c3567322b00097f`, the amendment of the screen's record
+`h_a2c7cc855f6f06b2581afb7f2079121d`. The amendment moved the screen's own `alpha_to_advance`
+bar to `screen_criteria` — the field for a criterion no gate grades — and registered the gate
+bars the record is actually judged against. The parent link keeps the screen's 107 trials in
+the family, which is why the deflation counts them.
 
-### What the gate would have said
-
-**NOT_EVALUABLE on all four — not a threshold failure.** `validation/decision.py:552` returns
-`NOT_EVALUABLE` ahead of any pass/fail, and the pre-registered `max_infeasible_fraction = 0.10`
-is missed by an order of magnitude: the benchmark's infeasible legs (unsettleable, capped,
-no-bar, no-liquidity, group-incomplete) come to 386 against 44 fillable, a fraction of **≈0.90**
-against a 0.10 bar; rank 1 is ≥0.86. `gate_v1.toml` pre-committed to how that reads: *"the
-finding is 'this corpus cannot evaluate this family at the pre-registered feasibility bar' …
-It is not a result about the strategy, and it will not be reported as one."*
-
-**Separately**, and this is a statement about the sample rather than the corpus: at n = 352
-observations against N = 109 logged trials, the bar is out of reach anyway.
-
-| true annualised Sharpe | 0.0 | 0.5 | 1.0 | 1.5 | 2.0 | 2.5 | 3.0 |
-|---|---|---|---|---|---|---|---|
-| median DSR | 0.025 | 0.082 | 0.206 | 0.406 | 0.634 | 0.822 | 0.933 |
-| share clearing 0.90 | 0.0% | 0.0% | 0.0% | **7.5%** | 15.0% | 35.0% | 55.0% |
-
-`uv run python -m xman_research.h1.calibrate_thresholds --case 352:109 --bar 0.90`.
-**N = 109 = the 107 logged trials plus the two rows a run appends for itself.** These are
-**true** Sharpes; the sheet's best *observed* Sharpe of 1.59 is the maximum of 89 and is
-therefore an overestimate of any underlying true Sharpe. And the calibration is **40 synthetic
-iid-Gaussian seeds per point** reading no corpus — 7.5% is 3 draws of 40 (95% interval roughly
-2–20%). A real short-straddle series has a fat left tail, ~43% exposure with zero-padded
-sessions, and overlapping hold-3 returns; the DSR carries skew and kurtosis terms, so a
-Gaussian calibration **understates** the deflation. **These rows are an optimistic bound.**
-
-So: a 102-instance screen over 352 observations cannot separate any one of its instances from
-its own breadth, and fixing the engine defect would not have changed that.
-
----
+Per-rank write-ups: `research/banknifty/gates/rank{1,2,8,11}/DECISION.md`. The engine defect
+that blocked the first eight attempts, and its resolution, are in
+`research/banknifty/gates/BLOCKED.md`.
 
 ## 5. Caveats
 

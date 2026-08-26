@@ -1,9 +1,9 @@
-# BANKNIFTY stage-two gate — BLOCKED by an engine defect
+# BANKNIFTY stage-two gate — the engine defect that blocked it, and how it was resolved
 
-**Outcome: no verdict of any kind was produced** — no pass, no failure, and no NOT_EVALUABLE
-decision record, though NOT_EVALUABLE is what the pre-registration expected and what the
-feasibility counts say all four runs would have returned (see *What the gate would have said*
-below). The stage-two gate could not be run at all, on any of the four pre-registered ranks,
+**This document records the defect and the eight refused attempts. It is superseded on the
+question of the outcome: the four gates have since run and returned four NOT_EVALUABLE
+verdicts — see the Resolved section at the end, and section 4 of ../BN_TOP5.md.** At the time
+of writing, no verdict of any kind had been produced. The stage-two gate could not be run at all, on any of the four pre-registered ranks,
 because two guards in `xman_research.validation.gate` contradict each other and the BANKNIFTY
 hypothesis record sits exactly in the gap between them.
 
@@ -184,3 +184,43 @@ own breadth.
 
 The blockage therefore costs one thing and not another: it costs the four decision records, and
 it does not cost a finding.
+
+---
+
+## Resolved
+
+The contradiction is fixed and the four gates have run.
+
+**The fix.** A screen's criteria and a gate's criteria shared the record's `thresholds` field
+while only the gate vocabulary was validated. They are now two fields.
+`HypothesisRecord.screen_criteria` carries what a screen required of an instance;
+`thresholds` carries what a gate grades, and every numeric one is checked against
+`MEASURED_METRICS` when the record is constructed. Both guards named above are unchanged —
+with registration validated, the state they disagreed about can no longer be reached. The
+vocabulary moved to `xman_research.metric_vocabulary`, which both sides import, and one
+predicate — `is_gradeable_metric` — is what keeps the registration check and `check_binding`
+in step.
+
+**The criterion now has a definition.** `alpha_to_advance` is registered under
+`screen_criteria` with `alpha_to_advance_definition` beside it, naming the quantity: the
+annualised Sharpe of the candidate-minus-benchmark difference series, which is the sheet's
+`alpha` and not the validator's `sharpe_difference`. The ambiguity documented above was real —
+the two readings disagree on ranks 2 and 3 — and it is now settled in the record rather than
+left to whoever reads it last.
+
+**The record was amended, not re-registered.** `h_a2c7cc855f6f06b2581afb7f2079121d` was
+amended to `h_307a83a24fd9a8018c3567322b00097f`. The parent link is intact and
+`count_family_trials` reads **107** for the amendment — the screen's whole breadth, exactly as
+before. `alpha gate --hypothesis` is what files a run against an amendment of the sheet's
+record; it requires the id to be in the sheet's own family, so it cannot be used to buy a
+smaller one.
+
+**The trial family is still intact.** `research/banknifty/screen_v1.db` held 107 trials before
+the fix and holds 107 in the family after it. The four gate runs each append their own rows,
+which is why the deflation's `selection_size` reads 109 to 115 across them.
+
+**The verdicts.** Four NOT_EVALUABLE, one per rank — the outcome the counterfactual above
+predicted, now on the record as decision records rather than as an argument. The measured
+infeasible fractions are 0.68 to 0.81 against the 0.10 bar; the estimate of ≈0.90 above was
+computed over the benchmark's intents rather than per instance, and the per-instance numbers
+are what the decisions carry.

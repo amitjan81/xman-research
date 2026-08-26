@@ -14,16 +14,16 @@
 #   * `recorded_at` below is a date, not a minute, and it is earlier than both the sheet's
 #     generation and this file's commit. The git history is the authority on the ordering;
 #     the field is retained because the loader requires one, not as evidence.
-#   * A LATER COMMIT AMENDS THIS FILE. `alpha_to_advance` was added after the first four gate
-#     attempts were refused at binding. No threshold moved and no verdict existed — the
-#     attempts died before measuring anything — but the amendment is on the record and is
-#     described at the criterion itself.
+#   * THIS FILE HAS BEEN AMENDED TWICE, BOTH TIMES BEFORE ANY VERDICT EXISTED. `alpha_to_advance`
+#     was added after the first four gate attempts were refused at binding, then removed when
+#     the criterion moved to the hypothesis record's `screen_criteria` and `hypothesis_id` was
+#     repointed at the amended record h_307a83a24fd9a8018c3567322b00097f. No bar this file
+#     grades has ever moved, and no gate attempt has ever reached a measurement, so no
+#     threshold has been chosen against a result. Both amendments are in the git history.
 #
 # THE FOUR M1 BARS BELOW ARE research/m1/gate.toml's, UNCHANGED — deflated_sharpe,
 # cost_breakeven_multiple, max_drawdown and risk_matched_increment, byte-identical, plus M1's
-# holdout bars and [not_evaluable] defaults. A FIFTH BAR, `alpha_to_advance`, is NOT M1's: it
-# is carried from the stage-one registration because the binding check requires it, and it is
-# documented where it appears.
+# holdout bars and [not_evaluable] defaults. They are the whole of what this gate grades.
 # What changed is the family they bind to: this file names the BANKNIFTY stage-one screen's
 # hypothesis record rather than M1's. The arguments M1 wrote for each bar are not restated
 # here; they are in research/m1/gate.toml and they are the arguments in force. What IS
@@ -120,7 +120,7 @@
 # longer be recorded.
 # =======================================================================================
 
-hypothesis_id = "h_a2c7cc855f6f06b2581afb7f2079121d"
+hypothesis_id = "h_307a83a24fd9a8018c3567322b00097f"
 recorded_at = 2026-08-25T00:00:00Z
 
 cross_epoch_justification = """
@@ -174,22 +174,15 @@ result about the strategy, and it will not be reported as one.
 
 [thresholds]
 
-# CARRIED VERBATIM FROM THE STAGE-ONE REGISTRATION, not chosen here.
+# THE SCREEN'S OWN BAR IS NOT GRADED HERE, AND IS NOT ABSENT FROM THE RECORD.
 #
-# research/banknifty/screen_v1.toml registered `thresholds = {alpha_to_advance = 0.5}` on the
-# hypothesis record before the screen ran, and validation/gate.py refuses to grade a run
-# whose hypothesis carries a criterion the gate does not — "the gate must grade every
-# criterion the hypothesis was registered with". So this bar is not a new pre-registration
-# and its value is not a choice: 0.5 is the number already in the log, and check_binding
-# refuses any other.
+# `alpha_to_advance = 0.5` is a stage-one criterion: it is measured against the sheet's
+# `alpha` column, which the validator does not compute. It is registered on the hypothesis
+# under `screen_criteria`, where a reader can see what the screen was looking for and no
+# gate is asked to grade it. What it demanded of stage one is on the record and was missed:
+# the sheet's best candidate shows -0.656 against a 0.5 bar.
 #
-# WHAT IT DEMANDS: a candidate must beat the benchmark by half a unit of annualised Sharpe
-# to advance. The stage-one sheet already shows the best candidate at -0.656, so this bar is
-# known to be missed by every measured instance before any of them is graded. Recorded
-# plainly: nothing about this run's outcome on this criterion is in suspense, and the value
-# of grading it is that the miss goes on the record in the same form as everything else.
-alpha_to_advance = { at_least = 0.5 }
-
+# The four bars below are the ones this gate grades.
 deflated_sharpe = { at_least = 0.90 }
 cost_breakeven_multiple = { at_least = 2.0 }
 max_drawdown = { at_most = 0.10 }

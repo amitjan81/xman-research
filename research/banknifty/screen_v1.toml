@@ -63,7 +63,30 @@ Holds are capped at five sessions by the owner's 1-5 day mandate. The corpus
 window is entirely in-sample: BANKNIFTY sessions from 2026-06-01 are sealed and
 no instance here may read one.
 """
-thresholds = {alpha_to_advance = 0.5}
+# This screen ran under the parent record. The criterion it registered, `alpha_to_advance`,
+# was a bar no component could grade, which left the record unable to be stage-two gated at
+# all; the amendment moves it to `screen_criteria` and registers the gate's own bars. The
+# parent link is what keeps the screen's 107 trials in this hypothesis's family, so the
+# amendment does not reset the multiple-testing burden.
+parent_id = "h_a2c7cc855f6f06b2581afb7f2079121d"
+
+# The bars a stage-two gate grades. They are research/m1/gate.toml's, and
+# research/banknifty/gate_v1.toml carries them unchanged.
+[hypothesis.thresholds]
+deflated_sharpe = 0.90
+cost_breakeven_multiple = 2.0
+max_drawdown = 0.10
+risk_matched_increment = 0.0
+"holdout.deflated_sharpe" = 0.50
+"holdout.cost_breakeven_multiple" = 2.0
+"holdout.max_drawdown" = 0.10
+"holdout.risk_matched_increment" = 0.0
+
+# What this screen required of an instance before it was worth gating. Measured against the
+# sheet's `alpha` column, which no gate computes, so it is recorded rather than graded — and
+# the definition of the quantity is stamped beside it by the loader.
+[hypothesis.screen_criteria]
+alpha_to_advance = 0.5
 
 # ---------------------------------------------------------------- benchmark
 
