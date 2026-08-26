@@ -1,11 +1,29 @@
 # BANKNIFTY stage-two decision gate — the thresholds, written down BEFORE the run.
 #
-# Committed in its own commit, ahead of the commit carrying any result, for the reason
-# research/h1/gate.toml gives and research/m1/gate.toml repeats: a `recorded_at` inside a
-# file is a string the author typed, and git history is what makes a pre-registration
-# checkable.
+# WHAT THIS FILE IS AND IS NOT PRE-REGISTERED AGAINST. Stated precisely, because
+# research/h1/gate.toml's reason for the convention — a `recorded_at` inside a file is a string
+# the author typed, and git history is what makes a pre-registration checkable — cuts against
+# an overclaim here as readily as for one.
 #
-# THE THRESHOLDS BELOW ARE research/m1/gate.toml's, UNCHANGED. Not one number moved.
+#   * It IS committed ahead of any stage-two verdict. No instance had been graded when this
+#     file was written, and the thresholds below were not chosen against any verdict.
+#   * It is NOT committed ahead of the stage-one result. The commit carrying this file also
+#     carries research/banknifty/screen_v1.json, this file quotes stage-one numbers, and the
+#     four ranks named below WERE CHOSEN BY READING THE SHEET. Which instances looked worth
+#     grading is a post-hoc selection and is not pre-registered by this file.
+#   * `recorded_at` below is a date, not a minute, and it is earlier than both the sheet's
+#     generation and this file's commit. The git history is the authority on the ordering;
+#     the field is retained because the loader requires one, not as evidence.
+#   * A LATER COMMIT AMENDS THIS FILE. `alpha_to_advance` was added after the first four gate
+#     attempts were refused at binding. No threshold moved and no verdict existed — the
+#     attempts died before measuring anything — but the amendment is on the record and is
+#     described at the criterion itself.
+#
+# THE FOUR M1 BARS BELOW ARE research/m1/gate.toml's, UNCHANGED — deflated_sharpe,
+# cost_breakeven_multiple, max_drawdown and risk_matched_increment, byte-identical, plus M1's
+# holdout bars and [not_evaluable] defaults. A FIFTH BAR, `alpha_to_advance`, is NOT M1's: it
+# is carried from the stage-one registration because the binding check requires it, and it is
+# documented where it appears.
 # What changed is the family they bind to: this file names the BANKNIFTY stage-one screen's
 # hypothesis record rather than M1's. The arguments M1 wrote for each bar are not restated
 # here; they are in research/m1/gate.toml and they are the arguments in force. What IS

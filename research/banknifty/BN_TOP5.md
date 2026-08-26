@@ -2,7 +2,8 @@
 
 Stage-one screen, `research/banknifty/screen_v1.json`. Window 2024-10-01 .. 2026-05-29,
 352 return observations. 102 candidate instances plus the benchmark. BANKNIFTY sessions
-from 2026-06-01 are sealed and none was read.
+from 2026-06-01 are sealed; the record that no run read one is in
+[`gates/BLOCKED.md`](gates/BLOCKED.md), which carries the invocations.
 
 ---
 
@@ -26,113 +27,176 @@ The hold-3 unconditional straddle carries a null alpha because it **is** the ben
 sheet says why: *"the spread over the benchmark is identically flat, so it has no dispersion
 to form a ratio."* Reporting it as a negative alpha would be wrong.
 
-**What the alpha metric penalises.** Alpha here is the annualised Sharpe of the candidate's
-per-session net return series minus the benchmark's, aligned on the union of their session
-dates with a **zero for a session either side sat out**. That last clause is the whole
-result. A conditioner does not improve the trade it takes; it declines trades. Every session
-it sits out contributes a zero to its series while the benchmark books the premium, so the
-conditioner forfeits the premium on precisely those sessions and pays for the privilege in
+**What the alpha metric penalises.** Alpha is the annualised Sharpe of the **difference
+series** — the candidate's per-session net return minus the benchmark's, aligned on the union
+of their session dates with a **zero for a session either side sat out**. That last clause
+drives most of the table. A conditioner does not improve the trade it takes; it declines
+trades. Every session it sits out contributes a zero to its series while the benchmark books
+the premium, so the conditioner forfeits the premium on those sessions and pays for it in
 Sharpe. The screen's best conditioner takes 5 round trips where the benchmark takes 22.
 
-**This mirrors the NIFTY result.** The premium is the edge; the conditioners subtract trades.
-`research/h1` reached the same shape on NIFTY — the mechanism showed up in the P&L and could
-not separate itself from noise. BANKNIFTY reproduces it with a wider search and the same
-conclusion: **breadth of search did not find a better trade than the simple one.**
+**That mechanism does not explain row 1, and the difference matters.** The hold-1
+unconditional straddle sits out nothing (exposure 0.426 against the benchmark's 0.432). Its
+alpha is −0.656 because it earns *less per session* — 0.000773 against 0.000971, annualising
+to 19.5% against 24.5% — at lower volatility. So a row can carry a **higher** Sharpe than the
+benchmark (1.590 vs 1.536) and still show a negative alpha: the difference series has its own
+dispersion, and a lower-return, lower-vol book differs from the benchmark in a direction that
+scores negatively.
+
+**This mirrors the NIFTY result** in `research/h1` — the premium showed up in the P&L and
+could not separate itself from noise. The designs differ (h1 gated one pre-registered instance
+at N = 6; this is a 102-instance screen), so what mirrors is the conclusion, not the method:
+**the variance premium is the edge, and breadth of search did not find a better trade than the
+simple one.**
 
 ---
 
 ## 2. Table A — top 5 by alpha (least negative)
 
-Alpha = candidate annualised Sharpe − benchmark annualised Sharpe. All n = 352.
-"Legs" is filled **entry legs**, not sessions — `screen.py` counts entry fills, and a
-straddle is two legs per round trip.
+**Alpha** = annualised Sharpe of the difference series (§1), **not** the difference of the two
+Sharpes. Those are different numbers: row 1 has an alpha of −0.656 and a Sharpe *difference*
+of +0.054. All n = 352.
 
-| # | Strategy | Params | Alpha | Sharpe | Max DD | Round trips | Legs | Risk-matched incr. | Feasibility | Regime |
+"Legs" is filled **entry legs**, not sessions — `screen.py` counts entry fills, and a straddle
+is two legs per round trip. Feasibility counts are **leg-level fill outcomes**, not sessions:
+they do not sum to 352, and `fillable` exceeds twice the round-trip count, so a leg can be
+counted under more than one outcome. Regime figures are **mean excess return over the
+benchmark** per session, not the instance's own return.
+
+| # | Strategy | Params | Alpha | Sharpe | Max DD | Round trips | Legs | Risk-matched incr. | Feasibility (legs) | Regime (excess over benchmark) |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | short ATM straddle | hold 1 | **−0.656** | 1.590 | 0.074 | 26 | 52 | **+0.0067** | 62 fillable / 270 unsettleable / 114 capped-to-zero | only structure positive in high IV−RV (+0.00007); negative in low and mid |
-| 2 | short ATM straddle after ≥1.5σ overnight gap | gap 1.5σ, hold 3 | −0.725 | 2.477 | 0.005 | **5** | 10 | +0.0506 | 10 fillable / 20 unsettleable | **negative in all three tagged regimes**; entire gain sits in 15 untagged sessions (+0.0106) |
-| 3 | short ATM straddle after ≥1.5σ overnight gap | gap 1.5σ, hold 1 | −0.788 | 2.326 | 0.005 | **5** | 10 | +0.0419 | 10 fillable / 20 unsettleable | as above; same 15 untagged sessions carry it |
-| 4 | short ATM straddle after ≥1.5σ overnight gap | gap 1.5σ, hold 5 | −0.916 | 0.877 | 0.113 | **5** | 10 | −0.0667 | 6 fillable / — | negative throughout |
+| 1 | short ATM straddle | hold 1 | **−0.656** | 1.590 | 0.074 | 26 | 52 | +0.0067 | 62 fillable / 270 unsettleable / 114 capped-to-zero | ≈0 in high IV−RV (+0.00007), negative in low/mid, +0.00069 untagged |
+| 2 | short ATM straddle after ≥1.5σ overnight gap | gap 1.5σ, hold 3 | −0.725 | 2.477 | 0.005 | **5** | 10 | +0.0506 | 10 fillable / 20 unsettleable | negative in all three tagged regimes; +0.0106 in 15 untagged sessions |
+| 3 | short ATM straddle after ≥1.5σ overnight gap | gap 1.5σ, hold 1 | −0.788 | 2.326 | 0.005 | **5** | 10 | +0.0419 | 10 fillable / 20 unsettleable | as above; same 15 untagged sessions |
+| 4 | short ATM straddle after ≥1.5σ overnight gap | gap 1.5σ, hold 5 | −0.916 | 0.877 | 0.113 | **5** | 10 | −0.0667 | 6 fillable / 20 unsettleable | negative in all three tagged regimes; +0.0050 untagged |
 | 5 | short ATM straddle | hold 5 | −1.147 | 0.693 | 0.137 | 14 | 28 | −0.1418 | 20 fillable / 226 unsettleable | negative in every regime including untagged |
 
 **Read rows 2–4 with care.** Three of the top five by alpha are the same conditioner at three
 holds, each on **5 round trips**. Their attractive Sharpes and near-zero drawdowns are
 statements about ten entry legs. Their regime breakdown is the tell: all three are *negative*
-in every one of the three volatility-tagged regimes, and the positive number comes entirely
-from 15 sessions the regime tagger could not tag. That is not an edge; it is a handful of
-sessions.
+in every one of the three volatility-tagged regimes and positive only in 15 sessions the
+regime tagger could not tag.
 
-Row 1 is the only row in Table A that is both readable and positive on the volatility-matched
-comparison (`risk_matched_increment` +0.0067) — the repository's own like-for-like measure,
-which scales the benchmark to the candidate's volatility before differencing.
+But note what that breakdown is and is not. It measures **excess over the benchmark**, so
+"negative in the tagged regimes" for an instance at 8% exposure mostly says *the benchmark
+earned premium there while this instance sat out*. It is not a decomposition of where the
+instance's own Sharpe of 2.477 came from, and it cannot be one. What it does show is a
+concentration: rank 2 out-earned the benchmark by ~15.8% cumulative across those 15 untagged
+sessions and lost to it everywhere else. **The 15 untagged sessions are not identified in the
+sheet.** The feature series covers 337 of 353 sessions, so they are plausibly the window's
+IV/RV warm-up — which would place them in the six-week weekly-expiry prologue this document
+says the result is not a statement about. That is unconfirmed and should be confirmed before
+anyone acts on rows 2–4.
+
+Row 1 is the only row in Table A that is both readable and non-negative on the
+volatility-matched comparison. Its `risk_matched_increment` of **+0.0067 is +0.67% annualised
+return — inside noise**, not a demonstrated edge.
 
 ---
 
 ## 3. Table B — top 5 by risk-adjusted return (annualised Sharpe, tie-break shallower DD)
 
 Includes the unconditional family, which the alpha ranking cannot rank because one member of
-it is the benchmark. **Rows with fewer than 10 round trips are not readable** and are marked.
+it is the benchmark. The **10-round-trip readability floor below is arbitrary and used only
+for presentation** — it is not pre-registered and nothing was graded against it.
 
 | # | Strategy | Params | Sharpe | Max DD | Round trips | Legs | Readable? |
 |---|---|---|---|---|---|---|---|
 | 1 | short ATM straddle after ≥1.5σ gap | gap 1.5σ, hold 3 | 2.477 | 0.005 | 5 | 10 | **NO — 5 round trips** |
 | 2 | short ATM straddle after ≥1.5σ gap | gap 1.5σ, hold 1 | 2.326 | 0.005 | 5 | 10 | **NO — 5 round trips** |
 | 3 | **short ATM straddle (unconditional)** | **hold 1** | **1.590** | **0.074** | **26** | 52 | **yes** |
-| 4 | **short ATM straddle (unconditional)** | **hold 3** — *the benchmark* | **1.536** | **0.116** | **22** | 44 | yes — but **breaches the drawdown bar**, see below |
+| 4 | **short ATM straddle (unconditional)** | **hold 3** — *the benchmark* | **1.536** | **0.116** | **22** | 44 | yes — misses the drawdown bar, see below |
 | 5 | short ATM strangle after ≥1.5σ gap | 1×ATR, gap 1.5σ, hold 3 | 1.417 | 0.000 | **1** | 2 | **NO — 1 round trip** |
 | *memo* | short ATM straddle on EMA20 z-band | thr 0.5, hold 3 | 1.202 | 0.047 | 18 | 36 | yes — highest-Sharpe **readable conditioner** |
 | *memo* | short ATM straddle on EMA20 z-band | thr 1.0, hold 1 | 1.080 | 0.033 | 12 | 24 | yes |
 
 **Three of the top five are unreadable.** That is the honest headline of Table B: ranking a
 102-instance screen by raw Sharpe surfaces whatever took the fewest trades, because a small
-sample of lucky trades makes a high ratio. Only rows 3 and 4 — both unconditional — clear
-10 round trips.
+sample of lucky trades makes a high ratio. Only rows 3 and 4 — both unconditional — clear 10
+round trips.
 
-**Row 4 breaches a pre-registered bar.** `max_drawdown ≤ 0.10` is the ruin bound recorded in
-`research/m1/gate.toml` and carried unchanged into `research/banknifty/gate_v1.toml`. The
-hold-3 straddle draws down **0.116**. The hold-1 straddle draws down **0.074** and is inside
-it. Between the two unconditional holds, hold-1 has the better Sharpe, the shallower
-drawdown, more round trips (26 vs 22), the less-negative alpha, and a positive risk-matched
-increment. **Hold-1 is the recommendation; hold-3 is not, and the drawdown is why.**
+**Hold-1 versus hold-3, stated with its uncertainty.** Hold-1 clears the pre-registered
+`max_drawdown ≤ 0.10` ruin bar by 0.026; hold-3 misses it by 0.016. That is the one criterion
+either was ever measured against in advance, and it is why hold-1 is preferred. But **on 22–26
+round trips the two drawdowns are not distinguishable from each other** — the sampling
+variance of a max-drawdown estimate at that trade count is far wider than the 0.042 gap
+between them, so "inside the bar" versus "outside it" is roughly one bad trade's difference
+and is not a property of the strategies. The Sharpe gap (0.054) and hold-1's risk-matched
+increment (+0.67%/yr) are likewise within noise. Hold-1 also has more round trips (26 vs 22).
 
 ---
 
 ## 4. Stage-two gate — BLOCKED, no verdict on any instance
 
-Four instances were pre-registered for grading in `research/banknifty/gate_v1.toml`, committed
-ahead of any result: ranks 1, 2, 8 and 11. **None produced a verdict.** Full record and
-verbatim errors: [`gates/BLOCKED.md`](gates/BLOCKED.md).
+Four instances were pre-registered for grading in `research/banknifty/gate_v1.toml`: ranks
+1, 2, 8 and 11. **None produced a verdict.** Full record: [`gates/BLOCKED.md`](gates/BLOCKED.md).
 
-| Instance | Verdict | Deflated Sharpe | DSR bar | Max DD | Cost breakeven | Reason |
+**What "pre-registered" does and does not mean here.** `gate_v1.toml` was committed
+(`dbb6538`) **ahead of any stage-two verdict**, which is the property that matters for
+grading. It was **not** committed ahead of the stage-one result: `dbb6538` carries both the
+gate and `screen_v1.json`, the gate quotes stage-one numbers, and **ranks 8 and 11 were chosen
+by reading the sheet**. A later commit (`d371955`) amended the gate to add the
+`alpha_to_advance` criterion after the first four attempts were refused. None of this touched
+a threshold — all four M1 bars are byte-identical to `research/m1/gate.toml` — but the file is
+a pre-registration of *thresholds*, not of *which instances were interesting*.
+
+| Instance | Verdict | Deflated Sharpe | DSR bar | Max DD (stage 1) | Cost breakeven | Reason |
 |---|---|---|---|---|---|---|
-| rank 1 — straddle hold 1 | **none — gate refused** | not computed | 0.90 | 0.074 (stage 1) | not computed | engine defect |
-| rank 2 — post-gap hold 3 | **none — gate refused** | not computed | 0.90 | 0.005 (stage 1) | not computed | engine defect |
-| rank 8 — EMA band hold 1 | **none — gate refused** | not computed | 0.90 | 0.033 (stage 1) | not computed | engine defect |
-| rank 11 — EMA band hold 3 | **none — gate refused** | not computed | 0.90 | 0.047 (stage 1) | not computed | engine defect |
-| hold-3 straddle (benchmark) | **not gateable by rank** | — | 0.90 | 0.116 (stage 1) | — | null alpha; `gate.py` refuses an unmeasured row |
+| rank 1 — straddle hold 1 | **none — gate refused** | not computed¹ | 0.90 | 0.074 | not computed | engine defect |
+| rank 2 — post-gap hold 3 | **none — gate refused** | not computed¹ | 0.90 | 0.005 | not computed | engine defect |
+| rank 8 — EMA band hold 1 | **none — gate refused** | not computed¹ | 0.90 | 0.033 | not computed | engine defect |
+| rank 11 — EMA band hold 3 | **none — gate refused** | not computed¹ | 0.90 | 0.047 | not computed | engine defect |
+| hold-3 straddle (benchmark) | **not gateable by rank** | — | 0.90 | 0.116 | — | null alpha; `gate.py` refuses an unmeasured row |
+
+¹ *Not computed, not incomputable.* The deflated Sharpe is a deterministic function of the
+screened series and the family count; computing it post hoc appends nothing to the family and
+reads no sealed session. It is **deferred**, not unavailable.
 
 **The defect.** The stage-one spec registered `thresholds = {alpha_to_advance = 0.5}` on the
-hypothesis record. `check_binding` then *requires* the gate to carry that criterion, while
-`DecisionGate.__post_init__` *refuses* any gate naming it, because no component computes it.
-No gate file satisfies both. Any hypothesis registered with `alpha_to_advance` can never be
-stage-two gated.
+hypothesis record. `check_binding` (`validation/gate.py:568`) then *requires* the gate to carry
+that criterion, while `DecisionGate.__post_init__` (`validation/gate.py:426`) *refuses* any
+gate naming it, because it is not in `MEASURED_METRICS`. No gate file satisfies both.
 
-**The family is intact.** 107 trials before the first attempt, 107 after the eighth. Nothing
-appended, no verdict produced and discarded. **The holdout is deferred, not spent** — BANKNIFTY
-from 2026-06-01 remains sealed and unread.
+**And the criterion was never defined.** `alpha/screen.py` never reads `thresholds`, so
+nothing has ever computed `alpha_to_advance` at either stage, and no document says which
+quantity it means. Under the sheet's `alpha` it is missed by all 89 measured candidates. Under
+`sharpe_difference` — the reading `gate_v1.toml`'s own prose gives it ("beat the benchmark by
+half a unit of annualised Sharpe") — **ranks 2 and 3 clear it**, at 0.942 and 0.791, both on 5
+round trips. The ambiguity is part of the defect, not a detail beside it.
 
-**The gate would not have passed anyway, and this is the more important number.** At
-n = 352 observations against N = 109 logged trials:
+**Nothing was spent.** Trial family 107 before the first attempt and 107 after the eighth. The
+BANKNIFTY holdout (≥ 2026-06-01) is **deferred, not spent** — every attempt died before
+`_measure`, and the holdout is read only on a `PASSED` verdict.
+
+### What the gate would have said
+
+**NOT_EVALUABLE on all four — not a threshold failure.** `validation/decision.py:552` returns
+`NOT_EVALUABLE` ahead of any pass/fail, and the pre-registered `max_infeasible_fraction = 0.10`
+is missed by an order of magnitude: the benchmark's infeasible legs (unsettleable, capped,
+no-bar, no-liquidity, group-incomplete) come to 386 against 44 fillable, a fraction of **≈0.90**
+against a 0.10 bar; rank 1 is ≥0.86. `gate_v1.toml` pre-committed to how that reads: *"the
+finding is 'this corpus cannot evaluate this family at the pre-registered feasibility bar' …
+It is not a result about the strategy, and it will not be reported as one."*
+
+**Separately**, and this is a statement about the sample rather than the corpus: at n = 352
+observations against N = 109 logged trials, the bar is out of reach anyway.
 
 | true annualised Sharpe | 0.0 | 0.5 | 1.0 | 1.5 | 2.0 | 2.5 | 3.0 |
 |---|---|---|---|---|---|---|---|
 | median DSR | 0.025 | 0.082 | 0.206 | 0.406 | 0.634 | 0.822 | 0.933 |
 | share clearing 0.90 | 0.0% | 0.0% | 0.0% | **7.5%** | 15.0% | 35.0% | 55.0% |
 
-A true Sharpe of 1.5 — about what the best instance shows — clears the bar in 7.5% of draws.
-Fixing the defect would have bought four `FAILS_THRESHOLD` verdicts, not a pass. **A
-102-instance screen over 352 observations cannot separate any one of its instances from its
-own breadth**, and that is what `gate_v1.toml` said in advance a miss would mean.
+`uv run python -m xman_research.h1.calibrate_thresholds --case 352:109 --bar 0.90`.
+**N = 109 = the 107 logged trials plus the two rows a run appends for itself.** These are
+**true** Sharpes; the sheet's best *observed* Sharpe of 1.59 is the maximum of 89 and is
+therefore an overestimate of any underlying true Sharpe. And the calibration is **40 synthetic
+iid-Gaussian seeds per point** reading no corpus — 7.5% is 3 draws of 40 (95% interval roughly
+2–20%). A real short-straddle series has a fat left tail, ~43% exposure with zero-padded
+sessions, and overlapping hold-3 returns; the DSR carries skew and kurtosis terms, so a
+Gaussian calibration **understates** the deflation. **These rows are an optimistic bound.**
+
+So: a 102-instance screen over 352 observations cannot separate any one of its instances from
+its own breadth, and fixing the engine defect would not have changed that.
 
 ---
 
@@ -142,45 +206,63 @@ own breadth**, and that is what `gate_v1.toml` said in advance a miss would mean
    the producer (42 for premium-below-intrinsic candles with a >0.5% rolling-spot divergence,
    clustered Apr–Jul 2025; 1 for the premium check alone; 10 for expiry-day convergence
    failure). 2024-11-20 was never a session — NSE did not trade (Maharashtra state election).
-2. **Quarantined expiry days dominate feasibility.** Ten of the window's 27 expiry cycles have
-   no settlement session, so the engine declines them at entry: the benchmark shows **258
-   unsettleable against 44 fillable**. The population is quarantine-*selected*, not random —
-   expiry-day convergence failure is likeliest on the expiries where the ATM straddle held the
-   most residual value, which is not independent of what a short straddle earns there. **This
-   plausibly biases the measured premium upward** and nothing here corrects for it.
+2. **Both quarantine populations are stress-selected, and both plausibly bias the measured
+   premium upward.** Ten of 27 expiry cycles have no settlement session, so the engine declines
+   them at entry — the benchmark shows **258 unsettleable legs against 44 fillable**.
+   Expiry-day convergence failure is likeliest on the expiries where the ATM straddle held the
+   most residual value, which is not independent of what a short straddle earns there. The 42
+   Apr–Jul 2025 sessions are selected the same way from the other side: premium-below-intrinsic
+   with dislocated spot is precisely when a short-gamma book loses. **Nothing here corrects for
+   either.** The fate of a hold-3 position spanning a quarantined non-expiry session is not
+   documented in the sheet; the benchmark's `no_bar = 34` suggests such legs are declined
+   rather than zero-filled, but that is inference, not a recorded rule.
 3. **Stale and capped marks.** Every instance carries a large `capped_to_zero` count (114 on
    rank 1, 71 on the benchmark) and a `resized` count (48 and 38) — positions the ladder could
    not fill at the requested size. Sizes actually traded are frequently not the sizes modelled.
 4. **Lot-size regimes.** The declared lot size moves across the window (15 / 30 / 35 boundaries)
    and the corpus audit records sessions where the declared value contradicts what the bars
    support. Notional is held at ₹50L, so the contract count changes underneath the strategy.
-5. **Sample size — 352 observations, ~20 months.** This is the binding constraint. From the
-   table in §4, at N = 109 trials a **true** annualised Sharpe of 1.5 reaches median DSR 0.406
-   and clears 0.90 in 7.5% of draws. Reaching 90% power at that Sharpe needs roughly
-   **3,000 sessions — about twelve years** of daily data. `research/h1/DECISION.md` §1 recorded
-   the same shape on 79 observations: the premium showed up, the evidence did not. More
-   instances make this worse, not better — each one deflates the rest.
-6. **Monthly-only expiry after 2024-11-13.** BANKNIFTY weekly expiries were culled six weeks
-   into the window. The pooled series is overwhelmingly a monthly-expiry series with a short
-   weekly prologue, and it is not a statement about the weekly regime.
+   A further entry restriction, `min_calendar_days_to_expiry = 6`, is carried in every
+   instance's `strategy_parameters` and excludes the final week of each cycle.
+5. **Sample size — 352 observations, ~20 months.** This is the binding constraint. From §4, at
+   N = 109 a **true** annualised Sharpe of 1.5 reaches median DSR 0.406 and clears 0.90 in 7.5%
+   of draws. Reaching 90% power at that Sharpe needs roughly **3,000 sessions — about twelve
+   years** (`--case 3000:109` → 90.0%), and that figure inherits the Gaussian optimism in §4.
+   `research/h1/DECISION.md` §1 recorded the same shape on 79 observations: the premium showed
+   up, the evidence did not. More instances make this worse, not better — each deflates the rest.
+6. **Monthly-only expiry after 2024-11-13, and annualisation across it.** BANKNIFTY weekly
+   expiries were culled six weeks into the window. The pooled series is overwhelmingly a
+   monthly-expiry series with a short weekly prologue, and is not a statement about the weekly
+   regime. The annualisation constant is nonetheless applied across the boundary, where both
+   the cycles-per-year and the independence of successive observations changed. Sharpe is also
+   computed on the **zero-padded** series, so a low-exposure instance already carries a
+   √exposure penalty: rank 2's 2.477 at ~8% exposure corresponds to roughly 8.6 on its active
+   sessions alone. Overlapping hold-3 and hold-5 returns on daily observations are not
+   corrected for.
 
 ---
 
 ## 6. Recommendation
 
-**Paper-trade first:** the **unconditional short ATM straddle at hold 1** — Sharpe 1.590,
-drawdown 0.074 (inside the 0.10 ruin bar, which hold-3 breaches at 0.116), 26 round trips,
-the least-negative alpha and the only readable positive risk-matched increment. Size so the
+**Paper-trade first:** the **unconditional short ATM straddle at hold 1**. It clears the one
+pre-registered bar either unconditional hold was measured against (DD 0.074 ≤ 0.10, which
+hold-3 misses at 0.116), has the higher Sharpe (1.590) and more round trips (26). Size so the
 contract count is **n ≥ 2 lots** at every session, so a capped-to-zero fill cannot silently
-turn a position into no position.
+turn a position into no position. **State plainly what this pick is:** an ungated, post-hoc
+selection from a 102-instance screen — the exact selection the deflated Sharpe exists to charge
+for — whose margin over hold-3 is inside noise on every measure. It is being paper-traded, not
+advanced.
 
-**Keep testing:** `ema_atr_band` — at threshold 0.5 / hold 3 it is the highest-Sharpe
-*readable* conditioner (1.202 on 18 round trips) at a third of the benchmark's drawdown
-(0.047 vs 0.116). It loses on alpha only by sitting out sessions. If the objective is
-drawdown-adjusted rather than premium-maximising, it is the one worth a narrow,
-pre-registered hypothesis of its own — graded against a **fresh family**, not this one.
+**Keep testing:** `ema_atr_band` at threshold 0.5 / hold 3 — the highest-Sharpe *readable*
+conditioner (1.202 on 18 round trips) at about **40%** of the benchmark's drawdown (0.047 vs
+0.116) while carrying **76%** of its exposure, so part of that shallower drawdown is mechanical.
+It is **negative on the risk-matched increment (−0.020)**, the like-for-like measure this
+document leans on elsewhere: under that metric it subtracts. It is worth a narrow,
+pre-registered hypothesis of its own — graded against a **fresh family**, not this one — only
+if the objective is explicitly drawdown-adjusted rather than premium-maximising.
 
-**Drop:** every `post_gap` variant and the 1-round-trip strangles. Their high Sharpes rest on
-5 and 1 round trips, and their regime breakdown is negative in all three tagged regimes with
-the entire gain in 15 untagged sessions. Also drop hold-5 across the board — it is the worst
-unconditional hold on every measure.
+**Drop:** the 1.5σ `post_gap` variants and the 1-round-trip strangles, whose Sharpes rest on 5
+and 1 round trips. Drop the 1.0σ `post_gap` variants too — those *are* readable (10–16 round
+trips) but on their own merits: drawdowns of 0.14–0.22 and alpha ≤ −1.27. Drop hold-5 across
+the board — it is the worst unconditional hold on Sharpe, drawdown, alpha, risk-matched
+increment and round trips alike.
