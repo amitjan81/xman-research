@@ -242,3 +242,24 @@ Progress goes to
 `/tmp/claude-1003/-home-qa-xman-research/3f31834d-274b-415e-85a8-5b5449afebee/scratchpad/bn-screen.log`,
 one INFO line per completed instance carrying its position, id and session count.
 The sheet is written once at the end, so the log is the only signal until then.
+
+---
+
+## The result
+
+The screen completed. **352 return observations, 102 candidate instances plus the
+benchmark, and nothing beat the benchmark on excess-return Sharpe.**
+
+- 89 measured candidates carry a defined alpha and **every one is negative**, best −0.656
+  (`short_atm_straddle_hold_n`, hold 1).
+- 1 instance carries a null alpha because it **is** the benchmark — the hold-3
+  unconditional straddle, whose spread over the benchmark is identically flat.
+- 12 instances never entered.
+
+Full deliverable, both ranking tables, and the caveats: [`BN_TOP5.md`](BN_TOP5.md).
+
+**The stage-two gate produced no verdict on any instance.** `check_binding` requires the
+gate to carry the `alpha_to_advance` criterion this spec registered, and `DecisionGate`
+refuses any gate naming it because nothing computes it. The record, with both errors
+verbatim, is [`gates/BLOCKED.md`](gates/BLOCKED.md). The trial family is unchanged at 107
+and the holdout is deferred, not spent.
