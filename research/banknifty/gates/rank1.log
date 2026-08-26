@@ -1,0 +1,22 @@
+warning: `VIRTUAL_ENV=/home/qa/runtime/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+DECISION on h_307a83a24fd9a8018c3567322b00097f: NOT_EVALUABLE
+  next: The answer is about execution — resolve the quote-data question before continuing.
+short_atm_straddle_hold_n[hold_sessions=1.0,target_notional=5000000.0] (in-sample) [2024-10-03..2026-05-29] — NOT_EVALUABLE
+  run window: 2024-10-03..2026-05-29
+  judged on: the whole window, 352 sessions, no walk-forward
+  headline: cost-breakeven 45.12x — computed from unverified inputs: corpus.declared_lot_size_contradicted:unverified, corpus.expiry_session_absent:unverified, corpus.open_interest_not_divisible_by_lot_size:unverified, gst.broking_services:corroborated, margin.simplified_approximation:unverified, nse.transaction_charge.options:corroborated, sebi.turnover_fee:corroborated, settlement.exchange_charge_assumed_not_levied:unverified, settlement.mean_of_underlying_minute_close_over_window:corroborated, stt.sell_option_premium:corroborated
+  deflated Sharpe 0.270 (observed 0.1002/period, deflated against 109 logged trials, SR* 0.1367)
+  annualised Sharpe 1.59, adjusted 1.53, max drawdown 7.4%, 5% shortfall -1.9152%
+  risk-matched increment +0.67%/yr (benchmark scaled 0.77x)
+  deflated_sharpe >= 0.9 — observed 0.2701 (FAIL)
+  cost_breakeven_multiple >= 2 — observed 45.12 (pass)
+  max_drawdown <= 0.1 — observed 0.07369 (pass)
+  risk_matched_increment >= 0 — observed 0.006671 (pass)
+  not evaluable: 80.6% of 566 intents could not have been filled (limit 10.0%); the P&L describes trades the market would not have taken
+  window crosses epochs: weekly_expiry_cull_2024, calendar_spread_relief_removed_2025, intraday_position_limits_2025, nse_expiry_tuesday_2025, stt_rise_2026 (justified in the gate file)
+  epochs spanned: 2024-10-03..2024-11-19, 2024-11-20..2025-02-09, 2025-02-10..2025-03-31, 2025-04-01..2025-08-31, 2025-09-01..2026-03-31, 2026-04-01..2026-05-29
+  UNVERIFIED INPUTS: corpus.declared_lot_size_contradicted:unverified, corpus.expiry_session_absent:unverified, corpus.open_interest_not_divisible_by_lot_size:unverified, gst.broking_services:corroborated, margin.simplified_approximation:unverified, nse.transaction_charge.options:corroborated, sebi.turnover_fee:corroborated, settlement.exchange_charge_assumed_not_levied:unverified, settlement.mean_of_underlying_minute_close_over_window:corroborated, stt.sell_option_premium:corroborated, benchmark:corpus.declared_lot_size_contradicted:unverified, benchmark:corpus.expiry_session_absent:unverified, benchmark:corpus.open_interest_not_divisible_by_lot_size:unverified, benchmark:gst.broking_services:corroborated, benchmark:margin.simplified_approximation:unverified, benchmark:nse.transaction_charge.options:corroborated, benchmark:sebi.turnover_fee:corroborated, benchmark:settlement.exchange_charge_assumed_not_levied:unverified, benchmark:settlement.mean_of_underlying_minute_close_over_window:corroborated, benchmark:stt.sell_option_premium:corroborated, dsr.sharpe_variance_assumed, epochs.dates_not_primary_sourced
+
+research/banknifty/gates/rank1/decision.json: not_evaluable
+family trial count at decision: 109 (the screen at research/banknifty/screen_v1.json contributed 103)
+holdout spent: False

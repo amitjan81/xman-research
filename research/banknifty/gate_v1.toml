@@ -1,0 +1,208 @@
+# BANKNIFTY stage-two decision gate — the thresholds, written down BEFORE the run.
+#
+# WHAT THIS FILE IS AND IS NOT PRE-REGISTERED AGAINST. Stated precisely, because
+# research/h1/gate.toml's reason for the convention — a `recorded_at` inside a file is a string
+# the author typed, and git history is what makes a pre-registration checkable — cuts against
+# an overclaim here as readily as for one.
+#
+#   * It IS committed ahead of any stage-two verdict. No instance had been graded when this
+#     file was written, and the thresholds below were not chosen against any verdict.
+#   * It is NOT committed ahead of the stage-one result. The commit carrying this file also
+#     carries research/banknifty/screen_v1.json, this file quotes stage-one numbers, and the
+#     four ranks named below WERE CHOSEN BY READING THE SHEET. Which instances looked worth
+#     grading is a post-hoc selection and is not pre-registered by this file.
+#   * `recorded_at` below is a date, not a minute, and it is earlier than both the sheet's
+#     generation and this file's commit. The git history is the authority on the ordering;
+#     the field is retained because the loader requires one, not as evidence.
+#   * THIS FILE HAS BEEN AMENDED TWICE, BOTH TIMES BEFORE ANY VERDICT EXISTED. `alpha_to_advance`
+#     was added after the first four gate attempts were refused at binding, then removed when
+#     the criterion moved to the hypothesis record's `screen_criteria` and `hypothesis_id` was
+#     repointed at the amended record h_307a83a24fd9a8018c3567322b00097f. No bar this file
+#     grades has ever moved, and no gate attempt has ever reached a measurement, so no
+#     threshold has been chosen against a result. Both amendments are in the git history.
+#
+# THE FOUR M1 BARS BELOW ARE research/m1/gate.toml's, UNCHANGED — deflated_sharpe,
+# cost_breakeven_multiple, max_drawdown and risk_matched_increment, byte-identical, plus M1's
+# holdout bars and [not_evaluable] defaults. They are the whole of what this gate grades.
+# What changed is the family they bind to: this file names the BANKNIFTY stage-one screen's
+# hypothesis record rather than M1's. The arguments M1 wrote for each bar are not restated
+# here; they are in research/m1/gate.toml and they are the arguments in force. What IS
+# written here is everything about this family that makes those bars land differently, and
+# it is written before any BANKNIFTY instance has been graded.
+#
+# =======================================================================================
+# THE SAMPLE
+#
+# Screened window: 2024-10-01 .. 2026-05-29. The sheet at research/banknifty/screen_v1.json
+# resolves it against the corpus as 353 sessions found against 407 the NSE calendar expects,
+# and measures 352 return observations. The 54 absent sessions are not narrowed around; the
+# sheet's `gaps_reason` states the policy in full and this gate runs under that same policy.
+#
+# TEN OF THE FIFTY-FOUR ARE EXPIRY SESSIONS. For ten of the window's 27 expiry cycles the
+# session at which a position would have cash-settled does not exist, so the engine declines
+# those cycles at entry and counts them UNSETTLEABLE. That is why every instance on this
+# sheet carries an `unsettleable` count in the hundreds against a `fillable` count in the
+# tens, and it is why NOT_EVALUABLE is a live and expected outcome here rather than an
+# obstacle. See the not-evaluable section below, which is deliberately not touched.
+#
+# =======================================================================================
+# THE TRIAL FAMILY, AND WHY THE DEFLATED-SHARPE BAR LANDS DIFFERENTLY HERE
+#
+# This is the one thing about this run that a reader must have before seeing a number, so
+# it is stated before there is one.
+#
+# M1's 0.90 bar was calibrated at n=384 observations against N=6 logged trials. The
+# BANKNIFTY family is not six. research/banknifty/screen_v1.db holds 103 trials logged by
+# the stage-one screen, plus 4 rows from a first screen run that died on a full disk. The
+# crashed rows are KEPT — deleting rows from an append-only research log to reach a
+# flattering count is the move this apparatus exists to prevent — so the family stands at
+# 107 before this gate runs at all.
+#
+# Every gate run below appends its own rows to that same log and the deflation count is read
+# from the log AFTER the run's own measure (alpha/gate.py reads count_family_trials once the
+# in-sample series exists). So each run grades against a family that includes itself, and
+# each subsequent run grades against a strictly larger one.
+#
+# PRE-REGISTERED CONSEQUENCE, written before the first verdict: at N above one hundred the
+# deflation term is large, and a 0.90 bar calibrated for N=6 is a bar this family is very
+# unlikely to clear at any Sharpe this sheet observed. THAT IS NOT A REASON TO MOVE IT.
+# A screen that examines 102 instances has spent 102 chances to look lucky, and the deflated
+# Sharpe is the statistic that charges for exactly that. Moving the bar because the screen
+# was broad would be charging nothing for the breadth that created the need to charge.
+#
+# What a miss here therefore means, stated in advance and in two parts:
+#   * It is NOT evidence against the variance risk premium in BANKNIFTY. The premium's point
+#     estimates are on the sheet and they are positive.
+#   * It IS a true statement that a 102-instance screen over 352 observations cannot single
+#     out any one of its instances from its own breadth. The remedy is a narrower
+#     pre-registered hypothesis graded against a fresh family, not a lower bar.
+#
+# =======================================================================================
+# THE RUN ORDER, PRE-REGISTERED — because N grows per run and the order therefore changes
+# every verdict after the first. Four instances, by their rank on the screened sheet:
+#
+#   1. rank  1  short_atm_straddle_hold_n[hold_sessions=1]        the least-negative alpha
+#   2. rank  2  short_atm_straddle_post_gap[gap_sigmas=1.5,hold=3] the highest raw Sharpe
+#   3. rank  8  short_atm_straddle_ema_atr_band[thr=1.0,hold=1]
+#   4. rank 11  short_atm_straddle_ema_atr_band[thr=0.5,hold=3]
+#
+# THE UNCONDITIONAL HOLD-3 STRADDLE IS NOT IN THAT LIST, and cannot be. It sits at rank 90
+# on the sheet carrying a null alpha, because it IS the benchmark: the sheet records "the
+# spread over the benchmark is identically flat, so it has no dispersion to form a ratio".
+# alpha/gate.py refuses an unmeasured row, correctly — a rank with no alpha has no place in
+# an ordering built on alpha. It is graded anyway, by the same machinery and the same bars:
+# every decision record below carries the benchmark leg's own measured series, and on this
+# sheet that series is the unconditional hold-3 straddle. Its numbers are read from there.
+#
+# Hold-5 is deliberately NOT gated. It was not asked for, and each extra run deflates the
+# four that were.
+#
+# =======================================================================================
+# THE HOLDOUT — DEFERRED, NOT SPENT
+#
+# BANKNIFTY's seal is 2026-06-01. Nothing at or past it is opened by this gate.
+#
+# alpha/holdout.py's `require_unsealed` guards on a single module constant, 2026-05-01,
+# which is research/h1's NIFTY seal and not BANKNIFTY's. The screened window ends 2026-05-29,
+# and a holdout must begin after the window it follows, so EVERY holdout window reachable
+# from this sheet ends after 2026-05-01 and every run of this gate must pass
+# `--seal-override`. There is no window that avoids it. That is a property of the guard's
+# constant, not evidence that a sealed BANKNIFTY session is being read.
+#
+# The window passed is 2026-05-30 .. 2026-05-31. It is a Saturday and a Sunday: it contains
+# ZERO NSE sessions, and it ends before BANKNIFTY's 2026-06-01 seal. It is a formal argument
+# the CLI requires, not a holdout. `holdout_spent` stays false on any verdict short of
+# PASSED, because alpha/gate.py measures the holdout only on a PASSED in-sample verdict.
+#
+# A genuine BANKNIFTY holdout grade — 2026-06-01 onward — is DEFERRED. It is not spent, not
+# read, and not reported. The holdout thresholds below are recorded now, at the same moment
+# as the in-sample ones, because after an in-sample verdict is exactly when they may no
+# longer be recorded.
+# =======================================================================================
+
+hypothesis_id = "h_307a83a24fd9a8018c3567322b00097f"
+recorded_at = 2026-08-25T00:00:00Z
+
+cross_epoch_justification = """
+THIS WINDOW CROSSES EVERY BOUNDARY M1'S WINDOW CROSSED, AND ONE MORE THAT IS BANKNIFTY'S
+ALONE. M1's cross-epoch argument is in research/m1/gate.toml and is not restated. What is
+added here is the boundary specific to this product:
+
+  BANKNIFTY WEEKLY EXPIRIES WERE CULLED ON 2024-11-13. From that date the product has a
+  MONTHLY front contract only. Before it, weekly.
+
+That is not a rate change. It changed how often the traded object exists, which changes the
+number of cycles a hold-n straddle can open in a year, which changes annualisation itself.
+Roughly six weeks of this 20-month window sit on the weekly side of that line and the rest
+on the monthly side, so the pooled series is overwhelmingly a monthly-expiry series with a
+short weekly prologue.
+
+SO WHY POOL AT ALL, on M1's own reasoning: splitting would burn a trial per sub-window
+against a family already carrying 107, deflate every resulting Sharpe further, hand the
+researcher a post-hoc choice of which regime to believe, and leave the weekly side with
+far too few cycles to carry a Sharpe worth reading. The pooled verdict is the honest form
+of the question, and the question is worth an answer.
+
+WHAT THE POOLED NUMBER THEREFORE MEANS, stated in advance: it describes a
+monthly-expiry BANKNIFTY straddle book with a weekly prologue attached, weighted by session
+count. It is NOT a statement about the weekly-expiry regime, and none will be claimed.
+"""
+
+feasibility_note = """
+RECORDED BEFORE THE RUN, because it is the fact most likely to decide these verdicts and it
+is already visible on the stage-one sheet.
+
+Every instance on this sheet carries an UNSETTLEABLE count far exceeding its FILLABLE count
+— the benchmark's own row reads 258 unsettleable against 44 fillable, and rank 1 reads 270
+against 62. The cause is stated in the sheet's gaps_reason and repeated above: ten expiry
+sessions are quarantined, so ten of 27 cycles can never settle and the engine declines them
+at entry rather than opening a position it cannot close.
+
+`max_infeasible_fraction = 0.10` is therefore expected to bite, and NOT_EVALUABLE is
+expected to be a live outcome for some or all four runs. It is left at C6's default and is
+NOT tuned, for the reason research/m1/gate.toml gives: the fourth outcome is the one a
+disappointing result is most tempting to reclassify into, or out of.
+
+If NOT_EVALUABLE is what comes back, the finding is "this corpus cannot evaluate this family
+at the pre-registered feasibility bar", and that is a result about the corpus. It is not a
+result about the strategy, and it will not be reported as one.
+"""
+
+# =======================================================================================
+# IN-SAMPLE THRESHOLDS — research/m1/gate.toml's, unchanged. Their arguments are there.
+# =======================================================================================
+
+[thresholds]
+
+# THE SCREEN'S OWN BAR IS NOT GRADED HERE, AND IS NOT ABSENT FROM THE RECORD.
+#
+# `alpha_to_advance = 0.5` is a stage-one criterion: it is measured against the sheet's
+# `alpha` column, which the validator does not compute. It is registered on the hypothesis
+# under `screen_criteria`, where a reader can see what the screen was looking for and no
+# gate is asked to grade it. What it demanded of stage one is on the record and was missed:
+# the sheet's best candidate shows -0.656 against a 0.5 bar.
+#
+# The four bars below are the ones this gate grades.
+deflated_sharpe = { at_least = 0.90 }
+cost_breakeven_multiple = { at_least = 2.0 }
+max_drawdown = { at_most = 0.10 }
+risk_matched_increment = { at_least = 0.0 }
+
+# =======================================================================================
+# HOLDOUT THRESHOLDS — recorded now, unreachable by design (see THE HOLDOUT above).
+# =======================================================================================
+
+[holdout_thresholds]
+deflated_sharpe = { at_least = 0.50 }
+cost_breakeven_multiple = { at_least = 2.0 }
+max_drawdown = { at_most = 0.10 }
+risk_matched_increment = { at_least = 0.0 }
+
+# =======================================================================================
+# NOT-EVALUABLE RULES — C6's defaults, untouched. See feasibility_note above.
+# =======================================================================================
+
+[not_evaluable]
+max_infeasible_fraction = 0.10
+max_stale_fraction = 0.20
+optimistic_costs_below = 1.0

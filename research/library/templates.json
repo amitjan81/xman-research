@@ -1,0 +1,565 @@
+{
+  "entries": [
+    {
+      "admitted_at": "2026-08-26T00:00:43.612092+00:00",
+      "admitted_by": "alpha-exploration agent, owner exploration mandate 2026-08-25",
+      "decision_outcome": "screened_stage_1_not_gated",
+      "decision_path": "research/banknifty/screen_v1.json",
+      "evidence": {
+        "annualised_sharpe": 1.5902439343239276,
+        "cost_stamps": [
+          "corpus.declared_lot_size_contradicted:unverified",
+          "corpus.expiry_session_absent:unverified",
+          "corpus.open_interest_not_divisible_by_lot_size:unverified",
+          "gst.broking_services:corroborated",
+          "margin.simplified_approximation:unverified",
+          "nse.transaction_charge.options:corroborated",
+          "sebi.turnover_fee:corroborated",
+          "settlement.exchange_charge_assumed_not_levied:unverified",
+          "settlement.mean_of_underlying_minute_close_over_window:corroborated",
+          "stt.sell_option_premium:corroborated"
+        ],
+        "deflated_sharpe": null,
+        "gate_status": null,
+        "hit_rate": null,
+        "hold_sessions": 1,
+        "max_drawdown": 0.0736889414941544,
+        "mean_return_at_hold": 0.0007732213091038331,
+        "mean_return_per_round_trip": 0.010468226954021123,
+        "mean_return_per_session": 0.0007732213091038331,
+        "measured_strategy": "hold_1_short_atm_straddle",
+        "measured_strategy_parameters": {
+          "conditioner": null,
+          "hold_sessions": 1,
+          "legs": [
+            {
+              "atr_offset": 0.0,
+              "option_type": "CE",
+              "side": "sell"
+            },
+            {
+              "atr_offset": 0.0,
+              "option_type": "PE",
+              "side": "sell"
+            }
+          ],
+          "min_calendar_days_to_expiry": 4,
+          "structure": "short_atm_straddle",
+          "supplied_feature_series": {
+            "atm_iv": 337,
+            "atr_14": 353,
+            "day_of_week": 353,
+            "ema20_z": 353,
+            "ema20_z_abs": 353,
+            "ema_20": 353,
+            "iv_minus_rv_10": 337,
+            "iv_minus_rv_20": 337,
+            "overnight_gap_return": 353,
+            "overnight_gap_sigmas": 353,
+            "realised_vol_10": 353,
+            "realised_vol_20": 353,
+            "sessions_to_nearest_expiry": 353
+          },
+          "target_notional": 5000000.0
+        },
+        "n_observations": 352,
+        "outcome": "screened",
+        "parameters": {
+          "hold_sessions": 1.0,
+          "target_notional": 5000000.0
+        },
+        "provenance": {
+          "alpha": "research/banknifty/screen_v1.json:instances[short_atm_straddle_hold_n@BANKNIFTY[hold_sessions=1.0,target_notional=5000000.0]].alpha \u2014 the ranking statistic, an annualised Sharpe of the spread over the sheet's benchmark",
+          "annualised_sharpe": "research/banknifty/screen_v1.json:instances[short_atm_straddle_hold_n@BANKNIFTY[hold_sessions=1.0,target_notional=5000000.0]].annualised_sharpe",
+          "cost_stamps": "research/banknifty/screen_v1.json:instances[short_atm_straddle_hold_n@BANKNIFTY[hold_sessions=1.0,target_notional=5000000.0]].cost_stamps",
+          "deflated_sharpe": "not computed: deflation needs the trial log's family count, which is wider than this sheet's 103 screening trials",
+          "gate_status": "absent: a screening sheet applies no threshold and pre-registers none, so there is no gate for this instance to have passed or failed",
+          "hit_rate": "not reported by a screening sheet",
+          "max_drawdown": "research/banknifty/screen_v1.json:instances[short_atm_straddle_hold_n@BANKNIFTY[hold_sessions=1.0,target_notional=5000000.0]].max_drawdown",
+          "mean_return_at_hold": "derived: mean_return_per_session x hold_sessions (1); the screened run held exactly that many sessions, so this is a restatement rather than an extrapolation",
+          "mean_return_per_round_trip": "research/banknifty/screen_v1.json:instances[short_atm_straddle_hold_n@BANKNIFTY[hold_sessions=1.0,target_notional=5000000.0]].mean_return_per_round_trip \u2014 net profit per position opened, over the run's capital base",
+          "mean_return_per_session": "research/banknifty/screen_v1.json:instances[short_atm_straddle_hold_n@BANKNIFTY[hold_sessions=1.0,target_notional=5000000.0]].mean_return_per_session, net of costs",
+          "measured_strategy": "research/banknifty/screen_v1.json:instances[short_atm_straddle_hold_n@BANKNIFTY[hold_sessions=1.0,target_notional=5000000.0]].strategy_name",
+          "measured_strategy_parameters": "research/banknifty/screen_v1.json:instances[short_atm_straddle_hold_n@BANKNIFTY[hold_sessions=1.0,target_notional=5000000.0]].strategy_parameters",
+          "n_observations": "research/banknifty/screen_v1.json:instances[short_atm_straddle_hold_n@BANKNIFTY[hold_sessions=1.0,target_notional=5000000.0]].n_observations",
+          "outcome": "research/banknifty/screen_v1.json:instances[short_atm_straddle_hold_n@BANKNIFTY[hold_sessions=1.0,target_notional=5000000.0]].outcome",
+          "parameters": "research/banknifty/screen_v1.json:instances[short_atm_straddle_hold_n@BANKNIFTY[hold_sessions=1.0,target_notional=5000000.0]].instance.params, filled out with short_atm_straddle_hold_n's declared defaults [hold_sessions=1.0,target_notional=5000000.0]",
+          "regime_table": "absent: the sheet's regime breakdown is a descriptive split of the excess return, not a measured multiplier the ranker may scale an edge by",
+          "round_trips": "research/banknifty/screen_v1.json:instances[short_atm_straddle_hold_n@BANKNIFTY[hold_sessions=1.0,target_notional=5000000.0]].round_trips",
+          "underlying": "research/banknifty/screen_v1.json:underlying",
+          "window": "research/banknifty/screen_v1.json:window"
+        },
+        "regime_table": null,
+        "round_trips": 26,
+        "underlying": "BANKNIFTY",
+        "window": "2024-10-01..2026-05-29"
+      },
+      "hypothesis_id": null,
+      "notes": null,
+      "override_reason": null,
+      "parameter_key": "hold_sessions=1.0,target_notional=5000000.0",
+      "parameters": {
+        "hold_sessions": 1.0,
+        "target_notional": 5000000.0
+      },
+      "reason": "BANKNIFTY stage-one screen rank 1 of 102; filed as CANDIDATE because the stage-two gate produced no verdict (research/banknifty/gates/BLOCKED.md)",
+      "status": "candidate",
+      "template_id": "short_atm_straddle_hold_n",
+      "trial_ids": [
+        "t_c57f2d37546c4f5a97271cad909a840b"
+      ],
+      "underlying": "BANKNIFTY"
+    },
+    {
+      "admitted_at": "2026-08-26T00:00:44.616359+00:00",
+      "admitted_by": "alpha-exploration agent, owner exploration mandate 2026-08-25",
+      "decision_outcome": "screened_stage_1_not_gated",
+      "decision_path": "research/banknifty/screen_v1.json",
+      "evidence": {
+        "annualised_sharpe": 2.477327787024359,
+        "cost_stamps": [
+          "corpus.declared_lot_size_contradicted:unverified",
+          "corpus.expiry_session_absent:unverified",
+          "corpus.open_interest_not_divisible_by_lot_size:unverified",
+          "gst.broking_services:corroborated",
+          "margin.simplified_approximation:unverified",
+          "nse.transaction_charge.options:corroborated",
+          "sebi.turnover_fee:corroborated",
+          "settlement.exchange_charge_assumed_not_levied:unverified",
+          "settlement.mean_of_underlying_minute_close_over_window:corroborated",
+          "stt.sell_option_premium:corroborated"
+        ],
+        "deflated_sharpe": null,
+        "gate_status": null,
+        "hit_rate": null,
+        "hold_sessions": 3,
+        "max_drawdown": 0.005200031090421337,
+        "mean_return_at_hold": 0.0015846297035082123,
+        "mean_return_per_round_trip": 0.03718597704232605,
+        "mean_return_per_session": 0.0005282099011694042,
+        "measured_strategy": "hold_3_short_atm_straddle_on_overnight_gap_sigmas",
+        "measured_strategy_parameters": {
+          "conditioner": {
+            "comparator": "at_least",
+            "description": "Magnitude of the overnight gap against the per-session standard deviation implied by twenty-session realised volatility.",
+            "feature": "overnight_gap_sigmas",
+            "lookback_sessions": 20,
+            "saturation_span": 2.0,
+            "sizes_position": false,
+            "strength_shape": "excess_over_span",
+            "threshold": 1.5,
+            "upper_threshold": null
+          },
+          "hold_sessions": 3,
+          "legs": [
+            {
+              "atr_offset": 0.0,
+              "option_type": "CE",
+              "side": "sell"
+            },
+            {
+              "atr_offset": 0.0,
+              "option_type": "PE",
+              "side": "sell"
+            }
+          ],
+          "min_calendar_days_to_expiry": 6,
+          "structure": "short_atm_straddle",
+          "supplied_feature_series": {
+            "atm_iv": 337,
+            "atr_14": 353,
+            "day_of_week": 353,
+            "ema20_z": 353,
+            "ema20_z_abs": 353,
+            "ema_20": 353,
+            "iv_minus_rv_10": 337,
+            "iv_minus_rv_20": 337,
+            "overnight_gap_return": 353,
+            "overnight_gap_sigmas": 353,
+            "realised_vol_10": 353,
+            "realised_vol_20": 353,
+            "sessions_to_nearest_expiry": 353
+          },
+          "target_notional": 5000000.0
+        },
+        "n_observations": 352,
+        "outcome": "screened",
+        "parameters": {
+          "gap_sigmas": 1.5,
+          "hold_sessions": 3.0,
+          "target_notional": 5000000.0
+        },
+        "provenance": {
+          "alpha": "research/banknifty/screen_v1.json:instances[short_atm_straddle_post_gap@BANKNIFTY[gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]].alpha \u2014 the ranking statistic, an annualised Sharpe of the spread over the sheet's benchmark",
+          "annualised_sharpe": "research/banknifty/screen_v1.json:instances[short_atm_straddle_post_gap@BANKNIFTY[gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]].annualised_sharpe",
+          "cost_stamps": "research/banknifty/screen_v1.json:instances[short_atm_straddle_post_gap@BANKNIFTY[gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]].cost_stamps",
+          "deflated_sharpe": "not computed: deflation needs the trial log's family count, which is wider than this sheet's 103 screening trials",
+          "gate_status": "absent: a screening sheet applies no threshold and pre-registers none, so there is no gate for this instance to have passed or failed",
+          "hit_rate": "not reported by a screening sheet",
+          "max_drawdown": "research/banknifty/screen_v1.json:instances[short_atm_straddle_post_gap@BANKNIFTY[gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]].max_drawdown",
+          "mean_return_at_hold": "derived: mean_return_per_session x hold_sessions (3); the screened run held exactly that many sessions, so this is a restatement rather than an extrapolation",
+          "mean_return_per_round_trip": "research/banknifty/screen_v1.json:instances[short_atm_straddle_post_gap@BANKNIFTY[gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]].mean_return_per_round_trip \u2014 net profit per position opened, over the run's capital base",
+          "mean_return_per_session": "research/banknifty/screen_v1.json:instances[short_atm_straddle_post_gap@BANKNIFTY[gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]].mean_return_per_session, net of costs",
+          "measured_strategy": "research/banknifty/screen_v1.json:instances[short_atm_straddle_post_gap@BANKNIFTY[gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]].strategy_name",
+          "measured_strategy_parameters": "research/banknifty/screen_v1.json:instances[short_atm_straddle_post_gap@BANKNIFTY[gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]].strategy_parameters",
+          "n_observations": "research/banknifty/screen_v1.json:instances[short_atm_straddle_post_gap@BANKNIFTY[gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]].n_observations",
+          "outcome": "research/banknifty/screen_v1.json:instances[short_atm_straddle_post_gap@BANKNIFTY[gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]].outcome",
+          "parameters": "research/banknifty/screen_v1.json:instances[short_atm_straddle_post_gap@BANKNIFTY[gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]].instance.params, filled out with short_atm_straddle_post_gap's declared defaults [gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]",
+          "regime_table": "absent: the sheet's regime breakdown is a descriptive split of the excess return, not a measured multiplier the ranker may scale an edge by",
+          "round_trips": "research/banknifty/screen_v1.json:instances[short_atm_straddle_post_gap@BANKNIFTY[gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0]].round_trips",
+          "underlying": "research/banknifty/screen_v1.json:underlying",
+          "window": "research/banknifty/screen_v1.json:window"
+        },
+        "regime_table": null,
+        "round_trips": 5,
+        "underlying": "BANKNIFTY",
+        "window": "2024-10-01..2026-05-29"
+      },
+      "hypothesis_id": null,
+      "notes": null,
+      "override_reason": null,
+      "parameter_key": "gap_sigmas=1.5,hold_sessions=3.0,target_notional=5000000.0",
+      "parameters": {
+        "gap_sigmas": 1.5,
+        "hold_sessions": 3.0,
+        "target_notional": 5000000.0
+      },
+      "reason": "BANKNIFTY stage-one screen rank 2 of 102; filed as CANDIDATE because the stage-two gate produced no verdict (research/banknifty/gates/BLOCKED.md)",
+      "status": "candidate",
+      "template_id": "short_atm_straddle_post_gap",
+      "trial_ids": [
+        "t_cc6ffc1417c14eeb9fecc5f76e015e57"
+      ],
+      "underlying": "BANKNIFTY"
+    },
+    {
+      "admitted_at": "2026-08-26T00:00:45.613525+00:00",
+      "admitted_by": "alpha-exploration agent, owner exploration mandate 2026-08-25",
+      "decision_outcome": "screened_stage_1_not_gated",
+      "decision_path": "research/banknifty/screen_v1.json",
+      "evidence": {
+        "annualised_sharpe": 1.2023840113436433,
+        "cost_stamps": [
+          "corpus.declared_lot_size_contradicted:unverified",
+          "corpus.expiry_session_absent:unverified",
+          "corpus.open_interest_not_divisible_by_lot_size:unverified",
+          "gst.broking_services:corroborated",
+          "margin.simplified_approximation:unverified",
+          "nse.transaction_charge.options:corroborated",
+          "sebi.turnover_fee:corroborated",
+          "settlement.exchange_charge_assumed_not_levied:unverified",
+          "settlement.mean_of_underlying_minute_close_over_window:corroborated",
+          "stt.sell_option_premium:corroborated"
+        ],
+        "deflated_sharpe": null,
+        "gate_status": null,
+        "hit_rate": null,
+        "hold_sessions": 3,
+        "max_drawdown": 0.047267771027965796,
+        "mean_return_at_hold": 0.0008651320697175952,
+        "mean_return_per_round_trip": 0.005639379417418398,
+        "mean_return_per_session": 0.00028837735657253174,
+        "measured_strategy": "hold_3_short_atm_straddle_on_ema20_z_abs",
+        "measured_strategy_parameters": {
+          "conditioner": {
+            "comparator": "at_least",
+            "description": "Magnitude of the index's distance from its twenty-session exponential average, in units of twice the fourteen-session average true range. Exposure is scaled by tanh of that magnitude over two.",
+            "feature": "ema20_z_abs",
+            "lookback_sessions": 60,
+            "saturation_span": 2.0,
+            "sizes_position": true,
+            "strength_shape": "tanh_of_magnitude",
+            "threshold": 0.5,
+            "upper_threshold": null
+          },
+          "hold_sessions": 3,
+          "legs": [
+            {
+              "atr_offset": 0.0,
+              "option_type": "CE",
+              "side": "sell"
+            },
+            {
+              "atr_offset": 0.0,
+              "option_type": "PE",
+              "side": "sell"
+            }
+          ],
+          "min_calendar_days_to_expiry": 6,
+          "structure": "short_atm_straddle",
+          "supplied_feature_series": {
+            "atm_iv": 337,
+            "atr_14": 353,
+            "day_of_week": 353,
+            "ema20_z": 353,
+            "ema20_z_abs": 353,
+            "ema_20": 353,
+            "iv_minus_rv_10": 337,
+            "iv_minus_rv_20": 337,
+            "overnight_gap_return": 353,
+            "overnight_gap_sigmas": 353,
+            "realised_vol_10": 353,
+            "realised_vol_20": 353,
+            "sessions_to_nearest_expiry": 353
+          },
+          "target_notional": 5000000.0
+        },
+        "n_observations": 352,
+        "outcome": "screened",
+        "parameters": {
+          "ema_band_threshold": 0.5,
+          "hold_sessions": 3.0,
+          "target_notional": 5000000.0
+        },
+        "provenance": {
+          "alpha": "research/banknifty/screen_v1.json:instances[short_atm_straddle_ema_atr_band@BANKNIFTY[ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]].alpha \u2014 the ranking statistic, an annualised Sharpe of the spread over the sheet's benchmark",
+          "annualised_sharpe": "research/banknifty/screen_v1.json:instances[short_atm_straddle_ema_atr_band@BANKNIFTY[ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]].annualised_sharpe",
+          "cost_stamps": "research/banknifty/screen_v1.json:instances[short_atm_straddle_ema_atr_band@BANKNIFTY[ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]].cost_stamps",
+          "deflated_sharpe": "not computed: deflation needs the trial log's family count, which is wider than this sheet's 103 screening trials",
+          "gate_status": "absent: a screening sheet applies no threshold and pre-registers none, so there is no gate for this instance to have passed or failed",
+          "hit_rate": "not reported by a screening sheet",
+          "max_drawdown": "research/banknifty/screen_v1.json:instances[short_atm_straddle_ema_atr_band@BANKNIFTY[ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]].max_drawdown",
+          "mean_return_at_hold": "derived: mean_return_per_session x hold_sessions (3); the screened run held exactly that many sessions, so this is a restatement rather than an extrapolation",
+          "mean_return_per_round_trip": "research/banknifty/screen_v1.json:instances[short_atm_straddle_ema_atr_band@BANKNIFTY[ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]].mean_return_per_round_trip \u2014 net profit per position opened, over the run's capital base",
+          "mean_return_per_session": "research/banknifty/screen_v1.json:instances[short_atm_straddle_ema_atr_band@BANKNIFTY[ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]].mean_return_per_session, net of costs",
+          "measured_strategy": "research/banknifty/screen_v1.json:instances[short_atm_straddle_ema_atr_band@BANKNIFTY[ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]].strategy_name",
+          "measured_strategy_parameters": "research/banknifty/screen_v1.json:instances[short_atm_straddle_ema_atr_band@BANKNIFTY[ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]].strategy_parameters",
+          "n_observations": "research/banknifty/screen_v1.json:instances[short_atm_straddle_ema_atr_band@BANKNIFTY[ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]].n_observations",
+          "outcome": "research/banknifty/screen_v1.json:instances[short_atm_straddle_ema_atr_band@BANKNIFTY[ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]].outcome",
+          "parameters": "research/banknifty/screen_v1.json:instances[short_atm_straddle_ema_atr_band@BANKNIFTY[ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]].instance.params, filled out with short_atm_straddle_ema_atr_band's declared defaults [ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]",
+          "regime_table": "absent: the sheet's regime breakdown is a descriptive split of the excess return, not a measured multiplier the ranker may scale an edge by",
+          "round_trips": "research/banknifty/screen_v1.json:instances[short_atm_straddle_ema_atr_band@BANKNIFTY[ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0]].round_trips",
+          "underlying": "research/banknifty/screen_v1.json:underlying",
+          "window": "research/banknifty/screen_v1.json:window"
+        },
+        "regime_table": null,
+        "round_trips": 18,
+        "underlying": "BANKNIFTY",
+        "window": "2024-10-01..2026-05-29"
+      },
+      "hypothesis_id": null,
+      "notes": null,
+      "override_reason": null,
+      "parameter_key": "ema_band_threshold=0.5,hold_sessions=3.0,target_notional=5000000.0",
+      "parameters": {
+        "ema_band_threshold": 0.5,
+        "hold_sessions": 3.0,
+        "target_notional": 5000000.0
+      },
+      "reason": "BANKNIFTY stage-one screen rank 11 of 102; filed as CANDIDATE because the stage-two gate produced no verdict (research/banknifty/gates/BLOCKED.md)",
+      "status": "candidate",
+      "template_id": "short_atm_straddle_ema_atr_band",
+      "trial_ids": [
+        "t_1d7d53b0b7a24607bd85c9a45fa704c1"
+      ],
+      "underlying": "BANKNIFTY"
+    },
+    {
+      "admitted_at": "2026-08-26T00:00:46.639178+00:00",
+      "admitted_by": "alpha-exploration agent",
+      "decision_outcome": "fails_threshold",
+      "decision_path": "research/h1/decision.json",
+      "evidence": {
+        "annualised_sharpe": 0.47958586708750306,
+        "cost_stamps": [
+          "corpus.open_interest_not_divisible_by_lot_size:unverified",
+          "gst.broking_services:corroborated",
+          "margin.simplified_approximation:unverified",
+          "nse.transaction_charge.options:corroborated",
+          "sebi.turnover_fee:corroborated",
+          "settlement.exchange_charge_assumed_not_levied:unverified",
+          "settlement.mean_of_underlying_minute_close_over_window:corroborated",
+          "stt.sell_option_premium:corroborated",
+          "benchmark:corpus.open_interest_not_divisible_by_lot_size:unverified",
+          "benchmark:gst.broking_services:corroborated",
+          "benchmark:margin.simplified_approximation:unverified",
+          "benchmark:nse.transaction_charge.options:corroborated",
+          "benchmark:sebi.turnover_fee:corroborated",
+          "benchmark:settlement.exchange_charge_assumed_not_levied:unverified",
+          "benchmark:settlement.mean_of_underlying_minute_close_over_window:corroborated",
+          "benchmark:stt.sell_option_premium:corroborated",
+          "dsr.sharpe_variance_assumed",
+          "epochs.dates_not_primary_sourced"
+        ],
+        "deflated_sharpe": 0.6043248358466966,
+        "gate_status": "failed",
+        "hit_rate": null,
+        "hold_sessions": 1,
+        "max_drawdown": 0.061146443233911635,
+        "mean_return_at_hold": 0.000234283019592321,
+        "mean_return_per_round_trip": null,
+        "mean_return_per_session": 0.000234283019592321,
+        "measured_strategy": "short_atm_straddle",
+        "measured_strategy_parameters": {
+          "lots": 1,
+          "min_days_to_expiry": 1
+        },
+        "n_observations": 79,
+        "outcome": "fails_threshold",
+        "parameters": null,
+        "provenance": {
+          "annualised_sharpe": "research/h1/decision.json:in_sample.metrics.annualised_sharpe",
+          "cost_stamps": "research/h1/decision.json:in_sample.metrics.unverified_inputs",
+          "deflated_sharpe": "research/h1/decision.json:in_sample.metrics.deflated_sharpe",
+          "gate_status": "research/h1/decision.json:in_sample.metrics.gate_status",
+          "hit_rate": "not reported by the source decision record",
+          "max_drawdown": "research/h1/decision.json:in_sample.metrics.max_drawdown",
+          "mean_return_at_hold": "derived: mean_return_per_session x hold_sessions (1); the source record measured a hold to cash settlement, so this assumes the per-session mean is flat across the hold",
+          "mean_return_per_round_trip": "absent: the source record reports no per-position figure, so the only expectation recoverable here is the per-session one scaled by the hold",
+          "mean_return_per_session": "derived: research/h1/decision.json:in_sample.metrics.mean_gross_return - research/h1/decision.json:in_sample.metrics.mean_cost_drag",
+          "measured_strategy": "research/h1/decision.json:runs.in_sample.strategy",
+          "measured_strategy_parameters": "research/h1/decision.json:runs.in_sample.strategy_parameters",
+          "n_observations": "research/h1/decision.json:in_sample.metrics.sample_length",
+          "outcome": "research/h1/decision.json:outcome",
+          "parameters": "absent: the record names no template parameter point, so the hold above is the whole of what is recoverable about the trade it measured",
+          "regime_table": "absent: the source record's epoch list partitions the window by statutory cost changes, which is not the volatility regime the ranker tags",
+          "round_trips": "absent: the source record does not say how many positions it opened",
+          "underlying": "absent: the record names no product, so nothing here corroborates the product an admission built on it is for",
+          "window": "research/h1/decision.json:in_sample.window"
+        },
+        "regime_table": null,
+        "round_trips": null,
+        "underlying": null,
+        "window": "2026-01-01..2026-04-30"
+      },
+      "hypothesis_id": "h_817b33ff6b9f68e288161f5990739744",
+      "notes": null,
+      "override_reason": "owner exploration mandate 2026-08-25: H1 outcome FAILS_THRESHOLD on deflated Sharpe 0.6043 vs 0.90 at n=79; admitted for paper-trade idea generation only, evidence banner shown",
+      "parameter_key": "hold_sessions=1.0,target_notional=1500000.0",
+      "parameters": {
+        "hold_sessions": 1.0,
+        "target_notional": 1500000.0
+      },
+      "reason": "H1 NIFTY variance risk premium; restores the NIFTY ideas the deployed sheets were built from",
+      "status": "admitted",
+      "template_id": "short_atm_straddle_hold_n",
+      "trial_ids": [
+        "t_1e98d041f6b344628ab50d401e8d302f"
+      ],
+      "underlying": "NIFTY"
+    },
+    {
+      "admitted_at": "2026-08-26T01:09:34.178008+00:00",
+      "admitted_by": "owner exploration mandate",
+      "decision_outcome": "not_evaluable",
+      "decision_path": "research/banknifty/gates/rank1/decision.json",
+      "evidence": {
+        "annualised_sharpe": 1.5902439343239276,
+        "cost_stamps": [
+          "corpus.declared_lot_size_contradicted:unverified",
+          "corpus.expiry_session_absent:unverified",
+          "corpus.open_interest_not_divisible_by_lot_size:unverified",
+          "gst.broking_services:corroborated",
+          "margin.simplified_approximation:unverified",
+          "nse.transaction_charge.options:corroborated",
+          "sebi.turnover_fee:corroborated",
+          "settlement.exchange_charge_assumed_not_levied:unverified",
+          "settlement.mean_of_underlying_minute_close_over_window:corroborated",
+          "stt.sell_option_premium:corroborated",
+          "benchmark:corpus.declared_lot_size_contradicted:unverified",
+          "benchmark:corpus.expiry_session_absent:unverified",
+          "benchmark:corpus.open_interest_not_divisible_by_lot_size:unverified",
+          "benchmark:gst.broking_services:corroborated",
+          "benchmark:margin.simplified_approximation:unverified",
+          "benchmark:nse.transaction_charge.options:corroborated",
+          "benchmark:sebi.turnover_fee:corroborated",
+          "benchmark:settlement.exchange_charge_assumed_not_levied:unverified",
+          "benchmark:settlement.mean_of_underlying_minute_close_over_window:corroborated",
+          "benchmark:stt.sell_option_premium:corroborated",
+          "dsr.sharpe_variance_assumed",
+          "epochs.dates_not_primary_sourced"
+        ],
+        "deflated_sharpe": 0.27007996892008135,
+        "gate_status": "not_evaluable",
+        "hit_rate": null,
+        "hold_sessions": 1,
+        "max_drawdown": 0.0736889414941544,
+        "mean_return_at_hold": 0.0007732213091038331,
+        "mean_return_per_round_trip": 0.010468226954021123,
+        "mean_return_per_session": 0.0007732213091038331,
+        "measured_strategy": "hold_1_short_atm_straddle",
+        "measured_strategy_parameters": {
+          "conditioner": null,
+          "hold_sessions": 1,
+          "legs": [
+            {
+              "atr_offset": 0.0,
+              "option_type": "CE",
+              "side": "sell"
+            },
+            {
+              "atr_offset": 0.0,
+              "option_type": "PE",
+              "side": "sell"
+            }
+          ],
+          "min_calendar_days_to_expiry": 4,
+          "structure": "short_atm_straddle",
+          "supplied_feature_series": {
+            "atm_iv": 337,
+            "atr_14": 353,
+            "day_of_week": 353,
+            "ema20_z": 353,
+            "ema20_z_abs": 353,
+            "ema_20": 353,
+            "iv_minus_rv_10": 337,
+            "iv_minus_rv_20": 337,
+            "overnight_gap_return": 353,
+            "overnight_gap_sigmas": 353,
+            "realised_vol_10": 353,
+            "realised_vol_20": 353,
+            "sessions_to_nearest_expiry": 353
+          },
+          "target_notional": 5000000.0
+        },
+        "n_observations": 352,
+        "outcome": "not_evaluable",
+        "parameters": {
+          "hold_sessions": 1.0,
+          "target_notional": 5000000.0
+        },
+        "provenance": {
+          "annualised_sharpe": "research/banknifty/gates/rank1/decision.json:in_sample.metrics.annualised_sharpe",
+          "cost_stamps": "research/banknifty/gates/rank1/decision.json:in_sample.metrics.unverified_inputs",
+          "deflated_sharpe": "research/banknifty/gates/rank1/decision.json:in_sample.metrics.deflated_sharpe",
+          "gate_status": "research/banknifty/gates/rank1/decision.json:in_sample.metrics.gate_status",
+          "hit_rate": "not reported by the source decision record",
+          "max_drawdown": "research/banknifty/gates/rank1/decision.json:in_sample.metrics.max_drawdown",
+          "mean_return_at_hold": "derived: mean_return_per_session x hold_sessions (1); the source record measured a hold to cash settlement, so this assumes the per-session mean is flat across the hold",
+          "mean_return_per_round_trip": "research/banknifty/gates/rank1/decision.json:runs.in_sample.metrics.mean_return_per_round_trip",
+          "mean_return_per_session": "derived: research/banknifty/gates/rank1/decision.json:in_sample.metrics.mean_gross_return - research/banknifty/gates/rank1/decision.json:in_sample.metrics.mean_cost_drag",
+          "measured_strategy": "research/banknifty/gates/rank1/decision.json:runs.in_sample.strategy",
+          "measured_strategy_parameters": "research/banknifty/gates/rank1/decision.json:runs.in_sample.strategy_parameters",
+          "n_observations": "research/banknifty/gates/rank1/decision.json:in_sample.metrics.sample_length",
+          "outcome": "research/banknifty/gates/rank1/decision.json:outcome",
+          "parameters": "research/banknifty/gates/rank1/decision.json:runs.in_sample.template_parameters",
+          "regime_table": "absent: the source record's epoch list partitions the window by statutory cost changes, which is not the volatility regime the ranker tags",
+          "round_trips": "research/banknifty/gates/rank1/decision.json:runs.in_sample.metrics.round_trips",
+          "underlying": "absent: the record names no product, so nothing here corroborates the product an admission built on it is for",
+          "window": "research/banknifty/gates/rank1/decision.json:in_sample.window"
+        },
+        "regime_table": null,
+        "round_trips": 26,
+        "underlying": null,
+        "window": "2024-10-03..2026-05-29"
+      },
+      "hypothesis_id": "h_307a83a24fd9a8018c3567322b00097f",
+      "notes": null,
+      "override_reason": "owner exploration mandate 2026-08-25: stage-2 verdict NOT_EVALUABLE (80.6% of intents unfillable against a 10% bar; the corpus cannot evaluate this family), DSR 0.2701 vs 0.90 at n=352; admitted for paper-trade idea generation only, evidence banner shown",
+      "parameter_key": "hold_sessions=1.0,target_notional=5000000.0",
+      "parameters": {
+        "hold_sessions": 1.0,
+        "target_notional": 5000000.0
+      },
+      "reason": "BANKNIFTY paper-trade idea generation",
+      "status": "admitted",
+      "template_id": "short_atm_straddle_hold_n",
+      "trial_ids": [
+        "t_ddd80fee15744450935ebf4402b057dd",
+        "t_3345464c7e854eb8b6dc6c69e9654a1a"
+      ],
+      "underlying": "BANKNIFTY"
+    }
+  ],
+  "schema_version": 1
+}

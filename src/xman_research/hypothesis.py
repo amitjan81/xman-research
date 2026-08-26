@@ -9,7 +9,17 @@ Three fields carry the discipline, and the record refuses to exist without them:
 * **null_hypothesis** — what a result would look like if this does *not* work. Written
   before the run, it is the only thing that makes a disappointing result interpretable
   rather than negotiable.
-* **thresholds** — the decision criteria, written before any run.
+* **thresholds** — the decision criteria, written before any run. Every numeric one names
+  a metric :mod:`xman_research.validation` measures, checked here at construction: a
+  criterion nothing computes cannot be graded, and freezing one into a content-addressed
+  id makes the record ungradeable for as long as it exists.
+
+A fourth field is optional and carries the criteria of a *different* stage:
+
+* **screen_criteria** — what a stage-one screen required of an instance before it was
+  worth taking to a gate. Recorded on the record because a later reader needs to know
+  what the screen was looking for, and kept out of ``thresholds`` because a stage-two
+  gate is not asked to grade it — see :attr:`HypothesisRecord.screen_criteria`.
 
 The record is **immutable**. Changing a threshold after seeing a result is the single
 most common way research lies to itself, so there is no setter and no ``replace()``
@@ -40,13 +50,19 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Iterable, Mapping
+from contextvars import ContextVar
 from dataclasses import dataclass, field, fields
 from types import MappingProxyType
 from typing import Any
 
 from xman_research._canonical import canonical_json, json_safe
+from xman_research.metric_vocabulary import (
+    HOLDOUT_THRESHOLD_PREFIX,
+    MEASURED_METRICS,
+    is_gradeable_metric,
+)
 
-__all__ = ["HypothesisRecord", "HypothesisValidationError"]
+__all__ = ["HypothesisRecord", "HypothesisValidationError", "require_gradeable_thresholds"]
 
 ID_PREFIX = "h_"
 # 128 bits of the digest. 64 was enough for any plausible number of hypotheses, but the
@@ -57,6 +73,33 @@ ID_HEX_LENGTH = 32
 # a cyclic one cannot be frozen at all. Refused at construction, where nothing is at
 # stake — unlike the trial-log path, where refusing to serialise would cost a row.
 MAX_FREEZE_DEPTH = 60
+
+OMITTED_WHEN_EMPTY = frozenset({"screen_criteria"})
+"""Fields left out of :meth:`HypothesisRecord.content` when they hold nothing.
+
+An id is content-addressed and is quoted outside this package — in gate files, decision
+records, and the ``hypothesis_id`` column of every trial row — so an id already minted
+has to stay minted. A field that always encodes, even as ``{}``, changes the canonical
+JSON of *every* record and re-mints all of them; a field listed here encodes only when a
+record actually carries it, so records that do not are byte-identical to what they were
+before the field existed. The cost is that ``screen_criteria={}`` and no
+``screen_criteria`` at all are the same record, which is the intended reading: a
+hypothesis with no screen-stage bars did not have any.
+
+Only container-valued fields belong here. The test is falsiness, so a field whose default
+is a scalar — ``0``, ``""`` — would be omitted at that value too, which would make two
+different records hash alike."""
+
+
+_REBUILDING: ContextVar[bool] = ContextVar("rebuilding_stored_hypothesis", default=False)
+"""Whether the record being constructed is one already registered somewhere.
+
+Set only by :meth:`HypothesisRecord.from_stored`. Everything about a record is validated
+on both paths except the metric vocabulary, which is a rule about what may be registered
+*next* rather than a fact about what a stored record is. A log is append-only evidence: a
+record registered under an older vocabulary must still be readable, or the log holding it
+cannot be opened — and neither can the amendment that brings it into line, which is the
+one operation that record still needs."""
 
 
 class HypothesisValidationError(ValueError):
@@ -126,7 +169,51 @@ def _require_thresholds(value: Any) -> Mapping[str, Any]:
     for key, item in frozen.items():
         if item is None or (isinstance(item, str) and not item.strip()):
             raise HypothesisValidationError(f"threshold {key!r} is blank: {item!r}")
+    if not _REBUILDING.get():
+        require_gradeable_thresholds(frozen)
     return frozen
+
+
+def require_gradeable_thresholds(thresholds: Mapping[str, Any]) -> None:
+    """Refuse criteria no component measures, or explain why they cannot be graded.
+
+    Called when a record is constructed and again when one is registered. The second call
+    is not redundant: :meth:`HypothesisRecord.from_stored` exists so a log holding a record
+    from an older vocabulary stays readable, and it is public, so construction is not the
+    only way a record reaches a log. Registration is the moment a record becomes binding
+    evidence, and it is the moment that has to hold.
+    """
+    ungradeable = sorted(
+        key
+        for key, item in thresholds.items()
+        if _is_criterion(item) and not is_gradeable_metric(key)
+    )
+    if not ungradeable:
+        return
+    raise HypothesisValidationError(
+        f"thresholds name {', '.join(ungradeable)}, which no component measures. A "
+        "numeric threshold is graded by xman_research.validation, and the metrics it "
+        f"computes are: {', '.join(sorted(MEASURED_METRICS))} — each optionally "
+        f"prefixed {HOLDOUT_THRESHOLD_PREFIX!r} to bind the holdout run instead. "
+        "Registering a criterion outside that vocabulary makes the record ungradeable "
+        "for good: the gate must carry every numeric threshold the record registered, "
+        "and a gate naming a metric outside the vocabulary is refused when it is read. "
+        "A bar the screen applies to itself belongs in screen_criteria, which no gate "
+        "is asked to grade."
+    )
+
+
+def _is_criterion(value: Any) -> bool:
+    """Whether a threshold value is a bar the validator will be asked to grade.
+
+    Mirrors :meth:`~xman_research.validation.gate.DecisionGate.check_binding`, which
+    reconciles a registered threshold against the gate file only when its value is a
+    number. Anything else — prose, a nested table of parameters — is recorded with the
+    record but never graded, so it is not held to the measurable vocabulary. ``bool`` is a
+    Python ``int`` and binding grades it as one, so it counts as a criterion here too — the
+    two predicates decide the same keys or the guards can disagree again.
+    """
+    return isinstance(value, int | float)
 
 
 def _normalise_predictors(value: Any) -> tuple[str, ...]:
@@ -161,6 +248,24 @@ class HypothesisRecord:
     exit_rule: Mapping[str, Any] = field(default_factory=dict)
     notes: str = ""
     parent_id: str | None = None
+    screen_criteria: Mapping[str, Any] = field(default_factory=dict)
+    """What a stage-one screen required before an instance was worth gating.
+
+    Separate from :attr:`thresholds` because the two are answered by different components
+    at different times. ``thresholds`` are graded by :mod:`xman_research.validation`, and
+    :meth:`~xman_research.validation.gate.DecisionGate.check_binding` requires the gate
+    file to carry every numeric one — so a key here that the validator cannot measure
+    would make the record ungradeable, which is why ``thresholds`` refuses one. A screen
+    criterion is stated against quantities the screen computes rather than ones the
+    validator does, and it is recorded for the reader — the sheet's ranking can be read
+    back against the bar it was ranked for. Nothing filters on it: no gate is asked to
+    grade it, and the screen does not drop a row for missing it.
+
+    A criterion is only as good as its definition, so record the definition alongside the
+    number: ``{"alpha_to_advance": 0.5, "alpha_to_advance_definition": "..."}``. The two
+    readings of a word like *alpha* can disagree on the ranking, and a bar with no stated
+    quantity is decided by whoever reads it last.
+    """
     id: str = field(init=False, default="")
 
     def __post_init__(self) -> None:
@@ -175,15 +280,44 @@ class HypothesisRecord:
         set_(self, "notes", self.notes.strip() if isinstance(self.notes, str) else "")
         if self.parent_id is not None:
             set_(self, "parent_id", _require_prose(self.parent_id, "parent_id"))
+        set_(self, "screen_criteria", _freeze_mapping(self.screen_criteria, "screen_criteria"))
         set_(self, "id", self._derive_id())
+
+    @classmethod
+    def from_stored(cls, **stored: Any) -> HypothesisRecord:
+        """Rebuild a record that is already registered, exactly as it was stored.
+
+        The id is re-derived from the rebuilt content, so this is not a way to get a
+        record past a check and into a log: a rebuilt record that does not hash to the id
+        it was filed under is caught by the caller that read it. What it skips is the
+        metric-vocabulary check on ``thresholds``, which governs what may be registered
+        now — see :data:`_REBUILDING`.
+        """
+        token = _REBUILDING.set(True)
+        try:
+            return cls(**stored)
+        finally:
+            _REBUILDING.reset(token)
 
     def _derive_id(self) -> str:
         digest = hashlib.sha256(canonical_json(self.content()).encode("utf-8")).hexdigest()
         return f"{ID_PREFIX}{digest[:ID_HEX_LENGTH]}"
 
     def content(self) -> dict[str, Any]:
-        """The id-bearing content of this record: every field except the id itself."""
-        return {f.name: json_safe(getattr(self, f.name)) for f in fields(self) if f.name != "id"}
+        """The id-bearing content of this record: every field except the id itself.
+
+        A field listed in :data:`OMITTED_WHEN_EMPTY` is left out entirely when it holds
+        nothing, so a record that does not use it hashes exactly as it would if the field
+        did not exist. The id is the join key between a record and the trials filed against
+        it, and it is quoted in committed gate files and decision records — a field added
+        to this class must therefore leave every id already minted where it is, and adding
+        one that always encodes (even as ``{}``) would re-mint all of them.
+        """
+        return {
+            f.name: json_safe(getattr(self, f.name))
+            for f in fields(self)
+            if f.name != "id" and not (f.name in OMITTED_WHEN_EMPTY and not getattr(self, f.name))
+        }
 
     def amend(self, **changes: Any) -> HypothesisRecord:
         """Return a new record with ``changes`` applied and this record as its parent.

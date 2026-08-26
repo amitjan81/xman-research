@@ -13,8 +13,14 @@ from pathlib import Path
 
 import pytest
 
-from xman_research import DataWindow, HypothesisRecord, ResearchSession
-from xman_research.validation.decision import ValidationConfig
+from validation_helpers import benchmark_series, evidence, trading_sessions
+from xman_research import (
+    DataWindow,
+    HypothesisRecord,
+    HypothesisValidationError,
+    ResearchSession,
+)
+from xman_research.validation.decision import ValidationConfig, Validator
 from xman_research.validation.gate import (
     EPOCH_BOUNDARIES,
     EPOCH_PROVENANCE_STAMP,
@@ -22,6 +28,7 @@ from xman_research.validation.gate import (
     DecisionGate,
     Direction,
     GateBindingError,
+    GateVocabularyError,
     HoldoutPolicy,
     HoldoutTouchedError,
     Threshold,
@@ -268,6 +275,96 @@ def test_the_holdout_answer_covers_the_whole_amendment_family(
     assert inspect_holdout(session, record, policy=policy).touched
 
 
+def holdout_validator(tmp_path: Path, db_path: Path, record: HypothesisRecord) -> Validator:
+    """A validator over the fixture's own log, with a gate bound to ``record``."""
+    write_gate(tmp_path / "gate.toml", hypothesis_id=record.id)
+    config_path = tmp_path / "validation.toml"
+    config_path.write_text(
+        f'trial_log_path = "{db_path}"\ngate_path = "gate.toml"\nholdout_first_date = 2026-03-01\n'
+    )
+    return Validator(ValidationConfig.from_file(config_path))
+
+
+def logged_run(
+    session: ResearchSession, record: HypothesisRecord, window: DataWindow
+) -> tuple[str, dt.datetime]:
+    """One appended trial's id and the timestamp the log's own clock stamped it with.
+
+    ``run_at`` on the evidence must equal that timestamp: the thresholds-predate-the-run
+    check reconciles the two and refuses a disagreement.
+    """
+    with session.trial(record, data_window=window) as trial:
+        trial_id = trial.trial_id
+    row = next(row for row in session.log.family_trials(record.id) if row.trial_id == trial_id)
+    return trial_id, row.created_at
+
+
+def test_a_separately_run_holdout_benchmark_does_not_trip_the_check(
+    tmp_path: Path, db_path: Path, session: ResearchSession
+) -> None:
+    """Grading a holdout against a benchmark run in its own trial must still be possible.
+
+    The risk-matched increment compares two series over the identical sessions under the
+    identical cost model, so a caller whose benchmark is a *different* strategy re-runs it
+    over the holdout and files a second trial in the same family with the same window.
+    Exempting only the candidate would make that trial the evidence of a prior touch, and
+    the grading would refuse itself after the months had already been read.
+    """
+    record = register(session)
+    validator = holdout_validator(tmp_path, db_path, record)
+    dates = trading_sessions(dt.date(2026, 3, 2), 20)
+    window = DataWindow(dates[0], dates[-1])
+    candidate_trial_id, candidate_at = logged_run(session, record, window)
+    benchmark_trial_id, benchmark_at = logged_run(session, record, window)
+    assert candidate_trial_id != benchmark_trial_id
+
+    verdict = validator.grade_holdout(
+        evidence(
+            benchmark_series(dates, seed=11, label="candidate"),
+            run_at=candidate_at,
+            trial_id=candidate_trial_id,
+        ),
+        benchmark=evidence(
+            benchmark_series(dates, seed=12), run_at=benchmark_at, trial_id=benchmark_trial_id
+        ),
+        hypothesis=record,
+    )
+
+    assert verdict.holdout is not None
+    assert not verdict.holdout.touched
+    assert verdict.holdout.touching_trial_ids == ()
+
+
+def test_a_holdout_trial_from_an_earlier_read_still_trips_the_check(
+    tmp_path: Path, db_path: Path, session: ResearchSession
+) -> None:
+    """The exemption is exactly three trials wide, not "any trial with this window".
+
+    A fourth holdout row — an evaluation from some earlier session — is what the check
+    exists to find, and widening the exemption must not have made it invisible.
+    """
+    record = register(session)
+    validator = holdout_validator(tmp_path, db_path, record)
+    dates = trading_sessions(dt.date(2026, 3, 2), 20)
+    window = DataWindow(dates[0], dates[-1])
+    earlier_trial_id, _ = logged_run(session, record, window)
+    candidate_trial_id, candidate_at = logged_run(session, record, window)
+    benchmark_trial_id, benchmark_at = logged_run(session, record, window)
+
+    with pytest.raises(HoldoutTouchedError, match=earlier_trial_id):
+        validator.grade_holdout(
+            evidence(
+                benchmark_series(dates, seed=11, label="candidate"),
+                run_at=candidate_at,
+                trial_id=candidate_trial_id,
+            ),
+            benchmark=evidence(
+                benchmark_series(dates, seed=12), run_at=benchmark_at, trial_id=benchmark_trial_id
+            ),
+            hypothesis=record,
+        )
+
+
 # ----------------------------------------------------------------- configuration
 
 
@@ -294,3 +391,111 @@ def test_the_config_requires_every_pinned_value(tmp_path: Path) -> None:
     config_path.write_text('trial_log_path = "research.db"\n')
     with pytest.raises(ValueError, match="gate_path, holdout_first_date"):
         ValidationConfig.from_file(config_path)
+
+
+def test_a_gate_grades_the_record_thresholds_and_ignores_its_screen_criteria(
+    tmp_path: Path,
+) -> None:
+    """The two sets are answered by different stages, so a gate carries only its own.
+
+    A screen bar registered as a *threshold* would be one no gate could satisfy: binding
+    requires the gate to carry every numeric threshold the record registered, and a gate
+    naming a metric outside the measurable vocabulary is refused when it is read. Held
+    apart, the gate file names only what it grades and the screen's bar is still on the
+    record for a reader to see.
+    """
+    record = HypothesisRecord(
+        name="BANKNIFTY screen",
+        mechanism="Index hedgers pay up for protection, so implied sits above realised.",
+        null_hypothesis="No screened structure beats the unconditional straddle.",
+        thresholds={"deflated_sharpe": 0.90, "cost_breakeven_multiple": 2.0},
+        screen_criteria={
+            "alpha_to_advance": 0.5,
+            "alpha_to_advance_definition": "the spread's Sharpe",
+        },
+    )
+    path = tmp_path / "gate.toml"
+    write_gate(
+        path,
+        hypothesis_id=record.id,
+        body="""
+[thresholds]
+deflated_sharpe = { at_least = 0.90 }
+cost_breakeven_multiple = { at_least = 2.0 }
+""",
+    )
+    gate = DecisionGate.from_file(path)
+    gate.check_binding(record)
+    assert {threshold.metric for threshold in gate.thresholds} == {
+        "deflated_sharpe",
+        "cost_breakeven_multiple",
+    }
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "deflated_sharpe",
+        "pbo",
+        "holdout.deflated_sharpe",
+        "holdout.pbo",
+        "alpha_to_advance",
+        "holdout.alpha_to_advance",
+        "deflated_sharpe_typo",
+    ],
+)
+def test_what_registration_accepts_is_exactly_what_a_gate_can_be_written_for(
+    tmp_path: Path, key: str
+) -> None:
+    """The guarantee the two-field split rests on, asserted directly.
+
+    A key registration accepts must be one a gate file can carry and be read with; a key it
+    refuses must be one no gate could have carried anyway. If those two sets ever come
+    apart, a record exists that no gate file can satisfy and none can omit — which is the
+    state that blocked every BANKNIFTY stage-two run.
+    """
+    try:
+        record = HypothesisRecord(
+            name="H",
+            mechanism="Index hedgers pay up for protection.",
+            null_hypothesis="No positive mean after costs.",
+            thresholds={key: 0.5},
+        )
+    except HypothesisValidationError:
+        registration_accepts = False
+        record = None
+    else:
+        registration_accepts = True
+
+    bare = key.removeprefix("holdout.")
+    if key.startswith("holdout."):
+        body = (
+            "\n[thresholds]\ndeflated_sharpe = { at_least = 0.90 }\n"
+            f"\n[holdout_thresholds]\n{bare} = {{ at_least = 0.5 }}\n"
+        )
+    elif bare == "deflated_sharpe":
+        body = (
+            "\n[thresholds]\ndeflated_sharpe = { at_least = 0.5 }\n"
+            "\n[holdout_thresholds]\ndeflated_sharpe = { at_least = 0.5 }\n"
+        )
+    else:
+        body = (
+            "\n[thresholds]\ndeflated_sharpe = { at_least = 0.90 }\n"
+            f"{bare} = {{ at_least = 0.5 }}\n"
+            "\n[holdout_thresholds]\ndeflated_sharpe = { at_least = 0.5 }\n"
+        )
+    path = tmp_path / "gate.toml"
+    write_gate(path, hypothesis_id=record.id if record is not None else None, body=body)
+    try:
+        gate = DecisionGate.from_file(path)
+        if record is not None:
+            gate.check_binding(record)
+    except (GateVocabularyError, GateBindingError, ThresholdsNotRecordedError):
+        gate_is_writable = False
+    else:
+        gate_is_writable = True
+
+    assert registration_accepts == gate_is_writable, (
+        f"{key!r}: registration accepts={registration_accepts} but a gate for it is "
+        f"writable={gate_is_writable}. The two checks have come apart."
+    )
