@@ -60,11 +60,11 @@ __all__ = [
     "AdmittedParametersMismatchError",
     "AmbiguousParameterPointError",
     "AppendOnlyLibraryError",
+    "CrossProductEvidenceError",
     "DecisionRecordError",
     "EvidenceCard",
     "LibraryFileError",
     "TemplateLibrary",
-    "CrossProductEvidenceError",
     "UnpassedEvidenceError",
 ]
 

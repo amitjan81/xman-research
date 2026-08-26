@@ -385,3 +385,42 @@ def test_the_config_requires_every_pinned_value(tmp_path: Path) -> None:
     config_path.write_text('trial_log_path = "research.db"\n')
     with pytest.raises(ValueError, match="gate_path, holdout_first_date"):
         ValidationConfig.from_file(config_path)
+
+
+def test_a_gate_grades_the_record_thresholds_and_ignores_its_screen_criteria(
+    tmp_path: Path,
+) -> None:
+    """The two sets are answered by different stages, so a gate carries only its own.
+
+    A screen bar registered as a *threshold* would be one no gate could satisfy: binding
+    requires the gate to carry every numeric threshold the record registered, and a gate
+    naming a metric outside the measurable vocabulary is refused when it is read. Held
+    apart, the gate file names only what it grades and the screen's bar is still on the
+    record for a reader to see.
+    """
+    record = HypothesisRecord(
+        name="BANKNIFTY screen",
+        mechanism="Index hedgers pay up for protection, so implied sits above realised.",
+        null_hypothesis="No screened structure beats the unconditional straddle.",
+        thresholds={"deflated_sharpe": 0.90, "cost_breakeven_multiple": 2.0},
+        screen_criteria={
+            "alpha_to_advance": 0.5,
+            "alpha_to_advance_definition": "the spread's Sharpe",
+        },
+    )
+    path = tmp_path / "gate.toml"
+    write_gate(
+        path,
+        hypothesis_id=record.id,
+        body="""
+[thresholds]
+deflated_sharpe = { at_least = 0.90 }
+cost_breakeven_multiple = { at_least = 2.0 }
+""",
+    )
+    gate = DecisionGate.from_file(path)
+    gate.check_binding(record)
+    assert {threshold.metric for threshold in gate.thresholds} == {
+        "deflated_sharpe",
+        "cost_breakeven_multiple",
+    }

@@ -90,7 +90,9 @@ deflated_sharpe = 0.90
 cost_breakeven_multiple = 2.0
 max_drawdown = 0.10
 risk_matched_increment = 0.0
-alpha_to_advance = "0.5 annualised Sharpe of the spread, applied by the reader"
+
+[hypothesis.screen_criteria]
+alpha_to_advance = 0.5
 
 [benchmark]
 template = "short_atm_straddle_hold_n"

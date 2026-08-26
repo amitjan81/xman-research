@@ -220,6 +220,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--gaps-reason",
         help="override the gap policy; defaults to the one the screened sheet recorded",
     )
+    stage_two.add_argument(
+        "--hypothesis",
+        help=(
+            "grade against an amendment of the screen's record, by id. An amendment mints a "
+            "new id the sheet cannot name; it must be in the sheet's own family, so the "
+            "screen's trials still count against this run"
+        ),
+    )
 
     library = commands.add_parser("library", help="inspect and change template admissions")
     library_commands = library.add_subparsers(dest="library_command", required=True)
@@ -528,6 +536,7 @@ def _gate(args: argparse.Namespace) -> int:
         trial_log_path=args.trial_log,
         gaps_reason=args.gaps_reason,
         seal_override=args.seal_override,
+        hypothesis_id=args.hypothesis,
     )
     print(run.decision.summary())
     print()

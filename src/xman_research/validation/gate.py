@@ -31,6 +31,7 @@ from pathlib import Path
 from xman_research.clock import require_aware
 from xman_research.evaluation import ResearchSession
 from xman_research.hypothesis import HypothesisRecord
+from xman_research.metric_vocabulary import HOLDOUT_THRESHOLD_PREFIX, MEASURED_METRICS
 from xman_research.trial_log import DataWindow, TrialLog
 
 __all__ = [
@@ -70,41 +71,6 @@ EPOCH_PROVENANCE_STAMP = "epochs.dates_not_primary_sourced"
 # and `epochs_spanned` takes the boundaries as an argument (it already does — the
 # `boundaries=` parameter is the seam, and EPOCH_BOUNDARIES is only its default).
 # Nothing outside this module should import EPOCH_BOUNDARIES by name.
-
-HOLDOUT_THRESHOLD_PREFIX = "holdout."
-"""How a holdout threshold is named in the immutable hypothesis record.
-
-The in-sample bar is anchored to the content-addressed
-:class:`~xman_research.hypothesis.HypothesisRecord`; without this, the holdout bar lived
-only in the editable gate file, with ``recorded_at`` just another editable field. An
-operator who did not like the holdout verdict could soften the holdout bar and re-read —
-the exact move :meth:`DecisionGate.check_binding` exists to prevent, left open on the one
-run that matters most. Registering ``holdout.probabilistic_sharpe`` in the record's own
-``thresholds`` mapping binds it the same way, without changing the record's schema (which
-is content-addressed: a new field would change every id ever minted)."""
-
-MEASURED_METRICS: frozenset[str] = frozenset(
-    {
-        "deflated_sharpe",
-        "probabilistic_sharpe",
-        "cost_breakeven_multiple",
-        "max_drawdown",
-        "annualised_sharpe",
-        "annualised_adjusted_sharpe",
-        "expected_shortfall",
-        "risk_matched_increment",
-        "sharpe_difference",
-        "pbo",
-    }
-)
-"""Every metric a threshold may name — the gate's whole vocabulary.
-
-Checked when the gate file is *read*, so a typo or a metric this component does not
-compute is a refusal about the gate rather than a grade-time complaint that "the run did
-not report it" — which accuses the wrong party and sends the operator to re-run a backtest
-that was never going to help.
-:meth:`~xman_research.validation.decision.Validator._grade` asserts its observed metrics
-are exactly this set, which is what stops the two drifting apart."""
 
 HOLDOUT_UNCOMPUTABLE_METRICS = frozenset({"pbo"})
 """Metrics the single holdout run structurally cannot report.

@@ -114,6 +114,25 @@ class ScreeningRunError(ValueError):
     """A screen that cannot be run as specified, refused before any trial is appended."""
 
 
+ALPHA_DEFINITION = (
+    "annualised Sharpe of the candidate's per-session net return series minus "
+    "the benchmark's, aligned on the union of their session dates with a zero "
+    "for a session either side sat out. Distinct from `risk_matched`, which is "
+    "this repository's volatility-matched comparison and scales the benchmark "
+    "to the candidate's volatility before differencing."
+)
+"""What this screen means by a candidate's *alpha* — the sheet's ranking quantity.
+
+Named once and quoted everywhere the number is: the sheet's provenance, and the
+``screen_criteria`` of the hypothesis a screen registers. The two readings of "alpha"
+available here are not the same number and do not agree on the ranking — the difference
+series' Sharpe (this one) against `sharpe_difference`, the plain subtraction of the two
+annualised Sharpes, which :mod:`xman_research.validation` also computes. A bar stated as
+"alpha ≥ x" with no definition beside it is therefore decided by whoever reads it last,
+which is why the definition travels with the number rather than living only here.
+"""
+
+
 @dataclass(frozen=True, slots=True)
 class CandidateSpec:
     """One template and the explicit grid of parameter points to screen it at.
@@ -757,13 +776,7 @@ class ScreeningRun:
             "decision_time": self._config.decision_time.isoformat(),
             "corpus": dict(benchmark_result.data_provenance),
             "config": dict(benchmark_result.config_provenance),
-            "alpha_definition": (
-                "annualised Sharpe of the candidate's per-session net return series minus "
-                "the benchmark's, aligned on the union of their session dates with a zero "
-                "for a session either side sat out. Distinct from `risk_matched`, which is "
-                "this repository's volatility-matched comparison and scales the benchmark "
-                "to the candidate's volatility before differencing."
-            ),
+            "alpha_definition": ALPHA_DEFINITION,
             "trial_count_note": (
                 "every instance in this sheet was appended to the trial log against "
                 f"hypothesis {self._hypothesis.id} before its number was read, so a "

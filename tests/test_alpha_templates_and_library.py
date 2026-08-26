@@ -18,11 +18,11 @@ import pytest
 from xman_research import ManualClock
 from xman_research.alpha.library import (
     AdmissionRecord,
-    CrossProductEvidenceError,
     AdmissionStatus,
     AdmittedParametersMismatchError,
     AmbiguousParameterPointError,
     AppendOnlyLibraryError,
+    CrossProductEvidenceError,
     DecisionRecordError,
     EvidenceCard,
     LibraryFileError,
@@ -155,7 +155,7 @@ def test_admit_refuses_evidence_measured_on_another_product(
     payload = json.loads(path.read_text())
     payload["runs"]["in_sample"]["underlying"] = "NIFTY"
     path.write_text(json.dumps(payload))
-    with pytest.raises(CrossProductEvidenceError, match="measured .* on NIFTY"):
+    with pytest.raises(CrossProductEvidenceError, match=r"measured .* on NIFTY"):
         library.admit(
             underlying="BANKNIFTY",
             template=registry.get("short_atm_straddle_hold_n"),

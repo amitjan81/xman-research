@@ -70,7 +70,8 @@ null_hypothesis = \"\"\"
 No screened structure or conditioner produces a positive spread over the unconditional
 short at-the-money straddle held for the same number of sessions.
 \"\"\"
-thresholds = {alpha_to_advance = 0.5}
+thresholds = {deflated_sharpe = 0.90}
+screen_criteria = {alpha_to_advance = 0.5}
 
 [benchmark]
 template = "short_atm_straddle_hold_n"

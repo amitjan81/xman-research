@@ -66,7 +66,8 @@ def _hypothesis() -> HypothesisRecord:
             "No screened structure or conditioner beats the unconditional short "
             "at-the-money straddle held for the same number of sessions."
         ),
-        thresholds={"alpha_to_advance": 0.5},
+        thresholds={"deflated_sharpe": 0.90},
+        screen_criteria={"alpha_to_advance": 0.5},
     )
 
 
@@ -494,7 +495,8 @@ end = 2026-03-31
 name = "Screening: which short-variance structure is best paid"
 mechanism = "Implied variance sits above realised because someone warehouses the convexity."
 null_hypothesis = "No screened structure beats the unconditional straddle."
-thresholds = {alpha_to_advance = 0.5}
+thresholds = {deflated_sharpe = 0.90}
+screen_criteria = {alpha_to_advance = 0.5}
 
 [benchmark]
 template = "short_atm_straddle_hold_n"
@@ -516,7 +518,8 @@ def test_a_spec_reads_its_window_hypothesis_benchmark_and_grid(tmp_path: Path) -
     assert spec.trial_log_path == Path("research/screen/trials.db")
     assert spec.decision_time == dt.time(14, 50)
     assert spec.gaps_reason is None
-    assert spec.hypothesis.thresholds["alpha_to_advance"] == 0.5
+    assert spec.hypothesis.screen_criteria["alpha_to_advance"] == 0.5
+    assert "alpha_to_advance" not in spec.hypothesis.thresholds
 
 
 def test_a_spec_with_no_hypothesis_is_refused(tmp_path: Path) -> None:

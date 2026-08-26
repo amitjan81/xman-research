@@ -88,7 +88,10 @@ __all__ = [
     "new_trial_id",
 ]
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+_UPGRADABLE_FROM = frozenset({1})
+"""Schema versions this code can bring forward in place — see ``_upgrade_from``."""
 
 # RAISE(ABORT, ...) surfaces through the sqlite3 driver as IntegrityError.
 AppendOnlyViolation = sqlite3.IntegrityError
@@ -228,6 +231,7 @@ CREATE TABLE IF NOT EXISTS hypotheses (
     entry_rule_json TEXT NOT NULL,
     exit_rule_json  TEXT NOT NULL,
     notes           TEXT NOT NULL DEFAULT '',
+    screen_criteria_json TEXT NOT NULL DEFAULT '{}',
     registered_at   TEXT NOT NULL
 );
 
@@ -376,8 +380,9 @@ class TrialLog:
                 """
                 INSERT OR IGNORE INTO hypotheses (
                     id, parent_id, name, mechanism, null_hypothesis, thresholds_json,
-                    predictors_json, entry_rule_json, exit_rule_json, notes, registered_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    predictors_json, entry_rule_json, exit_rule_json, notes,
+                    screen_criteria_json, registered_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.id,
@@ -390,6 +395,7 @@ class TrialLog:
                     json.dumps(json_safe(record.entry_rule), sort_keys=True),
                     json.dumps(json_safe(record.exit_rule), sort_keys=True),
                     record.notes,
+                    json.dumps(json_safe(record.screen_criteria), sort_keys=True),
                     self._timestamp(),
                 ),
             )
@@ -408,7 +414,12 @@ class TrialLog:
         ).fetchone()
         if row is None:
             raise UnknownHypothesisError(f"no hypothesis registered with id {hypothesis_id!r}")
-        record = HypothesisRecord(
+        # Rebuilt rather than constructed: a record already in this table is evidence,
+        # and the vocabulary a criterion must be drawn from is a rule about what may be
+        # registered *next*. Applying it on the way out would make a log holding a record
+        # registered under an older rule unreadable — including by the amendment that
+        # brings it into line, which is the one operation such a record still needs.
+        record = HypothesisRecord.from_stored(
             name=row["name"],
             mechanism=row["mechanism"],
             null_hypothesis=row["null_hypothesis"],
@@ -418,6 +429,7 @@ class TrialLog:
             exit_rule=json.loads(row["exit_rule_json"]),
             notes=row["notes"],
             parent_id=row["parent_id"],
+            screen_criteria=json.loads(row["screen_criteria_json"]),
         )
         # The id is derived from the content, so re-deriving it on read is a free
         # integrity check: a record rewritten in place — which this connection's
@@ -624,12 +636,34 @@ class TrialLog:
         if found == SCHEMA_VERSION:
             return
         if found != 0:
+            if found in _UPGRADABLE_FROM:
+                self._upgrade_from(found)
+                return
             raise SchemaVersionError(
                 f"{self._db_path} was written with schema version {found}, but this code "
                 f"speaks version {SCHEMA_VERSION}. Refusing to open it rather than "
                 "guessing at the column meanings of a record that is meant to be evidence."
             )
         self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+    def _upgrade_from(self, found: int) -> None:
+        """Add the columns a newer schema reads, leaving every recorded value alone.
+
+        A log is append-only evidence, so an upgrade that rewrote a value would be the
+        thing this class exists to prevent; every step here adds a column with a default
+        and touches no row's recorded content. Refusing instead would strand a log whose
+        trials are the only record of the screen that produced them, and copying it
+        forward by hand is how a family count gets reset.
+        """
+        if found == 1:
+            columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(hypotheses)")}
+            if "screen_criteria_json" not in columns:
+                self._conn.execute(
+                    "ALTER TABLE hypotheses ADD COLUMN "
+                    "screen_criteria_json TEXT NOT NULL DEFAULT '{}'"
+                )
+        self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        self._conn.commit()
 
     def _require_hypothesis(self, hypothesis_id: str) -> None:
         if not self.has_hypothesis(hypothesis_id):

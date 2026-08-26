@@ -204,6 +204,7 @@ def run_stage_two_gate(
     trial_log_path: Path | str | None = None,
     gaps_reason: str | None = None,
     seal_override: str | None = None,
+    hypothesis_id: str | None = None,
 ) -> GateRun:
     """Grade one ranked instance from ``sheet_path`` and write its decision record.
 
@@ -215,6 +216,12 @@ def run_stage_two_gate(
     :data:`~xman_research.alpha.holdout.HOLDOUT_FIRST_DATE`; without one such a window is
     refused before any trial is spent. Where it is given it is copied into the decision
     record, so the months are answerable for afterwards.
+
+    ``hypothesis_id`` grades against an amendment of the record the screen ran under —
+    :meth:`~xman_research.hypothesis.HypothesisRecord.amend` mints a new id, so a record
+    amended after the sheet was written is no longer the id the sheet names. It must be in
+    the same family as the sheet's record: the family is what the deflation counts, and a
+    run filed against an unrelated record would deflate the screen's breadth away.
     """
     sheet = load_screen_sheet(sheet_path)
     resolved_registry = registry if registry is not None else default_registry()
@@ -260,7 +267,7 @@ def run_stage_two_gate(
     # arrive with the runs already in the log and no decision to show for them.
     gate = config.gate()
     with open_session(log_path) as session:
-        record = _hypothesis_of(session, sheet, Path(sheet_path))
+        record = _hypothesis_of(session, sheet, Path(sheet_path), override_id=hypothesis_id)
     gate.check_binding(record)
 
     resolved_store = store if store is not None else SessionStore()
@@ -491,16 +498,42 @@ def _sheet_log_path(sheet: ScreenSheet) -> Path:
     return Path(path)
 
 
-def _hypothesis_of(session: ResearchSession, sheet: ScreenSheet, source: Path) -> HypothesisRecord:
-    """The screen's own hypothesis record, read back out of the log it was registered in.
+def _hypothesis_of(
+    session: ResearchSession,
+    sheet: ScreenSheet,
+    source: Path,
+    *,
+    override_id: str | None = None,
+) -> HypothesisRecord:
+    """The hypothesis this run is filed against, read back out of the log.
 
     Read rather than rebuilt from the spec file: the record is content-addressed, so a spec
     edited since the screen ran would mint a different id, file this run against a family
     that holds none of the screen's trials, and deflate against a count of one.
+
+    ``override_id`` names an amendment of the screen's record — the sanctioned way a
+    criterion changes, and it mints a new id the sheet cannot know. It is required to be in
+    the sheet's own family, which is the same protection stated a different way: an id from
+    anywhere else buys the run a family holding none of the screen's trials.
     """
     hypothesis_id = sheet.provenance.get("hypothesis_id")
     if not isinstance(hypothesis_id, str) or not hypothesis_id.strip():
         raise StageTwoGateError(f"the sheet at {source} names no hypothesis in its provenance")
+    if override_id is not None and override_id != hypothesis_id:
+        try:
+            family = session.log.family_ids(override_id)
+        except LookupError as error:
+            raise StageTwoGateError(
+                f"the log at {session.log.db_path} holds no hypothesis {override_id!r}: {error}"
+            ) from error
+        if hypothesis_id not in family:
+            raise StageTwoGateError(
+                f"{override_id!r} is not in the family of {hypothesis_id!r}, which the sheet "
+                f"at {source} was screened against. Grading against it would deflate this run "
+                "against a family holding none of the screen's trials — amend the screen's "
+                "record rather than registering a fresh one."
+            )
+        hypothesis_id = override_id
     try:
         return session.log.get_hypothesis(hypothesis_id)
     except LookupError as error:

@@ -580,3 +580,20 @@ def test_trial_ids_are_full_width(log: TrialLog, h1: HypothesisRecord) -> None:
     log.register_hypothesis(h1)
     record = append(log, h1)
     assert len(record.trial_id) == len("t_") + 32
+
+
+def test_screen_criteria_round_trip_through_the_log(log: TrialLog) -> None:
+    record = HypothesisRecord(
+        name="BANKNIFTY screen",
+        mechanism="Index hedgers pay up for protection, so implied sits above realised.",
+        null_hypothesis="No screened structure beats the unconditional straddle.",
+        thresholds={"deflated_sharpe": 0.90},
+        screen_criteria={
+            "alpha_to_advance": 0.5,
+            "alpha_to_advance_definition": "the spread's Sharpe",
+        },
+    )
+    log.register_hypothesis(record)
+    read_back = log.get_hypothesis(record.id)
+    assert read_back.id == record.id
+    assert dict(read_back.screen_criteria) == dict(record.screen_criteria)

@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from xman_research.alpha.features import DEFAULT_DECISION_TIME
-from xman_research.alpha.screen import CandidateSpec
+from xman_research.alpha.screen import ALPHA_DEFINITION, CandidateSpec
 from xman_research.hypothesis import HypothesisRecord
 from xman_research.trial_log import DataWindow
 
@@ -193,15 +193,49 @@ def _hypothesis(payload: Mapping[str, Any], source: Path) -> HypothesisRecord:
             f"{source}: `[hypothesis.thresholds]` is empty. A screen that states nothing a "
             "survivor must clear is a search dressed as a hypothesis."
         )
+    screen_criteria = _screen_criteria(section, source)
     try:
         return HypothesisRecord(
             name=str(section.get("name", "")),
             mechanism=str(section.get("mechanism", "")),
             null_hypothesis=str(section.get("null_hypothesis", "")),
             thresholds=dict(thresholds),
+            screen_criteria=screen_criteria,
             predictors=tuple(str(name) for name in predictors),
             notes=str(section.get("notes", "")),
             parent_id=(str(section["parent_id"]) if section.get("parent_id") is not None else None),
         )
     except ValueError as error:
         raise ScreenSpecError(f"{source}: `[hypothesis]` is not a valid record: {error}") from error
+
+
+ALPHA_TO_ADVANCE = "alpha_to_advance"
+"""The screen's own bar: how much alpha an instance must show to be worth gating."""
+
+ALPHA_TO_ADVANCE_DEFINITION_KEY = f"{ALPHA_TO_ADVANCE}_definition"
+
+
+def _screen_criteria(section: Mapping[str, Any], source: Path) -> dict[str, Any]:
+    """The screen-stage bars, with the definition of `alpha_to_advance` attached.
+
+    These go on the record under ``screen_criteria`` rather than ``thresholds``: a
+    stage-two gate must carry every numeric threshold a record registered and may only
+    name metrics :mod:`xman_research.validation` measures, so a screen bar recorded as a
+    threshold is one no gate can satisfy and none can omit.
+
+    ``alpha_to_advance`` is measured against the sheet's `alpha` column, and the two
+    quantities that word can mean rank the sheet differently, so the bar is recorded with
+    :data:`~xman_research.alpha.screen.ALPHA_DEFINITION` beside it. A spec that states its
+    own definition keeps it; the reader is then told which quantity was meant by whoever
+    wrote the screen, which is the point either way.
+    """
+    stated = section.get("screen_criteria", {})
+    if not isinstance(stated, Mapping):
+        raise ScreenSpecError(
+            f"{source}: `[hypothesis.screen_criteria]` is not a table. A screen's own bars "
+            "are named criteria with values, or they are not criteria."
+        )
+    criteria = {str(key): value for key, value in stated.items()}
+    if ALPHA_TO_ADVANCE in criteria:
+        criteria.setdefault(ALPHA_TO_ADVANCE_DEFINITION_KEY, ALPHA_DEFINITION)
+    return criteria

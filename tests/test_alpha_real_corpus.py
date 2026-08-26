@@ -78,6 +78,8 @@ def seeded_library(tmp_path: Path) -> Path:
             "seed-from-decision",
             "--template",
             "short_atm_straddle_hold_n",
+            "--underlying",
+            UNDERLYING,
             "--decision",
             str(DECISION_RECORD),
             "--admit",
