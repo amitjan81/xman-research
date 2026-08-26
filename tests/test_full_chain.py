@@ -76,7 +76,9 @@ def test_the_whole_research_loop(tmp_path: Path) -> None:
         thresholds={
             "deflated_sharpe": 0.0,
             "cost_breakeven_multiple": 2.0,
-            "pbo_max": 0.5,
+            # The metric is `pbo`; which way the bar binds is the gate file's `at_most`,
+            # not part of the name. A registered key names a measurement.
+            "pbo": 0.5,
         },
         predictors=["iv_30d", "realised_vol_20d", "term_slope"],
         entry_rule={"entry_time": "09:30", "delta": 0.30},
