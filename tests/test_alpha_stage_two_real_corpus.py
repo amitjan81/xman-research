@@ -227,6 +227,8 @@ def test_the_whole_loop_screens_gates_admits_and_ranks_at_the_screened_point(
                 "admit",
                 "--template",
                 top.instance.template_id,
+                "--underlying",
+                UNDERLYING,
                 "--decision",
                 str(out_dir / "decision.json"),
                 "--by",

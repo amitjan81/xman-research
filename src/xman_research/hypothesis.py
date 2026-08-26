@@ -62,7 +62,7 @@ from xman_research.metric_vocabulary import (
     is_gradeable_metric,
 )
 
-__all__ = ["HypothesisRecord", "HypothesisValidationError"]
+__all__ = ["HypothesisRecord", "HypothesisValidationError", "require_gradeable_thresholds"]
 
 ID_PREFIX = "h_"
 # 128 bits of the digest. 64 was enough for any plausible number of hypotheses, but the
@@ -165,24 +165,38 @@ def _require_thresholds(value: Any) -> Mapping[str, Any]:
     for key, item in frozen.items():
         if item is None or (isinstance(item, str) and not item.strip()):
             raise HypothesisValidationError(f"threshold {key!r} is blank: {item!r}")
-    if _REBUILDING.get():
-        return frozen
-    ungradeable = sorted(
-        key for key, item in frozen.items() if _is_criterion(item) and not is_gradeable_metric(key)
-    )
-    if ungradeable:
-        raise HypothesisValidationError(
-            f"thresholds name {', '.join(ungradeable)}, which no component measures. A "
-            "numeric threshold is graded by xman_research.validation, and the metrics it "
-            f"computes are: {', '.join(sorted(MEASURED_METRICS))} — each optionally "
-            f"prefixed {HOLDOUT_THRESHOLD_PREFIX!r} to bind the holdout run instead. "
-            "Registering a criterion outside that vocabulary makes the record ungradeable "
-            "for good: the gate must carry every numeric threshold the record registered, "
-            "and a gate naming a metric outside the vocabulary is refused when it is read. "
-            "A bar the screen applies to itself belongs in screen_criteria, which no gate "
-            "is asked to grade."
-        )
+    if not _REBUILDING.get():
+        require_gradeable_thresholds(frozen)
     return frozen
+
+
+def require_gradeable_thresholds(thresholds: Mapping[str, Any]) -> None:
+    """Refuse criteria no component measures, or explain why they cannot be graded.
+
+    Called when a record is constructed and again when one is registered. The second call
+    is not redundant: :meth:`HypothesisRecord.from_stored` exists so a log holding a record
+    from an older vocabulary stays readable, and it is public, so construction is not the
+    only way a record reaches a log. Registration is the moment a record becomes binding
+    evidence, and it is the moment that has to hold.
+    """
+    ungradeable = sorted(
+        key
+        for key, item in thresholds.items()
+        if _is_criterion(item) and not is_gradeable_metric(key)
+    )
+    if not ungradeable:
+        return
+    raise HypothesisValidationError(
+        f"thresholds name {', '.join(ungradeable)}, which no component measures. A "
+        "numeric threshold is graded by xman_research.validation, and the metrics it "
+        f"computes are: {', '.join(sorted(MEASURED_METRICS))} — each optionally "
+        f"prefixed {HOLDOUT_THRESHOLD_PREFIX!r} to bind the holdout run instead. "
+        "Registering a criterion outside that vocabulary makes the record ungradeable "
+        "for good: the gate must carry every numeric threshold the record registered, "
+        "and a gate naming a metric outside the vocabulary is refused when it is read. "
+        "A bar the screen applies to itself belongs in screen_criteria, which no gate "
+        "is asked to grade."
+    )
 
 
 def _is_criterion(value: Any) -> bool:
@@ -191,10 +205,11 @@ def _is_criterion(value: Any) -> bool:
     Mirrors :meth:`~xman_research.validation.gate.DecisionGate.check_binding`, which
     reconciles a registered threshold against the gate file only when its value is a
     number. Anything else — prose, a nested table of parameters — is recorded with the
-    record but never graded, so it is not held to the measurable vocabulary. ``bool`` is
-    a Python ``int`` and is excluded deliberately: ``True`` is a flag, not a bar.
+    record but never graded, so it is not held to the measurable vocabulary. ``bool`` is a
+    Python ``int`` and binding grades it as one, so it counts as a criterion here too — the
+    two predicates decide the same keys or the guards can disagree again.
     """
-    return isinstance(value, int | float) and not isinstance(value, bool)
+    return isinstance(value, int | float)
 
 
 def _normalise_predictors(value: Any) -> tuple[str, ...]:

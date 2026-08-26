@@ -215,6 +215,8 @@ def test_the_cli_refuses_to_admit_against_a_decision_record_that_is_not_there(
             "admit",
             "--template",
             "short_atm_straddle_hold_n",
+            "--underlying",
+            UNDERLYING,
             "--decision",
             str(tmp_path / "absent.json"),
             "--by",

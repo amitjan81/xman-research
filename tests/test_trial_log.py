@@ -12,6 +12,7 @@ from xman_research import (
     AppendOnlyViolation,
     DataWindow,
     HypothesisRecord,
+    HypothesisValidationError,
     LogIntegrityError,
     ManualClock,
     SchemaVersionError,
@@ -597,3 +598,46 @@ def test_screen_criteria_round_trip_through_the_log(log: TrialLog) -> None:
     read_back = log.get_hypothesis(record.id)
     assert read_back.id == record.id
     assert dict(read_back.screen_criteria) == dict(record.screen_criteria)
+
+
+def test_registering_an_ungradeable_record_is_refused_however_it_was_built(
+    log: TrialLog,
+) -> None:
+    """`from_stored` skips the vocabulary check so an older log stays readable; it is not a
+    way to get a criterion nothing measures into a log as new evidence."""
+    smuggled = HypothesisRecord.from_stored(
+        name="BANKNIFTY screen",
+        mechanism="Index hedgers pay up for protection, so implied sits above realised.",
+        null_hypothesis="No screened structure beats the unconditional straddle.",
+        thresholds={"alpha_to_advance": 0.5},
+    )
+    with pytest.raises(HypothesisValidationError, match="alpha_to_advance"):
+        log.register_hypothesis(smuggled)
+
+
+def test_a_record_already_in_the_log_is_re_registered_without_being_re_judged(
+    log: TrialLog,
+) -> None:
+    """Re-registration is a no-op on a content-addressed id, and a stored record is
+    evidence: a vocabulary that narrows later must not make its own log unwritable."""
+    stored = HypothesisRecord.from_stored(
+        name="BANKNIFTY screen",
+        mechanism="Index hedgers pay up for protection, so implied sits above realised.",
+        null_hypothesis="No screened structure beats the unconditional straddle.",
+        thresholds={"alpha_to_advance": 0.5},
+    )
+    log._conn.execute(
+        "INSERT INTO hypotheses (id, parent_id, name, mechanism, null_hypothesis, "
+        "thresholds_json, predictors_json, entry_rule_json, exit_rule_json, notes, "
+        "screen_criteria_json, registered_at) VALUES (?, NULL, ?, ?, ?, ?, '[]', '{}', "
+        "'{}', '', '{}', '2026-08-25T00:00:00+00:00')",
+        (
+            stored.id,
+            stored.name,
+            stored.mechanism,
+            stored.null_hypothesis,
+            '{"alpha_to_advance": 0.5}',
+        ),
+    )
+    log._conn.commit()
+    assert log.register_hypothesis(stored).id == stored.id

@@ -73,7 +73,7 @@ from typing import Any
 from xman_research._canonical import json_safe, safe_json_dumps, safe_repr
 from xman_research.clock import Clock, require_aware
 from xman_research.code_version import CodeVersion, CodeVersionProvider
-from xman_research.hypothesis import HypothesisRecord
+from xman_research.hypothesis import HypothesisRecord, require_gradeable_thresholds
 
 __all__ = [
     "AppendOnlyViolation",
@@ -370,6 +370,13 @@ class TrialLog:
         overwritten. ``INSERT OR IGNORE`` skips rather than replaces, so the
         immutability triggers are never in play.
         """
+        if not self.has_hypothesis(record.id):
+            # Checked on the way in, not only at construction: `HypothesisRecord.from_stored`
+            # rebuilds a record without this check so that a log written under an older
+            # vocabulary stays readable, and it is public. Registration is where a record
+            # becomes binding evidence, so it is the boundary that has to hold. A record
+            # already in this table is re-registered as a no-op and is not re-judged.
+            require_gradeable_thresholds(record.thresholds)
         if record.parent_id is not None and not self.has_hypothesis(record.parent_id):
             raise UnknownHypothesisError(
                 f"parent hypothesis {record.parent_id!r} is not registered; "
