@@ -31,7 +31,11 @@ from pathlib import Path
 from xman_research.clock import require_aware
 from xman_research.evaluation import ResearchSession
 from xman_research.hypothesis import HypothesisRecord
-from xman_research.metric_vocabulary import HOLDOUT_THRESHOLD_PREFIX, MEASURED_METRICS
+from xman_research.metric_vocabulary import (
+    HOLDOUT_THRESHOLD_PREFIX,
+    HOLDOUT_UNCOMPUTABLE_METRICS,
+    MEASURED_METRICS,
+)
 from xman_research.trial_log import DataWindow, TrialLog
 
 __all__ = [
@@ -71,17 +75,6 @@ EPOCH_PROVENANCE_STAMP = "epochs.dates_not_primary_sourced"
 # and `epochs_spanned` takes the boundaries as an argument (it already does — the
 # `boundaries=` parameter is the seam, and EPOCH_BOUNDARIES is only its default).
 # Nothing outside this module should import EPOCH_BOUNDARIES by name.
-
-HOLDOUT_UNCOMPUTABLE_METRICS = frozenset({"pbo"})
-"""Metrics the single holdout run structurally cannot report.
-
-:meth:`~xman_research.validation.decision.Validator.grade_holdout` passes no CSCV result:
-the holdout is one run of one configuration, and probability-of-backtest-overfitting is a
-statement about choosing between many. So a gate whose in-sample thresholds name ``pbo``
-and whose ``[holdout_thresholds]`` is empty cannot grade the holdout at all — the fallback
-to the in-sample set raises ``MetricNotReportedError`` every time. That is refused at load
-rather than discovered at the end of the loop."""
-
 
 @dataclass(frozen=True, slots=True)
 class EpochBoundary:
@@ -396,6 +389,19 @@ class DecisionGate:
                     "grade time, where it would have been reported as the run failing to "
                     "measure something — which blames the run for the gate's typo."
                 )
+        uncomputable = sorted(
+            threshold.metric
+            for threshold in self.holdout_thresholds
+            if threshold.metric in HOLDOUT_UNCOMPUTABLE_METRICS
+        )
+        if uncomputable:
+            raise GateVocabularyError(
+                f"{self.source} [holdout_thresholds] names {', '.join(uncomputable)}, which "
+                "the holdout run cannot report: the holdout is a single configuration and "
+                "those metrics are statements about choosing between many. A bar there could "
+                "never be graded, so it is refused when the gate is read rather than at the "
+                "end of the loop."
+            )
         if not self.holdout_thresholds:
             blocked = sorted(
                 threshold.metric

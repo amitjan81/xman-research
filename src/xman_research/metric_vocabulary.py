@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = [
     "HOLDOUT_THRESHOLD_PREFIX",
+    "HOLDOUT_UNCOMPUTABLE_METRICS",
     "MEASURED_METRICS",
     "is_gradeable_metric",
 ]
@@ -30,15 +31,15 @@ __all__ = [
 HOLDOUT_THRESHOLD_PREFIX = "holdout."
 """How a holdout threshold is named in the immutable hypothesis record.
 
-The in-sample bar is anchored to the content-addressed
-:class:`~xman_research.hypothesis.HypothesisRecord`; without this, the holdout bar lived
-only in the editable gate file, with ``recorded_at`` just another editable field. An
-operator who did not like the holdout verdict could soften the holdout bar and re-read —
-the exact move :meth:`~xman_research.validation.gate.DecisionGate.check_binding` exists
-to prevent, left open on the one run that matters most. Registering
-``holdout.probabilistic_sharpe`` in the record's own ``thresholds`` mapping binds it the
-same way, without changing the record's schema (which is content-addressed: a field
-added to the hashed content would change every id ever minted)."""
+The holdout bar has to be anchored to the content-addressed
+:class:`~xman_research.hypothesis.HypothesisRecord` and not only to the gate file, which is
+editable and whose ``recorded_at`` is just another editable field: an operator who has seen
+the in-sample verdict must not be able to soften the holdout bar and re-read, which is the
+move :meth:`~xman_research.validation.gate.DecisionGate.check_binding` exists to stop, on
+the one run where it matters most. Registering ``holdout.probabilistic_sharpe`` in the
+record's own ``thresholds`` mapping binds it the same way without adding a field to the
+record's schema — the schema is content-addressed, so a field added to the hashed content
+changes every id ever minted."""
 
 MEASURED_METRICS: frozenset[str] = frozenset(
     {
@@ -69,14 +70,27 @@ A criterion a screen applies to itself is not in here and does not belong in a r
 :attr:`~xman_research.hypothesis.HypothesisRecord.screen_criteria`."""
 
 
+HOLDOUT_UNCOMPUTABLE_METRICS = frozenset({"pbo"})
+"""Metrics the single holdout run structurally cannot report.
+
+:meth:`~xman_research.validation.decision.Validator.grade_holdout` passes no CSCV result:
+the holdout is one run of one configuration, and probability-of-backtest-overfitting is a
+statement about choosing between many. A ``holdout.``-prefixed threshold on one of these is
+ungradeable in the same way a metric outside :data:`MEASURED_METRICS` is, and
+:func:`is_gradeable_metric` refuses it for the same reason: binding would require a gate to
+carry a bar the holdout grade can never produce a number for."""
+
+
 def is_gradeable_metric(name: str) -> bool:
     """Whether a threshold key names something the validator can measure.
 
-    A ``holdout.``-prefixed name is resolved against the same vocabulary: the prefix
-    says *which run* the bar applies to, not which quantity, so ``holdout.max_drawdown``
-    and ``max_drawdown`` name the same measurement.
+    A ``holdout.``-prefixed name is resolved against the same vocabulary: the prefix says
+    *which run* the bar applies to, not which quantity, so ``holdout.max_drawdown`` and
+    ``max_drawdown`` name the same measurement. The exception is a metric only the
+    many-configuration in-sample run can report — see
+    :data:`HOLDOUT_UNCOMPUTABLE_METRICS`.
     """
-    bare = (
-        name[len(HOLDOUT_THRESHOLD_PREFIX) :] if name.startswith(HOLDOUT_THRESHOLD_PREFIX) else name
-    )
-    return bare in MEASURED_METRICS
+    if name.startswith(HOLDOUT_THRESHOLD_PREFIX):
+        bare = name[len(HOLDOUT_THRESHOLD_PREFIX) :]
+        return bare in MEASURED_METRICS and bare not in HOLDOUT_UNCOMPUTABLE_METRICS
+    return name in MEASURED_METRICS

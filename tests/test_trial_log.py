@@ -21,6 +21,7 @@ from xman_research import (
     TrialOutcome,
     UnknownHypothesisError,
 )
+from xman_research.trial_log import SCHEMA_VERSION
 
 
 def append(log: TrialLog, hypothesis: HypothesisRecord, **overrides: object) -> object:
@@ -641,3 +642,84 @@ def test_a_record_already_in_the_log_is_re_registered_without_being_re_judged(
     )
     log._conn.commit()
     assert log.register_hypothesis(stored).id == stored.id
+
+
+def _write_schema_v1(path: Path) -> str:
+    """A log in the shape that predates `screen_criteria_json`, holding one record."""
+    record = HypothesisRecord.from_stored(
+        name="BANKNIFTY screen",
+        mechanism="Index hedgers pay up for protection, so implied sits above realised.",
+        null_hypothesis="No screened structure beats the unconditional straddle.",
+        thresholds={"alpha_to_advance": 0.5},
+    )
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE hypotheses (
+            id TEXT PRIMARY KEY, parent_id TEXT, name TEXT NOT NULL, mechanism TEXT NOT NULL,
+            null_hypothesis TEXT NOT NULL, thresholds_json TEXT NOT NULL,
+            predictors_json TEXT NOT NULL, entry_rule_json TEXT NOT NULL,
+            exit_rule_json TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '',
+            registered_at TEXT NOT NULL
+        );
+        PRAGMA user_version = 1;
+        """
+    )
+    conn.execute(
+        "INSERT INTO hypotheses VALUES (?, NULL, ?, ?, ?, ?, '[]', '{}', '{}', '', ?)",
+        (
+            record.id,
+            record.name,
+            record.mechanism,
+            record.null_hypothesis,
+            '{"alpha_to_advance": 0.5}',
+            "2026-08-25T00:00:00+00:00",
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return record.id
+
+
+def test_a_schema_v1_log_is_brought_forward_without_its_content_moving(
+    tmp_path: Path, clock: ManualClock, code_version: StaticCodeVersion
+) -> None:
+    """The upgrade adds a column and nothing else. A log is evidence: an id that moved
+    would break the join between a record and the trials filed against it."""
+    path = tmp_path / "v1.db"
+    stored_id = _write_schema_v1(path)
+
+    log = TrialLog(path, clock=clock, code_version=code_version)
+    assert log.get_hypothesis(stored_id).id == stored_id
+    assert dict(log.get_hypothesis(stored_id).screen_criteria) == {}
+    log.close()
+
+    with sqlite3.connect(path) as conn:
+        assert int(conn.execute("PRAGMA user_version").fetchone()[0]) == SCHEMA_VERSION
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(hypotheses)")}
+        assert "screen_criteria_json" in columns
+
+    # Opening it again is a no-op rather than a second migration.
+    reopened = TrialLog(path, clock=clock, code_version=code_version)
+    assert reopened.get_hypothesis(stored_id).id == stored_id
+    reopened.close()
+
+
+def test_a_v1_log_that_already_has_the_column_is_stamped_without_a_second_alter(
+    tmp_path: Path, clock: ManualClock, code_version: StaticCodeVersion
+) -> None:
+    """The column check is what makes the upgrade re-runnable on a partially applied file."""
+    path = tmp_path / "half.db"
+    stored_id = _write_schema_v1(path)
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            "ALTER TABLE hypotheses ADD COLUMN screen_criteria_json TEXT NOT NULL DEFAULT '{}'"
+        )
+        conn.execute("PRAGMA user_version = 1")
+
+    log = TrialLog(path, clock=clock, code_version=code_version)
+    assert log.get_hypothesis(stored_id).id == stored_id
+    log.close()
+    with sqlite3.connect(path) as conn:
+        assert int(conn.execute("PRAGMA user_version").fetchone()[0]) == SCHEMA_VERSION
+

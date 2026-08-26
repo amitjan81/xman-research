@@ -14,7 +14,12 @@ from pathlib import Path
 import pytest
 
 from validation_helpers import benchmark_series, evidence, trading_sessions
-from xman_research import DataWindow, HypothesisRecord, ResearchSession
+from xman_research import (
+    DataWindow,
+    HypothesisRecord,
+    HypothesisValidationError,
+    ResearchSession,
+)
 from xman_research.validation.decision import ValidationConfig, Validator
 from xman_research.validation.gate import (
     EPOCH_BOUNDARIES,
@@ -23,6 +28,7 @@ from xman_research.validation.gate import (
     DecisionGate,
     Direction,
     GateBindingError,
+    GateVocabularyError,
     HoldoutPolicy,
     HoldoutTouchedError,
     Threshold,
@@ -424,3 +430,72 @@ cost_breakeven_multiple = { at_least = 2.0 }
         "deflated_sharpe",
         "cost_breakeven_multiple",
     }
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "deflated_sharpe",
+        "pbo",
+        "holdout.deflated_sharpe",
+        "holdout.pbo",
+        "alpha_to_advance",
+        "holdout.alpha_to_advance",
+        "deflated_sharpe_typo",
+    ],
+)
+def test_what_registration_accepts_is_exactly_what_a_gate_can_be_written_for(
+    tmp_path: Path, key: str
+) -> None:
+    """The guarantee the two-field split rests on, asserted directly.
+
+    A key registration accepts must be one a gate file can carry and be read with; a key it
+    refuses must be one no gate could have carried anyway. If those two sets ever come
+    apart, a record exists that no gate file can satisfy and none can omit — which is the
+    state that blocked every BANKNIFTY stage-two run.
+    """
+    try:
+        record = HypothesisRecord(
+            name="H",
+            mechanism="Index hedgers pay up for protection.",
+            null_hypothesis="No positive mean after costs.",
+            thresholds={key: 0.5},
+        )
+    except HypothesisValidationError:
+        registration_accepts = False
+        record = None
+    else:
+        registration_accepts = True
+
+    bare = key.removeprefix("holdout.")
+    if key.startswith("holdout."):
+        body = (
+            "\n[thresholds]\ndeflated_sharpe = { at_least = 0.90 }\n"
+            f"\n[holdout_thresholds]\n{bare} = {{ at_least = 0.5 }}\n"
+        )
+    elif bare == "deflated_sharpe":
+        body = (
+            "\n[thresholds]\ndeflated_sharpe = { at_least = 0.5 }\n"
+            "\n[holdout_thresholds]\ndeflated_sharpe = { at_least = 0.5 }\n"
+        )
+    else:
+        body = (
+            "\n[thresholds]\ndeflated_sharpe = { at_least = 0.90 }\n"
+            f"{bare} = {{ at_least = 0.5 }}\n"
+            "\n[holdout_thresholds]\ndeflated_sharpe = { at_least = 0.5 }\n"
+        )
+    path = tmp_path / "gate.toml"
+    write_gate(path, hypothesis_id=record.id if record is not None else None, body=body)
+    try:
+        gate = DecisionGate.from_file(path)
+        if record is not None:
+            gate.check_binding(record)
+    except (GateVocabularyError, GateBindingError, ThresholdsNotRecordedError):
+        gate_is_writable = False
+    else:
+        gate_is_writable = True
+
+    assert registration_accepts == gate_is_writable, (
+        f"{key!r}: registration accepts={registration_accepts} but a gate for it is "
+        f"writable={gate_is_writable}. The two checks have come apart."
+    )

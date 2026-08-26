@@ -57,6 +57,48 @@ def test_accepts_a_complete_record() -> None:
     assert record.parent_id is None
 
 
+# The BANKNIFTY stage-one record's own content, transcribed from the screen it
+# registered. Assembled line by line so the source stays readable at any width: the
+# prose is hashed into the id, so a rewrap here is a different record.
+BANKNIFTY_MECHANISM = "\n".join(
+    [
+        "BANKNIFTY index-option implied variance sits above subsequently realised variance",
+        "for the same reason NIFTY's does: index hedgers and structured-product desks buy",
+        "convexity with price insensitivity and somebody must warehouse it. BANKNIFTY",
+        "prices that warehousing differently — its constituents are one sector, its",
+        "realised volatility is higher, and since 2024-11-13 its front contract expires",
+        "monthly rather than weekly, which lengthens the decay window a short-variance",
+        "book sits inside. Whether the premium is best collected at the money, across a",
+        "band of strikes, with a bought tail, or only on sessions a conditioner selects,",
+        "is an empirical question about this corpus and not about the mechanism.",
+    ]
+)
+
+BANKNIFTY_NULL = "\n".join(
+    [
+        "No screened structure or conditioner produces a positive risk-matched spread over",
+        "the unconditional short at-the-money BANKNIFTY straddle held for the same number",
+        "of sessions.",
+    ]
+)
+
+BANKNIFTY_NOTES = "\n".join(
+    [
+        "Holds are capped at five sessions by the owner's 1-5 day mandate. The corpus",
+        "window is entirely in-sample: BANKNIFTY sessions from 2026-06-01 are sealed and",
+        "no instance here may read one.",
+    ]
+)
+
+BANKNIFTY_PREDICTORS = (
+    "atm_iv_minus_rv20",
+    "day_of_week",
+    "ema20_z_abs",
+    "overnight_gap_sigmas",
+    "sessions_to_nearest_expiry",
+)
+
+
 # ------------------------------------------------------------------ identity
 
 
@@ -289,3 +331,22 @@ def test_a_stored_record_is_readable_after_the_vocabulary_narrows() -> None:
         thresholds={"deflated_sharpe": 0.9}, screen_criteria={"alpha_to_advance": 0.5}
     )
     assert amended.parent_id == stored.id
+
+
+def test_a_record_minted_before_screen_criteria_existed_still_hashes_to_its_id() -> None:
+    """A literal id, pinned. The relational test above cannot catch a change to the hashed
+    content that moves every record equally; this one can. The value is the BANKNIFTY
+    stage-one record, quoted in research/banknifty/gate_v1.toml and carried by every trial
+    row of that screen — if this fails, that log's join key has moved."""
+    record = HypothesisRecord.from_stored(
+        name=(
+            "BANKNIFTY stage-1 screen: does a wider structure or a conditioner beat the "
+            "short ATM straddle"
+        ),
+        mechanism=BANKNIFTY_MECHANISM,
+        null_hypothesis=BANKNIFTY_NULL,
+        thresholds={"alpha_to_advance": 0.5},
+        predictors=BANKNIFTY_PREDICTORS,
+        notes=BANKNIFTY_NOTES,
+    )
+    assert record.id == "h_a2c7cc855f6f06b2581afb7f2079121d"

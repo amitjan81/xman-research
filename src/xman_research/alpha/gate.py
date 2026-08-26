@@ -133,10 +133,15 @@ class GateRun:
         payload = self.decision.as_dict()
         payload["hypothesis"] = {
             "id": self.hypothesis.id,
+            # An amendment carries a different id from the one the sheet names, so without
+            # the parent a reader cannot join this record to the screen that paid for its
+            # deflation without opening the log.
+            "parent_id": self.hypothesis.parent_id,
             "name": self.hypothesis.name,
             "mechanism": self.hypothesis.mechanism,
             "null_hypothesis": self.hypothesis.null_hypothesis,
             "thresholds": dict(self.hypothesis.thresholds),
+            "screen_criteria": dict(self.hypothesis.screen_criteria),
             "predictors": list(self.hypothesis.predictors),
         }
         payload["runs"] = {
@@ -168,7 +173,7 @@ class GateRun:
                 "the deflated Sharpe above is computed against the family trial count this "
                 f"record quotes ({self.trial_count}), which includes the "
                 f"{self.screen_trials} trial(s) the screen at {self.sheet_path} appended "
-                "against this same hypothesis. The screen is therefore paid for here."
+                "against this hypothesis's family. The screen is therefore paid for here."
             ),
         }
         payload["gate_path"] = str(self.gate_path)

@@ -84,7 +84,11 @@ JSON of *every* record and re-mints all of them; a field listed here encodes onl
 record actually carries it, so records that do not are byte-identical to what they were
 before the field existed. The cost is that ``screen_criteria={}`` and no
 ``screen_criteria`` at all are the same record, which is the intended reading: a
-hypothesis with no screen-stage bars did not have any."""
+hypothesis with no screen-stage bars did not have any.
+
+Only container-valued fields belong here. The test is falsiness, so a field whose default
+is a scalar — ``0``, ``""`` — would be omitted at that value too, which would make two
+different records hash alike."""
 
 
 _REBUILDING: ContextVar[bool] = ContextVar("rebuilding_stored_hypothesis", default=False)
@@ -252,9 +256,10 @@ class HypothesisRecord:
     :meth:`~xman_research.validation.gate.DecisionGate.check_binding` requires the gate
     file to carry every numeric one — so a key here that the validator cannot measure
     would make the record ungradeable, which is why ``thresholds`` refuses one. A screen
-    criterion is applied by the screen, against quantities the screen computes; it is
-    recorded so the sheet's ranking can be read back against the bar it was ranked for,
-    and no gate is asked to grade it.
+    criterion is stated against quantities the screen computes rather than ones the
+    validator does, and it is recorded for the reader — the sheet's ranking can be read
+    back against the bar it was ranked for. Nothing filters on it: no gate is asked to
+    grade it, and the screen does not drop a row for missing it.
 
     A criterion is only as good as its definition, so record the definition alongside the
     number: ``{"alpha_to_advance": 0.5, "alpha_to_advance_definition": "..."}``. The two
