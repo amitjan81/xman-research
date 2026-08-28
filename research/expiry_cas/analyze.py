@@ -13,11 +13,15 @@ only place a closing-auction effect can show up in this corpus.
    the box. These need only option prices, never an underlying level. On a session whose
    spot is unobservable they are the **only** trustworthy mispricing evidence, and they
    are what this module leads with.
-2. *Put-call parity residuals* :math:`r = C - P - (S - K)`. These need a spot. Where the
-   spot is itself parity-derived the residual is zero by construction at the anchor
-   strike, and across all strikes it can only measure disagreement *between* strikes —
-   never a mispricing common to the whole chain. The anchor is excluded mechanically and
-   the limitation is printed with the table.
+2. *Put-call parity residuals* :math:`r = C - P - (S - K)`. These need a spot, and on an
+   expiry session that spot is itself a chain statistic — the anchor pair's own parity
+   level — so these are **not** independent of the family above. The anchor strike's
+   residual is zero by construction and is excluded mechanically; what remains is
+   :math:`implied_K - implied_{anchor}`, a contrast of the same per-minute implied-spot
+   vector the box differences. Neither family can see a mispricing common to every strike:
+   a uniform call-rich/put-cheap shift leaves every cross-strike contrast unchanged.
+   Vertical and butterfly bounds are the genuinely different relations, since each uses a
+   single option type.
 3. *Directional and premium-decay effects* — straddle time value, per-strike returns.
    These need a spot for intrinsic and inherit whatever the spot's provenance is.
 
@@ -89,12 +93,29 @@ def _window(frame: pd.DataFrame | pd.Series, start: dt.time, end: dt.time):
 # --------------------------------------------------------------------------- swings
 
 
+def _feed_range(session: SessionData, start: dt.time, end: dt.time) -> float:
+    """Range of the index feed's own fresh prints over a window.
+
+    Only minutes where the feed actually changed count as observations; the forward-filled
+    repeats in between carry no information about the range and would not change it anyway.
+    NaN when the feed printed nothing fresh in the window, which is a real state — the feed
+    can stop entirely mid-session — and not a zero range.
+    """
+    window = _window(session.spot, start, end)
+    fresh = window.loc[window["feed_fresh"], "feed"].dropna()
+    return float(fresh.max() - fresh.min()) if len(fresh) > 1 else float("nan")
+
+
 def swing_metrics(session: SessionData) -> dict[str, object]:
     """Underlying movement in the final half hour, split at the continuous close.
 
-    Uses the ``best`` spot series — the feed on minutes it actually moved, parity
-    elsewhere — because a forward-filled feed level differenced against itself reports a
-    zero return that is an absence of data rather than an absence of movement.
+    Uses the ``best`` spot series, which is the anchor pair's parity level on every
+    session. It is one source throughout: differencing a series assembled from the feed on
+    some minutes and parity on others reports the offset between them as movement, and on a
+    chain with time left that offset runs to tens of points.
+
+    ``range_feed_1500_1529`` reports the index feed's own range beside it. The two are
+    different measurements rather than a check of each other — see :func:`_feed_range`.
     """
     spot = session.spot.dropna(subset=["best"]).copy()
     spot["ret"] = spot["best"].pct_change()
@@ -144,6 +165,12 @@ def swing_metrics(session: SessionData) -> dict[str, object]:
         "max_5min_at": t5,
         "max_1min_auction": am1,
         "max_1min_auction_at": at1,
+        # The index feed's own range over the same window, from its fresh prints only. A
+        # second, independent view of the underlying that is NOT interchangeable with the
+        # parity range: on a pre-CAS session options price against the expected 15:00-15:30
+        # *average*, so parity tracks a damped blend while the feed tracks the index itself,
+        # and the two legitimately disagree.
+        "range_feed_1500_1529": _feed_range(session, FINAL_WINDOW_START, CONTINUOUS_END),
         "auction_spot_quality": "exact (T=0)"
         if session.is_expiry_session
         else "proxy (T>0, noisy)",
@@ -190,9 +217,18 @@ def repricing_metrics(session: SessionData) -> dict[str, object]:
         return {"date": session.session_date, "atm_strike": session.parity_anchor_strike}
 
     def at(hhmm: str, col: str) -> float:
+        """The last mark at or before ``hhmm``, or NaN when the session never reached it.
+
+        Carrying the previous bar forward past the end of the session would print a
+        15:39 column for a session that stopped at 15:29 and read as a post-close
+        observation rather than as its absence, which is how a pre-CAS session comes to
+        report an auction-window number it never had.
+        """
         target = dt.time(int(hhmm[:2]), int(hhmm[3:]))
         rows = straddle[straddle.index.time <= target]
-        return float(rows[col].iloc[-1]) if len(rows) else float("nan")
+        if not len(rows) or (rows.index[-1].time() < target and target >= AUCTION_START):
+            return float("nan")
+        return float(rows[col].iloc[-1])
 
     # Per-strike option return over the auction approach, the "lottery vs crush" split.
     chain = session.chain
@@ -390,16 +426,29 @@ def roundtrip_cost_points(
     premium: float,
     *,
     exit_kind: str = "settlement",
+    settlement_side: Side = Side.SELL,
+    settlement_intrinsic: float | None = None,
 ) -> float:
     """Round-trip cost of a ``legs``-leg structure, expressed in index points per unit.
 
     ``exit_kind`` decides how the position leaves. ``"settlement"`` is a position carried
     into expiry: ``legs`` opening trades plus one settlement event, which is where
-    exercise STT — charged on intrinsic at a different rate from premium STT, and only on
-    the long side — enters. ``"trade"`` is a position closed in the market before expiry:
-    ``2 * legs`` ordinary trades and no settlement charge at all. Charging settlement on a
-    position that was sold back, or premium-only on one that expired in the money, are
-    the two ways to get an expiry-day cost estimate wrong in opposite directions.
+    exercise STT — charged on intrinsic at a different rate from premium STT — enters.
+    ``"trade"`` is a position closed in the market before expiry: ``2 * legs`` ordinary
+    trades and no settlement charge at all. Charging settlement on a position that was sold
+    back, or premium-only on one that expired in the money, are the two ways to get an
+    expiry-day cost estimate wrong in opposite directions.
+
+    ``settlement_side`` is the side the *holder* takes to flatten, and it decides who pays
+    exercise STT: the charge falls on the purchaser, so a long flattens with ``SELL`` and
+    pays it, while a short flattens with ``BUY`` and does not. Defaulting a short to
+    ``SELL`` would charge it a tax it never owes — the error that flatters nothing here but
+    inflates the cost floor of every short-premium structure.
+
+    ``settlement_intrinsic`` is the per-unit intrinsic the settlement is charged on. It
+    defaults to ``premium`` only because a structure's intrinsic is not always known to the
+    caller; passing the real figure is always better, since premium and intrinsic are
+    different bases that coincide only by accident.
     """
     units = session.lot_size
     opening_legs = legs if exit_kind == "settlement" else 2 * legs
@@ -420,9 +469,9 @@ def roundtrip_cost_points(
             ChargeableTrade(
                 trade_date=session.session_date,
                 kind=TradeKind.SETTLEMENT,
-                side=Side.SELL,
+                side=settlement_side,
                 quantity_units=units,
-                price=premium,
+                price=premium if settlement_intrinsic is None else settlement_intrinsic,
                 orders=0,
                 notional_price=notional,
             )
@@ -452,12 +501,25 @@ def residual_summary(
                 continue
             mag = sub["residual"].abs()
             over = sub[mag > cost_points]
-            # Persistence: the same strike clearing cost on consecutive minutes.
+            # Persistence: the same strike clearing cost on consecutive minutes **in the
+            # same direction**. The sign condition is the point of the measure, not a
+            # refinement of it: a residual that flips +/- between adjacent minutes is the
+            # signature of prints landing in a different order within each bar, which is
+            # exactly the non-simultaneity artefact persistence exists to screen out.
+            # Counting a whipsaw as persistence would certify the artefact as evidence.
+            #
+            # The count is of consecutive *pairs*, so a run of k minutes contributes k-1.
             persistent = 0
             if len(over):
-                marks = over[["ts", "strike"]].drop_duplicates().sort_values(["strike", "ts"])
-                gaps = marks.groupby("strike")["ts"].diff()
-                persistent = int((gaps == pd.Timedelta(minutes=1)).sum())
+                marks = (
+                    over[["ts", "strike", "residual"]]
+                    .drop_duplicates(subset=["ts", "strike"])
+                    .sort_values(["strike", "ts"])
+                )
+                grouped = marks.groupby("strike")
+                consecutive = grouped["ts"].diff() == pd.Timedelta(minutes=1)
+                same_sign = np.sign(marks["residual"]) == np.sign(grouped["residual"].shift())
+                persistent = int((consecutive & same_sign).sum())
             out.append(
                 {
                     "date": session.session_date,
@@ -509,7 +571,16 @@ def strategy_short_straddle(session: SessionData) -> dict[str, object]:
     settle = float(terminal.iloc[-1])
     intrinsic = abs(settle - k)
     gross = entry - intrinsic
-    cost = roundtrip_cost_points(session, legs=2, notional=settle, premium=entry / 2)
+    # The straddle is short, so it is assigned rather than exercising: it flattens with a
+    # BUY and owes no exercise STT, and the settlement base is the real intrinsic.
+    cost = roundtrip_cost_points(
+        session,
+        legs=2,
+        notional=settle,
+        premium=entry / 2,
+        settlement_side=Side.BUY,
+        settlement_intrinsic=intrinsic,
+    )
     return {
         "date": session.session_date,
         "status": session.status,

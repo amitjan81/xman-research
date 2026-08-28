@@ -69,7 +69,9 @@ class SessionData:
     ``feed_fresh`` (the feed changed from the previous minute — the only minutes where
     the feed is an observation), ``parity`` (cross-strike median of :math:`C-P+K` over
     strikes whose both legs traded that minute), ``parity_anchor`` (the same quantity at
-    the single anchor strike), and ``best`` (``feed`` where fresh, ``parity`` otherwise).
+    the single anchor strike), and ``best`` — the movement series, which is ``parity_anchor``
+    on every session because differencing a series assembled from two sources reports the
+    offset between them as movement.
     """
 
     underlying: str
@@ -219,27 +221,30 @@ def load_session(underlying: str, session_date: dt.date, lot_size_default: int =
     spot = pd.DataFrame(index=feed.index.union(parity.index)).join(feed).join(parity)
     spot["feed_fresh"] = spot["feed"].ne(spot["feed"].shift()) & spot["feed"].notna()
 
-    # Which series to difference for per-minute movement.
+    # The movement series comes from ONE source. Never a splice.
     #
-    # The feed is forward-filled through its freeze, so consecutive feed values are not
-    # consecutive observations: a print that lands after twelve frozen minutes carries
-    # twelve minutes of movement, and differencing it as a one-minute return reports a
-    # jump that never happened in one minute. Parity has no such gap — it is recomputed
-    # from options that traded in that minute.
+    # Two independent failure modes force that rule, and mixing sources triggers both. The
+    # feed is forward-filled through its freeze, so consecutive feed values are not
+    # consecutive observations: a print landing after twelve frozen minutes carries twelve
+    # minutes of movement and differences as a one-minute jump that never happened. And
+    # parity sits at a large persistent offset from the feed whenever the chain has time
+    # left — measured at +73 to +94 points on this corpus's control sessions, several times
+    # any plausible carry term — so every minute that switches source reports that offset as
+    # a move. A series assembled from whichever source looked better each minute reports the
+    # offset as volatility.
     #
-    # Parity is preferred outright once the chain expires today, because T -> 0 collapses
-    # the forward term to under a tenth of a point on a 24,000 index and the estimate is
-    # then exact rather than proxied. On a chain with days left the forward term is order
-    # 17 points and parity also inherits vega noise from every leg, so the feed's fresh
-    # prints are the better observation and parity only fills the gaps.
-    exact_parity = front_expiry == session_date
-    if exact_parity:
-        spot["best"] = spot["parity"].where(spot["parity"].notna(), spot["feed"])
-        spot["best_source"] = np.where(spot["parity"].notna(), "parity", "feed")
-    else:
-        spot["best"] = np.where(spot["feed_fresh"], spot["feed"], spot["parity"])
-        spot["best_source"] = np.where(spot["feed_fresh"], "feed", "parity")
-    spot.loc[spot["best"].isna(), "best_source"] = "none"
+    # The anchor pair alone is that one source, on every session. It is the most liquid
+    # strike and it prints every minute of the final window on every session in this corpus.
+    # Using it rather than the cross-strike median is also what makes excluding the anchor
+    # from the parity residuals do what it claims: the strike whose residual is zero by
+    # construction is the strike the level came from, so the level must come from a strike
+    # that is named rather than from a median whose identity changes minute to minute.
+    #
+    # A chain with days left still carries a level bias here. It is a near-constant offset
+    # over a ten-minute window, so differences remain usable while levels do not — and the
+    # bias is no longer spliced into the differences.
+    spot["best"] = spot["parity_anchor"]
+    spot["best_source"] = np.where(spot["parity_anchor"].notna(), "parity_anchor", "none")
 
     return SessionData(
         underlying=underlying,
