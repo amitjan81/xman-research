@@ -34,7 +34,9 @@ SPOT = 24_205.0
 ANCHOR = 24_200.0
 
 
-def _fair_chain(spot: float = SPOT, bumps: dict[tuple[float, str], float] | None = None) -> pd.DataFrame:
+def _fair_chain(
+    spot: float = SPOT, bumps: dict[tuple[float, str], float] | None = None
+) -> pd.DataFrame:
     """A two-minute chain priced at exact intrinsic, optionally with one leg bumped."""
     bumps = bumps or {}
     rows = []

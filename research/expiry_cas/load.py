@@ -55,7 +55,9 @@ AUCTION_END = dt.time(15, 39)
 #: Start of the settlement-relevant final half hour.
 FINAL_WINDOW_START = dt.time(15, 0)
 
-_SYMBOL_RE = re.compile(r"^(?P<root>.+?)-(?P<expiry>\d{2}[A-Za-z]{3}\d{4})-(?P<strike>\d+(?:\.\d+)?)-(?P<kind>CE|PE)$")
+_SYMBOL_RE = re.compile(
+    r"^(?P<root>.+?)-(?P<expiry>\d{2}[A-Za-z]{3}\d{4})-(?P<strike>\d+(?:\.\d+)?)-(?P<kind>CE|PE)$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,14 +160,18 @@ def _parity_spot(chain: pd.DataFrame, anchor_strike: float) -> pd.DataFrame:
     a residual that is pure staleness rather than mispricing.
     """
     traded = chain[chain["volume"] > 0]
-    wide = traded.pivot_table(index=["ts", "strike"], columns="opt_type", values="close", aggfunc="last")
+    wide = traded.pivot_table(
+        index=["ts", "strike"], columns="opt_type", values="close", aggfunc="last"
+    )
     if "CE" not in wide.columns or "PE" not in wide.columns:
         return pd.DataFrame(columns=["parity", "parity_anchor", "parity_n"])
     wide = wide.dropna(subset=["CE", "PE"])
     implied = (wide["CE"] - wide["PE"] + wide.index.get_level_values("strike")).rename("implied")
     frame = implied.reset_index()
     agg = frame.groupby("ts")["implied"].agg(parity="median", parity_n="size")
-    anchor = frame[frame["strike"] == anchor_strike].set_index("ts")["implied"].rename("parity_anchor")
+    anchor = (
+        frame[frame["strike"] == anchor_strike].set_index("ts")["implied"].rename("parity_anchor")
+    )
     return agg.join(anchor)
 
 

@@ -46,9 +46,9 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from load import AUCTION_START, FINAL_WINDOW_START, SessionData, load_session  # noqa: E402
+from load import AUCTION_START, FINAL_WINDOW_START, SessionData, load_session
 
-from xman_research.backtest.costs import (  # noqa: E402
+from xman_research.backtest.costs import (
     ChargeableTrade,
     Side,
     StatutoryCostStack,
@@ -144,9 +144,13 @@ def swing_metrics(session: SessionData) -> dict[str, object]:
         "max_5min_at": t5,
         "max_1min_auction": am1,
         "max_1min_auction_at": at1,
-        "auction_spot_quality": "exact (T=0)" if session.is_expiry_session else "proxy (T>0, noisy)",
-        "feed_stale_min_1500_1539": int((~_window(session.spot, FINAL_WINDOW_START, AUCTION_END)["feed_fresh"]).sum()),
-        "spot_minutes_1500_1539": int(len(_window(spot, FINAL_WINDOW_START, AUCTION_END))),
+        "auction_spot_quality": "exact (T=0)"
+        if session.is_expiry_session
+        else "proxy (T>0, noisy)",
+        "feed_stale_min_1500_1539": int(
+            (~_window(session.spot, FINAL_WINDOW_START, AUCTION_END)["feed_fresh"]).sum()
+        ),
+        "spot_minutes_1500_1539": len(_window(spot, FINAL_WINDOW_START, AUCTION_END)),
     }
 
 
@@ -214,7 +218,7 @@ def repricing_metrics(session: SessionData) -> dict[str, object]:
         "tv_1500": at("15:00", "time_value"),
         "tv_1529": at("15:29", "time_value"),
         "tv_1539": at("15:39", "time_value"),
-        "n_strikes_ret": int(len(rets)),
+        "n_strikes_ret": len(rets),
         "ret_median_pct": float(rets.median()) if len(rets) else float("nan"),
         "ret_max_pct": float(rets.max()) if len(rets) else float("nan"),
         "ret_min_pct": float(rets.min()) if len(rets) else float("nan"),
@@ -229,8 +233,12 @@ def repricing_metrics(session: SessionData) -> dict[str, object]:
 def _leg_matrix(session: SessionData) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Close and volume pivots indexed by (ts, strike) with CE/PE columns."""
     chain = session.chain
-    close = chain.pivot_table(index=["ts", "strike"], columns="opt_type", values="close", aggfunc="last")
-    volume = chain.pivot_table(index=["ts", "strike"], columns="opt_type", values="volume", aggfunc="last")
+    close = chain.pivot_table(
+        index=["ts", "strike"], columns="opt_type", values="close", aggfunc="last"
+    )
+    volume = chain.pivot_table(
+        index=["ts", "strike"], columns="opt_type", values="volume", aggfunc="last"
+    )
     return close, volume
 
 
@@ -308,7 +316,11 @@ def vertical_violations(session: SessionData) -> pd.DataFrame:
             continue
         series = close[kind].rename("px").reset_index()
         vol = volume[kind].rename("v").reset_index()
-        merged = series.merge(vol, on=["ts", "strike"]).dropna(subset=["px"]).sort_values(["ts", "strike"])
+        merged = (
+            series.merge(vol, on=["ts", "strike"])
+            .dropna(subset=["px"])
+            .sort_values(["ts", "strike"])
+        )
         nxt = merged.groupby("ts").shift(-1)
         frame = pd.DataFrame(
             {
@@ -344,7 +356,11 @@ def butterfly_violations(session: SessionData) -> pd.DataFrame:
             continue
         series = close[kind].rename("px").reset_index()
         vol = volume[kind].rename("v").reset_index()
-        merged = series.merge(vol, on=["ts", "strike"]).dropna(subset=["px"]).sort_values(["ts", "strike"])
+        merged = (
+            series.merge(vol, on=["ts", "strike"])
+            .dropna(subset=["px"])
+            .sort_values(["ts", "strike"])
+        )
         g = merged.groupby("ts")
         mid, hi = g.shift(-1), g.shift(-2)
         spacing_even = (mid["strike"] - merged["strike"]) == (hi["strike"] - mid["strike"])
@@ -414,7 +430,9 @@ def roundtrip_cost_points(
     return total / units
 
 
-def residual_summary(session: SessionData, frame: pd.DataFrame, cost_points: float) -> list[dict[str, object]]:
+def residual_summary(
+    session: SessionData, frame: pd.DataFrame, cost_points: float
+) -> list[dict[str, object]]:
     """Residual distribution per relation and window, with the staleness gate applied.
 
     ``persistent`` counts strike-minutes whose residual clears the cost threshold in two
@@ -448,15 +466,17 @@ def residual_summary(session: SessionData, frame: pd.DataFrame, cost_points: flo
                     "relation": relation,
                     "window": window,
                     "gate": gate,
-                    "n": int(len(sub)),
+                    "n": len(sub),
                     "median_abs": float(mag.median()),
                     "p95_abs": float(mag.quantile(0.95)),
                     "max_abs": float(mag.max()),
                     "cost_points": cost_points,
-                    "n_over_cost": int(len(over)),
+                    "n_over_cost": len(over),
                     "pct_over_cost": float(len(over) / len(sub) * 100),
                     "n_persistent": persistent,
-                    "median_volume_over": float(over["min_leg_volume"].median()) if len(over) else float("nan"),
+                    "median_volume_over": float(over["min_leg_volume"].median())
+                    if len(over)
+                    else float("nan"),
                 }
             )
     return out
@@ -519,7 +539,9 @@ def strategy_auction_strangle(session: SessionData) -> dict[str, object]:
     call_k, put_k = strikes[idx + 2], strikes[idx - 2]
 
     def px(strike: float, kind: str, at: dt.time) -> float:
-        rows = chain[(chain["strike"] == strike) & (chain["opt_type"] == kind) & (chain["ts"].dt.time <= at)]
+        rows = chain[
+            (chain["strike"] == strike) & (chain["opt_type"] == kind) & (chain["ts"].dt.time <= at)
+        ]
         return float(rows["close"].iloc[-1]) if len(rows) else float("nan")
 
     entry = px(call_k, "CE", LOTTERY_ENTRY) + px(put_k, "PE", LOTTERY_ENTRY)
@@ -530,7 +552,9 @@ def strategy_auction_strangle(session: SessionData) -> dict[str, object]:
     terminal = session.spot["best"].dropna()
     settle = float(terminal.iloc[-1]) if len(terminal) else float("nan")
     # The wings are sold back on the last auction print, not carried into settlement.
-    cost = roundtrip_cost_points(session, legs=2, notional=settle, premium=entry / 2, exit_kind="trade")
+    cost = roundtrip_cost_points(
+        session, legs=2, notional=settle, premium=entry / 2, exit_kind="trade"
+    )
     return {
         "date": session.session_date,
         "status": session.status,
@@ -590,7 +614,9 @@ def _md(frame: pd.DataFrame, floatfmt: str = "{:.2f}") -> str:
             disp[col] = disp[col].map(lambda v: "" if pd.isna(v) else floatfmt.format(v))
     header = "| " + " | ".join(str(c) for c in disp.columns) + " |"
     sep = "| " + " | ".join("---" for _ in disp.columns) + " |"
-    body = "\n".join("| " + " | ".join(str(v) for v in row) + " |" for row in disp.itertuples(index=False))
+    body = "\n".join(
+        "| " + " | ".join(str(v) for v in row) + " |" for row in disp.itertuples(index=False)
+    )
     return f"{header}\n{sep}\n{body}\n"
 
 
@@ -612,7 +638,11 @@ def make_figures(sessions: list[SessionData], outdir: Path) -> list[str]:
         if series.empty:
             continue
         label = f"{s.session_date} {'expiry' if s.is_expiry_session else 'control'}"
-        ax.plot([t.strftime("%H:%M") for t in series.index], series / series.iloc[0] * 100 - 100, label=label)
+        ax.plot(
+            [t.strftime("%H:%M") for t in series.index],
+            series / series.iloc[0] * 100 - 100,
+            label=label,
+        )
     ax.axvline("15:30", color="k", ls="--", lw=1)
     ax.set_title("Underlying path, 15:00-15:39 (rebased, dashed line = continuous close)")
     ax.set_ylabel("% from 15:00")
@@ -630,7 +660,9 @@ def make_figures(sessions: list[SessionData], outdir: Path) -> list[str]:
         if st.empty:
             continue
         st = st[st.index.time >= FINAL_WINDOW_START]
-        ax.plot([t.strftime("%H:%M") for t in st.index], st["time_value"], label=f"{s.session_date}")
+        ax.plot(
+            [t.strftime("%H:%M") for t in st.index], st["time_value"], label=f"{s.session_date}"
+        )
     ax.axvline("15:30", color="k", ls="--", lw=1)
     ax.axhline(0, color="grey", lw=0.8)
     ax.set_title("ATM straddle time value into settlement")
@@ -685,7 +717,11 @@ def main() -> None:
         cost_pts = roundtrip_cost_points(s, legs=4, notional=notional, premium=premium)
         for builder in (parity_residuals, box_residuals, vertical_violations, butterfly_violations):
             residuals.extend(residual_summary(s, builder(s), cost_pts))
-        for coll, fn in ((straddles, strategy_short_straddle), (strangles, strategy_auction_strangle), (fades, strategy_fade_first_auction_print)):
+        for coll, fn in (
+            (straddles, strategy_short_straddle),
+            (strangles, strategy_auction_strangle),
+            (fades, strategy_fade_first_auction_print),
+        ):
             r = fn(s)
             if r:
                 coll.append(r)
