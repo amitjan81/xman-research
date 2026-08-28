@@ -367,18 +367,28 @@ def butterfly_violations(session: SessionData) -> pd.DataFrame:
     return out
 
 
-def roundtrip_cost_points(session: SessionData, legs: int, notional: float, premium: float) -> float:
-    """Round-trip cost of an ``legs``-leg structure, expressed in index points per unit.
+def roundtrip_cost_points(
+    session: SessionData,
+    legs: int,
+    notional: float,
+    premium: float,
+    *,
+    exit_kind: str = "settlement",
+) -> float:
+    """Round-trip cost of a ``legs``-leg structure, expressed in index points per unit.
 
-    Each leg is entered and settles at expiry, so the charge is ``legs`` opening trades
-    plus ``legs`` settlement events. Premium turnover is approximated by ``premium`` per
-    leg, which drives STT on the sold legs; the exercise-STT term is charged on intrinsic,
-    approximated here at half the strike spacing since only the in-the-money legs settle
-    with value.
+    ``exit_kind`` decides how the position leaves. ``"settlement"`` is a position carried
+    into expiry: ``legs`` opening trades plus one settlement event, which is where
+    exercise STT — charged on intrinsic at a different rate from premium STT, and only on
+    the long side — enters. ``"trade"`` is a position closed in the market before expiry:
+    ``2 * legs`` ordinary trades and no settlement charge at all. Charging settlement on a
+    position that was sold back, or premium-only on one that expired in the money, are
+    the two ways to get an expiry-day cost estimate wrong in opposite directions.
     """
     units = session.lot_size
+    opening_legs = legs if exit_kind == "settlement" else 2 * legs
     total = 0.0
-    for _ in range(legs):
+    for _ in range(opening_legs):
         total += _cost(
             ChargeableTrade(
                 trade_date=session.session_date,
@@ -389,17 +399,18 @@ def roundtrip_cost_points(session: SessionData, legs: int, notional: float, prem
                 orders=1,
             )
         )
-    total += _cost(
-        ChargeableTrade(
-            trade_date=session.session_date,
-            kind=TradeKind.SETTLEMENT,
-            side=Side.SELL,
-            quantity_units=units,
-            price=premium,
-            orders=0,
-            notional_price=notional,
+    if exit_kind == "settlement":
+        total += _cost(
+            ChargeableTrade(
+                trade_date=session.session_date,
+                kind=TradeKind.SETTLEMENT,
+                side=Side.SELL,
+                quantity_units=units,
+                price=premium,
+                orders=0,
+                notional_price=notional,
+            )
         )
-    )
     return total / units
 
 
@@ -462,7 +473,10 @@ def strategy_short_straddle(session: SessionData) -> dict[str, object]:
     parity spot from the auction window, where every strike agrees on one number.
     """
     straddle = _atm_straddle(session)
-    if straddle.empty:
+    if straddle.empty or not session.is_expiry_session:
+        # A chain with days left is not settled by this session's close. Marking one to
+        # intrinsic at 15:39 would book the whole remaining time value as profit and
+        # report a held-to-expiry edge that the session never delivered.
         return {}
     k = session.parity_anchor_strike
     entry_rows = straddle[straddle.index.time <= FINAL_WINDOW_START]
@@ -515,7 +529,8 @@ def strategy_auction_strangle(session: SessionData) -> dict[str, object]:
     gross = exit_px - entry
     terminal = session.spot["best"].dropna()
     settle = float(terminal.iloc[-1]) if len(terminal) else float("nan")
-    cost = roundtrip_cost_points(session, legs=2, notional=settle, premium=entry / 2)
+    # The wings are sold back on the last auction print, not carried into settlement.
+    cost = roundtrip_cost_points(session, legs=2, notional=settle, premium=entry / 2, exit_kind="trade")
     return {
         "date": session.session_date,
         "status": session.status,
