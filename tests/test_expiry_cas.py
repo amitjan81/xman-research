@@ -151,7 +151,10 @@ def test_the_movement_series_never_splices_the_feed_into_the_parity_level(tmp_pa
     second minute. A single-source series differences to zero throughout.
     """
     level = 77_150.0
-    minutes = [dt.time(15, 28), dt.time(15, 29), dt.time(15, 30), dt.time(15, 31)]
+    # A bar at or before 15:00 is required for the anchor to be struck from the broadcast
+    # level, which is the path production takes; without one the loader falls back to the
+    # index symbol's own last bar and the fixture would not exercise the same code.
+    minutes = [dt.time(15, 0), dt.time(15, 28), dt.time(15, 29), dt.time(15, 30), dt.time(15, 31)]
     session = _load(tmp_path, monkeypatch, implied_by_minute=dict.fromkeys(minutes, level))
 
     best = session.spot["best"]
@@ -174,7 +177,7 @@ def test_parity_residuals_drop_the_strike_the_spot_was_built_from(tmp_path, monk
     from analyze import parity_residuals
 
     level = 77_150.0
-    minutes = [dt.time(15, 20), dt.time(15, 21)]
+    minutes = [dt.time(15, 0), dt.time(15, 20), dt.time(15, 21)]
     skew = {77_000.0: 3.0, 77_100.0: 1.0, 77_200.0: 5.0, 77_300.0: 9.0, 76_900.0: 7.0}
     session = _load(
         tmp_path,
@@ -260,20 +263,30 @@ def test_the_cost_threshold_is_strict_and_scales_with_lot_size():
     # Per-order brokerage is a flat rupee charge, so spreading it over more units lowers the
     # per-unit threshold. A Sensex lot of 20 therefore carries a several-times-higher
     # threshold than a Nifty lot of 65 with no difference in market conditions.
-    small_lot = roundtrip_cost_points(session, legs=4, notional=77_000.0, premium=50.0)
-    big = SessionData(
-        underlying="NIFTY",
-        session_date=SESSION_DATE,
-        status="published",
-        chain=pd.DataFrame(),
-        index=pd.Series(dtype=float),
-        spot=pd.DataFrame(),
-        lot_size=65,
-        front_expiry=SESSION_DATE,
-        parity_anchor_strike=ANCHOR,
+    def cost_at_lot(lot: int) -> float:
+        sized = SessionData(
+            underlying=UNDERLYING,
+            session_date=SESSION_DATE,
+            status="published",
+            chain=pd.DataFrame(),
+            index=pd.Series(dtype=float),
+            spot=pd.DataFrame(),
+            lot_size=lot,
+            front_expiry=SESSION_DATE,
+            parity_anchor_strike=ANCHOR,
+        )
+        return roundtrip_cost_points(sized, legs=4, notional=77_000.0, premium=50.0)
+
+    sensex_lot, nifty_lot, double_lot = cost_at_lot(20), cost_at_lot(65), cost_at_lot(130)
+    assert sensex_lot > nifty_lot > double_lot
+    # Every other component is ad-valorem on premium or notional, so it is identical per
+    # unit at any lot size. The lot-dependent part is therefore a flat per-order charge
+    # spread over units, and the cost differences must be exactly linear in 1/lot. Pinning
+    # the shape rather than a rate keeps the test honest if a statutory rate is revised.
+    per_unit_order_charge = (sensex_lot - nifty_lot) / (1 / 20 - 1 / 65)
+    np.testing.assert_allclose(
+        (nifty_lot - double_lot) / (1 / 65 - 1 / 130), per_unit_order_charge, rtol=1e-9
     )
-    big_lot = roundtrip_cost_points(big, legs=4, notional=77_000.0, premium=50.0)
-    assert small_lot > big_lot
 
     # A position sold back in the market pays 2*legs trades and no settlement event, so its
     # cost is linear in the leg count.

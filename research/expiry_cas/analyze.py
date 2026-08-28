@@ -770,7 +770,12 @@ def make_figures(sessions: list[SessionData], outdir: Path) -> list[str]:
         )
     ax.axvline("15:30", color="k", ls="--", lw=1)
     ax.set_yscale("log")
-    ax.set_title("|1-minute move| of the underlying, expiry sessions (log scale)")
+    # Zero-move minutes are dropped because a log axis cannot render them, so a window can
+    # plot fewer points than it has minutes. The title says so: a reader counting marks in
+    # the auction window would otherwise read a missing point as a missing bar.
+    ax.set_title(
+        "|1-minute move| of the underlying, expiry sessions (log scale; zero-move minutes omitted)"
+    )
     ax.set_ylabel("index points")
     ax.tick_params(axis="x", rotation=90, labelsize=6)
     ax.legend(fontsize=7)
