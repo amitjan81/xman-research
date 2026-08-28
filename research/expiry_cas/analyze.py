@@ -59,8 +59,9 @@ from xman_research.backtest.costs import (
     TradeKind,
 )
 
-#: NSE's Closing Auction Session goes live on this date; before it, expiring options
-#: print no post-close bars at all and the settlement statistic is a different one.
+#: First session in this corpus carrying post-close bars, on both NSE and BSE. Before it,
+#: expiring options print nothing at or after 15:30 on either exchange and the settlement
+#: statistic is a different one, so the two regimes are never pooled.
 CAS_LIVE_FROM = dt.date(2026, 8, 3)
 
 CONTINUOUS_END = dt.time(15, 29)
@@ -742,6 +743,39 @@ def make_figures(sessions: list[SessionData], outdir: Path) -> list[str]:
     ax.legend(fontsize=7)
     fig.tight_layout()
     p = outdir / "atm_time_value.png"
+    fig.savefig(p, dpi=110)
+    plt.close(fig)
+    written.append(p.name)
+
+    # Absolute one-minute move on a log axis. The rebased-percent view above cannot show
+    # this: the auction window's moves are three orders of magnitude below the continuous
+    # window's on the same session, so a linear axis renders the entire window as the zero
+    # line and the size of the drop at 15:30 is exactly the finding.
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for s in sessions:
+        if not s.is_expiry_session:
+            continue
+        series = s.spot["best"].dropna()
+        series = series[series.index.time >= FINAL_WINDOW_START]
+        moves = series.diff().abs().dropna()
+        moves = moves[moves > 0]
+        if moves.empty:
+            continue
+        ax.plot(
+            [t.strftime("%H:%M") for t in moves.index],
+            moves,
+            marker=".",
+            lw=0.9,
+            label=f"{s.session_date}",
+        )
+    ax.axvline("15:30", color="k", ls="--", lw=1)
+    ax.set_yscale("log")
+    ax.set_title("|1-minute move| of the underlying, expiry sessions (log scale)")
+    ax.set_ylabel("index points")
+    ax.tick_params(axis="x", rotation=90, labelsize=6)
+    ax.legend(fontsize=7)
+    fig.tight_layout()
+    p = outdir / "minute_moves_log.png"
     fig.savefig(p, dpi=110)
     plt.close(fig)
     written.append(p.name)

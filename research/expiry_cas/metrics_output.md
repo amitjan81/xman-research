@@ -299,4 +299,4 @@
 | 2026-08-28 | published | post-CAS | False | 24239.25 | 24245.65 | 24227.50 | 6.40 | 18.15 | 283.59 |
 
 
-figures: spot_final_window.png, atm_time_value.png, box_residuals.png
+figures: spot_final_window.png, atm_time_value.png, minute_moves_log.png, box_residuals.png
