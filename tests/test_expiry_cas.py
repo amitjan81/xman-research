@@ -152,9 +152,7 @@ def test_the_movement_series_never_splices_the_feed_into_the_parity_level(tmp_pa
     """
     level = 77_150.0
     minutes = [dt.time(15, 28), dt.time(15, 29), dt.time(15, 30), dt.time(15, 31)]
-    session = _load(
-        tmp_path, monkeypatch, implied_by_minute=dict.fromkeys(minutes, level)
-    )
+    session = _load(tmp_path, monkeypatch, implied_by_minute=dict.fromkeys(minutes, level))
 
     best = session.spot["best"]
     assert session.spot["feed_fresh"].sum() == 1, "fixture must have exactly one fresh feed minute"
