@@ -131,17 +131,17 @@ Two strikes wide on each index, so each leg is defined-risk. Nifty size is notio
 | **2026-08-27** | S2 | 15:26 | −0.28 % | 76900/77100 | 24200/24300 | **−902.66** | −980.41 | 26,300 |
 | **Total** | | | | | | **−1,806.76** | **−1,982.51** | |
 
-**No rows at X = 0.5 %, 1 % or 1.5 %.** At the exploratory threshold: **1 winner, 3 losers, negative in aggregate at both exit times, and the dislocated session is among the losers.** Costs are ~₹220 per round trip. On **08-13** the cost *is* the result (gross −₹9.75 against ₹209.71 of cost); on 08-27 cost is 24 % of the loss.
+**No rows at X = 0.5 %, 1 % or 1.5 %.** At the exploratory threshold: **1 winner, 2 losers, 1 artefact** — negative in aggregate at both exit times, and the dislocated session is among the losers. (08-04 is the artefact: its P&L is an expiring Nifty leg, not a cross-index trade, so counting it as a loss flatters the structure's diagnosis rather than damning it.) Costs are ~₹220 per round trip. On **08-13** the cost *is* the result (gross −₹9.75 against ₹209.71 of cost); on 08-27 cost is 24 % of the loss.
 
 **A structural obstacle the table cannot show.** The brief allows a settlement exit on expiry days. A *paired* trade cannot take one: Sensex expires Thursday and Nifty Tuesday, so on every session in this corpus at most one leg is expiring. Holding to settlement means holding an unhedged overnight position in the other index — a different trade with different risk, not this one.
 
 ### S3 mirror, stated plainly
 
-S3 is not a separate finding: it is the same estimator with the sign flipped, and it fires on 08-06 and 08-13 — both Sensex expiry sessions with a positive pin, neither dislocated. Its one winner (08-06, +₹1,432) is the corpus's single profitable trade and rests on one session.
+S3 is not a separate finding: it is the same estimator with the sign flipped, and it fires on 08-06 and 08-13 — both Sensex expiry sessions with a positive pin, neither dislocated. Its one winner (08-06, +₹1,432) is the corpus's only profitable trade and rests on one session.
 
 ---
 
-## 5. The band against the ladder — why the wing test returns nothing
+## 5. The band against the ladder — one arithmetic null and one empirical one
 
 Each constituent's auction price is confined to ±3 % of its 15:00–15:15 VWAP, so an index of bounded constituents is bounded by ±3 % of the index computed on those VWAP references. That reference index is not in this corpus; the floor and ceiling here use the 15:14 implied level, a close proxy and not the same number. The bound is approximate at the edges — and the margin below is more than an order of magnitude, so the conclusion survives the approximation.
 
