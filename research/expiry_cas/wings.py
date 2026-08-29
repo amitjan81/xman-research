@@ -18,11 +18,13 @@ be stated wherever a number from one is read as evidence about the other.
   reports a multi-minute move as a one-minute spike — which is precisely the artifact a
   spike table is most likely to manufacture. Every reported change carries the gap in
   minutes between its endpoints.
-* The underlying is recovered by put-call parity at a single anchor pair, never spliced
-  from the feed. On a chain with :math:`T > 0` this level carries the forward bias
-  :math:`K(1 - e^{-rT})`, order 90 points at :math:`K = 77{,}200` seven days out, so
-  parity **levels** here are not comparable to a published index level; only changes
-  over the window are. :data:`PARITY_BIAS_NOTE` is printed beside every such table.
+* Two underlying series, each used for one job. The **cash feed** at 15:14
+  (:attr:`ChainSession.ref_spot`) classifies strikes — moneyness, the wing cut, the
+  at-the-money time-value strike. **Parity** at a single anchor pair supplies *movement*,
+  and is the only series that survives past 15:29 when the cash index stops. They are
+  never spliced, and the level gap between them is reported rather than assumed away:
+  parity prices the forward, which on this session sits far enough above cash that carry
+  explains only part of it (:attr:`ChainSession.forward_premium`).
 
 **The bound problem, stated once.** For an expiring option the ±3 % auction band bounds
 settlement, so a short put has a known worst case. A next-expiry option has an unbounded
@@ -68,10 +70,10 @@ INDICATIVE_0827 = {
 #: ±3 % band floor around the 15:15 reference. Bounds *today's* auction close only.
 BAND_FLOOR_0827 = 77182.91 * 0.97
 
-PARITY_BIAS_NOTE = (
-    "Parity spot on a non-expiring chain overstates the index by K(1-e^{-rT}) "
-    "(~90 pts at K=77,200, T=7d). Changes over the window are usable; levels are not."
-)
+#: Rate used to size the carry component of the parity-vs-cash gap. Indicative Indian
+#: short-term funding; the point of quoting it is that the gap is larger than any
+#: plausible value of it, so the residual is a finding rather than a mis-set constant.
+CARRY_RATE = 0.065
 
 _SYMBOL_RE = re.compile(
     r"^(?P<root>.+?)-(?P<expiry>\d{2}[A-Za-z]{3}\d{4})-(?P<strike>\d+(?:\.\d+)?)-(?P<kind>CE|PE)$"
@@ -106,6 +108,45 @@ class ChainSession:
     @property
     def days_to_expiry(self) -> int:
         return (self.expiry - self.session_date).days
+
+    @property
+    def ref_spot(self) -> float:
+        """The cash index at 15:14 — the reference every moneyness in this study is struck on.
+
+        This is the **feed** level, not the parity level. Parity on a non-expiring chain
+        prices the *forward*, which sits materially above cash (:attr:`forward_premium`),
+        so using it to classify strikes pushes the whole board one way: it labels more
+        strikes as wings and picks an at-the-money strike that is hundreds of points in
+        the money against cash. Moneyness, the wing cut, and the at-the-money time-value
+        strike therefore all come from here.
+
+        Parity is still the only usable series after 15:29, when the cash index stops. The
+        division of labour is: cash level for *classification*, parity for *movement*.
+        """
+        live = self.feed_spot.dropna()
+        live = live[live.index.time <= WINDOW_START]
+        if len(live):
+            return float(live.iloc[-1])
+        return float(self.implied_spot.dropna().iloc[0])
+
+    @property
+    def forward_premium(self) -> float:
+        """Parity level minus cash level at 15:14, in index points.
+
+        For a chain with :math:`T > 0` put-call parity recovers :math:`S - Ke^{-rT}`, so a
+        positive gap is expected. Its *size* is a finding rather than a nuisance: the carry
+        term :math:`K(1-e^{-rT})` accounts for only part of it on this session, and the
+        remainder is a genuine premium in the options market's forward, not a stale leg —
+        it is consistent across strikes.
+        """
+        parity = self.implied_spot.dropna()
+        if parity.empty:
+            return float("nan")
+        return float(parity.iloc[0]) - self.ref_spot
+
+    def carry_points(self, rate: float = 0.065) -> float:
+        """The part of :attr:`forward_premium` that carry at ``rate`` explains."""
+        return self.anchor_strike * (1.0 - np.exp(-rate * self.days_to_expiry / 365.0))
 
 
 def _load_raw(underlying: str, session_date: dt.date) -> pd.DataFrame:
@@ -250,6 +291,115 @@ def crash_base(live: pd.Series) -> tuple[float | None, str]:
     return (float(chosen), when) if chosen > 0 else (None, "—")
 
 
+#: The minutes the published indicative spent at its low.
+CRASH_START, CRASH_END = dt.time(15, 18), dt.time(15, 23)
+#: Cash matching runs 15:30-15:35 and the close is published around 15:35.
+POST_AUCTION_START = dt.time(15, 30)
+
+
+def phase_of(ts: pd.Timestamp) -> str:
+    """Which part of the session a bar belongs to.
+
+    Three phases, because a premium move means a different thing in each. ``crash`` is the
+    window the indicative spent at its low — the only phase where a move is a response to
+    the dislocation. ``post_auction`` is 15:30 onward, where matching is under way and the
+    close is about to be published, so a move there is about the close becoming known.
+    ``pre`` is everything before the dislocation.
+    """
+    t = ts.time()
+    if t >= POST_AUCTION_START:
+        return "post_auction"
+    if CRASH_START <= t <= CRASH_END:
+        return "crash"
+    return "pre"
+
+
+def forward_path(session: ChainSession) -> pd.DataFrame:
+    """The option-implied forward's own move, in points and percent, at four checkpoints.
+
+    This is the quantity the study's own conventions say is usable on a non-expiring chain
+    — a *change*, from one source, with the level's forward premium differencing out. It
+    is reported because a wing premium move cannot be read without it: part of any premium
+    change is delta against this series, and only the remainder is a volatility or skew
+    bid.
+    """
+    parity = session.implied_spot.dropna()
+    if parity.empty:
+        return pd.DataFrame()
+    base = float(parity.iloc[0])
+    rows = []
+    for label, when in (
+        ("15:23 (indicative low)", dt.time(15, 23)),
+        ("15:30", dt.time(15, 30)),
+        ("15:35", dt.time(15, 35)),
+        ("15:39", dt.time(15, 39)),
+    ):
+        upto = parity[parity.index.time <= when]
+        if upto.empty:
+            continue
+        level = float(upto.iloc[-1])
+        rows.append(
+            {
+                "checkpoint": label,
+                "implied_fwd": level,
+                "change_pts": level - base,
+                "change_pct": (level / base - 1.0) * 100.0,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def delta_decomposition(session: ChainSession, strikes: list[float]) -> pd.DataFrame:
+    """Split each wing put's crash-window move into a delta part and a residual.
+
+    Delta is estimated empirically from this chain rather than assumed: for each strike,
+    the slope of its traded premium change against the simultaneous change in the
+    option-implied forward, over every minute of the window where both printed. The
+    residual is what the forward's own move does not explain — a volatility or skew bid.
+
+    The estimate's limits: the slope is fitted over a window in which volatility is itself
+    moving, so it absorbs some vega into the delta term, and the strikes with the fewest
+    prints have the loosest slopes. ``n`` is reported so a slope fitted on a handful of
+    points is visible as such.
+    """
+    parity = session.implied_spot.dropna()
+    d_fwd = parity.diff()
+    rows = []
+    for k in strikes:
+        live = session.pe_close[k].where(session.pe_vol[k] > 0).dropna()
+        d_px = live.diff()
+        joined = pd.DataFrame({"dp": d_px, "ds": d_fwd.reindex(d_px.index)}).dropna()
+        joined = joined[joined["ds"].abs() > 1e-9]
+        if len(joined) < 5:
+            continue
+        slope = float(np.polyfit(joined["ds"], joined["dp"], 1)[0])
+        base_px, base_min = crash_base(live)
+        crash = live[(live.index.time >= CRASH_START) & (live.index.time <= CRASH_END)]
+        if base_px is None or crash.empty:
+            continue
+        move = float(crash.max()) - base_px
+        fwd_at = parity[parity.index.time <= CRASH_END]
+        fwd_move = float(fwd_at.iloc[-1]) - float(parity.iloc[0]) if len(fwd_at) else np.nan
+        rows.append(
+            {
+                "strike": k,
+                "moneyness": k / session.ref_spot,
+                "base_min": base_min,
+                "n": len(joined),
+                "empirical_delta": slope,
+                # A put's delta is negative. A positive fitted slope means the regression
+                # failed on that strike rather than that the option behaves strangely, so
+                # the split must not be read there.
+                "fit_ok": slope < 0,
+                "fwd_move_pts": fwd_move,
+                "move_rs": move,
+                "delta_part_rs": slope * fwd_move,
+                "residual_rs": move - slope * fwd_move,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _px_at(close: pd.DataFrame, vol: pd.DataFrame, strike: float, when: dt.time) -> float:
     """Last traded price at or before ``when`` for one strike; NaN if it never traded."""
     live = close[strike].where(vol[strike] > 0).dropna()
@@ -269,7 +419,7 @@ def spike_table(session: ChainSession, kind: str, wing_max_moneyness: float) -> 
     changes = traded_changes(close, vol)
     if changes.empty:
         return changes
-    ref_spot = float(session.implied_spot.dropna().iloc[0])
+    ref_spot = session.ref_spot
     sign = 1 if kind == "PE" else -1
     changes = changes[changes["d_pct"] * sign > 0]
     if changes.empty:
@@ -287,9 +437,15 @@ def spike_table(session: ChainSession, kind: str, wing_max_moneyness: float) -> 
             t: _px_at(close, vol, k, dt.time(15, m))
             for t, m in (("15:30", 30), ("15:35", 35), ("15:39", 39))
         }
+        # Retracement is only defined at a checkpoint that comes *after* the spike. At or
+        # before it, the "later" price is the spike bar itself or the pre-spike dip, and
+        # the ratio reports 0 % or 100 % for reasons that have nothing to do with the move
+        # reversing.
         rev = {
             f"reversal_{t}_pct": (
-                np.nan if abs(height) < 1e-9 else (peak - after[t]) / height * 100.0
+                np.nan
+                if abs(height) < 1e-9 or t <= r["to_ts"].strftime("%H:%M")
+                else (peak - after[t]) / height * 100.0
             )
             for t in after
         }
@@ -298,7 +454,7 @@ def spike_table(session: ChainSession, kind: str, wing_max_moneyness: float) -> 
         # reached while the indicative was at its low, against the same strike's last
         # continuous-session price.
         live = close[k].where(vol[k] > 0).dropna()
-        crash = live[(live.index.time >= dt.time(15, 18)) & (live.index.time <= dt.time(15, 23))]
+        crash = live[(live.index.time >= CRASH_START) & (live.index.time <= CRASH_END)]
         base_px, base_min = crash_base(live)
         if base_px is not None and len(crash):
             extreme = float(crash.max() if kind == "PE" else crash.min())
@@ -312,6 +468,7 @@ def spike_table(session: ChainSession, kind: str, wing_max_moneyness: float) -> 
                 "crash_1518_1523_pct": crash_pct,
                 "crash_base_min": base_min,
                 "spike_min": r["to_ts"].strftime("%H:%M"),
+                "phase": phase_of(r["to_ts"]),
                 "gap_min": r["gap_min"],
                 "px_before": pre,
                 "px_spike": peak,
@@ -348,9 +505,14 @@ def band_floor_bound(
 
 
 def atm_time_value(session: ChainSession) -> tuple[float, float]:
-    """The 15:14 at-the-money put premium and the strike it came from."""
-    ref = float(session.implied_spot.dropna().iloc[0])
-    k = min(session.pe_close.columns, key=lambda c: abs(c - ref))
+    """The 15:14 at-the-money put premium and the strike it came from.
+
+    At-the-money is struck against the **cash** index, so the premium returned is close to
+    pure time value. Struck against the parity forward instead, the chosen strike sits
+    hundreds of points in the money against cash and the premium carries intrinsic — which
+    would inflate every bound built from it.
+    """
+    k = min(session.pe_close.columns, key=lambda c: abs(c - session.ref_spot))
     return _px_at(session.pe_close, session.pe_vol, k, WINDOW_START), float(k)
 
 
@@ -372,11 +534,11 @@ def control_scan(
             continue
         if session.implied_spot.dropna().empty:
             continue
-        ref = float(session.implied_spot.dropna().iloc[0])
         changes = traded_changes(session.pe_close, session.pe_vol)
         if changes.empty:
             continue
-        changes["moneyness"] = changes["strike"] / ref
+        changes["moneyness"] = changes["strike"] / session.ref_spot
+        changes["phase"] = changes["to_ts"].map(phase_of)
         wing = changes[changes["moneyness"] <= wing_max_moneyness]
         n_wing = wing["strike"].nunique()
         peak = float(wing["d_pct"].max()) if len(wing) else float("nan")
@@ -392,8 +554,19 @@ def control_scan(
         # A single threshold cannot say whether the event separates from an ordinary day:
         # one high enough to be a "spike" may fire on neither. The sweep is what locates
         # the threshold, if any, at which the event and the controls part company.
-        for thr in (25.0, 50.0, threshold_pct):
-            row[f"hits_{thr:.0f}pct"] = wing[wing["d_pct"] >= thr]["strike"].nunique()
+        #
+        # Hits are split by phase because they are not the same evidence. Only a move
+        # inside 15:18-15:23 is a response to the indicative; a move at 15:30-15:31 lands
+        # after matching has begun and the close is about to be published, which is a
+        # different event with a different cause. Counting them together lets post-auction
+        # blips masquerade as crash-window repricing.
+        for thr in sorted({25.0, 50.0, threshold_pct}):
+            hit = wing[wing["d_pct"] >= thr]
+            row[f"hits_{thr:.0f}pct"] = hit["strike"].nunique()
+            row[f"crash_hits_{thr:.0f}pct"] = hit[hit["phase"] == "crash"]["strike"].nunique()
+            row[f"postauction_hits_{thr:.0f}pct"] = hit[hit["phase"] == "post_auction"][
+                "strike"
+            ].nunique()
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -504,8 +677,7 @@ def figures(
     if nifty is not None:
         fig, ax = plt.subplots(figsize=(11, 5))
         for sess, colour, style in ((session, "#1f4e79", "-"), (nifty, "#c55a11", "--")):
-            ref = float(sess.implied_spot.dropna().iloc[0])
-            money = {k: k / ref for k in sess.pe_close.columns}
+            money = {k: k / sess.ref_spot for k in sess.pe_close.columns}
             picks = sorted(money, key=lambda k: abs(money[k] - 0.975))[:3]
             for k in picks:
                 live = sess.pe_close[k].where(sess.pe_vol[k] > 0).dropna()
@@ -563,6 +735,7 @@ def build_report(
             "crash_1518_1523_pct",
             "crash_base_min",
             "spike_min",
+            "phase",
             "gap_min",
             "px_before",
             "px_spike",
@@ -593,9 +766,17 @@ def build_report(
         ]
     ].copy()
 
+    # --- the forward's own move, and what it explains of the wing move -----------------
+    fwd = forward_path(session)
+    decomp = delta_decomposition(
+        session, list(puts[puts["is_wing"]].nlargest(8, "d_pct")["strike"])
+    )
+
     # --- intrinsic references ---------------------------------------------------------
-    ref_spot = float(session.implied_spot.dropna().iloc[0])
-    ref = puts[["strike", "moneyness", "px_1514", "px_spike", "spike_min", "px_15:39"]].copy()
+    ref_spot = session.ref_spot
+    ref = puts[
+        ["strike", "moneyness", "px_1514", "px_spike", "spike_min", "phase", "px_15:39"]
+    ].copy()
     ref["intrinsic_at_indicative_low"] = np.maximum(ref["strike"] - INDICATIVE_0827["low"], 0.0)
     ref["intrinsic_at_close"] = np.maximum(ref["strike"] - INDICATIVE_0827["close"], 0.0)
     ref["spike_over_intrinsic_low"] = ref["px_spike"] - ref["intrinsic_at_indicative_low"]
@@ -661,8 +842,7 @@ def build_report(
         for sess, tag in ((session, "sensex"), (nifty, "nifty_front"), (nifty_next, "nifty_next")):
             if sess is None or sess.implied_spot.dropna().empty:
                 continue
-            r0 = float(sess.implied_spot.dropna().iloc[0])
-            k = min(sess.pe_close.columns, key=lambda c: abs(c / r0 - target))
+            k = min(sess.pe_close.columns, key=lambda c: abs(c / sess.ref_spot - target))
             ch = traded_changes(sess.pe_close[[k]], sess.pe_vol[[k]])
             live = sess.pe_close[k].where(sess.pe_vol[k] > 0).dropna()
             crash = live[
@@ -720,6 +900,8 @@ def build_report(
         wing_m,
         threshold,
         ref_spot,
+        fwd,
+        decomp,
     )
 
 
@@ -740,12 +922,22 @@ def _render(
     wing_m,
     threshold,
     ref_spot,
+    fwd,
+    decomp,
 ) -> str:
     ctl = controls[controls["row"] == "control"]
     n_hits = int(ctl[f"hits_{threshold:.0f}pct"].sum())
     n_wing = int(ctl["n_wing"].sum())
     ev = controls[controls["row"] == "EVENT"].iloc[0]
-    peak = puts.nlargest(1, "d_pct").iloc[0]
+    # The headline strike is the largest mover *among wings*. Taken over all puts it would
+    # be whichever deep in-the-money contract happened to print widest, which is delta on
+    # an illiquid strike and not the subject of this study.
+    wing_puts = puts[puts["is_wing"]]
+    peak = wing_puts.nlargest(1, "d_pct").iloc[0]
+    crash_wings = wing_puts[wing_puts["phase"] == "crash"]
+    best_fade = rr.loc[rr["reward_rs_per_lot"].idxmax()]
+    peak_fade = rr[(rr["strike"] == peak["strike"]) & (rr["cover_at"] == "15:39")]
+    peak_fade = peak_fade.iloc[0] if len(peak_fade) else best_fade
 
     # The cross-index asymmetry is read off the deepest moneyness bucket the cross-check
     # covers, so it moves with the table rather than being asserted beside it.
@@ -778,24 +970,56 @@ def _render(
         f"different instrument, with a week of life left and an unbounded overnight gap, that "
         f"happens to share a strike. Nothing here confirms or refutes the ~4,800 % claim.",
         "",
-        f"**Parity levels are biased.** {PARITY_BIAS_NOTE} Every index level below is therefore "
-        f"used for *changes* only, and the published indicative path "
+        f"**The options forward sits {session.forward_premium:,.0f} points above cash, and that "
+        f"is a finding, not a nuisance.** The cash feed reads "
+        f"**{session.ref_spot:,.2f}** at 15:14; parity at the anchor pair reads "
+        f"**{float(session.implied_spot.dropna().iloc[0]):,.2f}**. Carry at "
+        f"{CARRY_RATE:.1%} over {session.days_to_expiry} days explains only "
+        f"**{session.carry_points(CARRY_RATE):,.0f}** of the gap — the residual would need a "
+        f"rate near {CARRY_RATE * session.forward_premium / max(session.carry_points(CARRY_RATE), 1e-9):.0%} "
+        f"— and the parity level is consistent across neighbouring strikes, so it is a real "
+        f"forward premium rather than one stale leg. **The two series therefore do different "
+        f"jobs here:** cash classifies strikes (moneyness, the wing cut, the at-the-money "
+        f"strike whose premium estimates time value), parity supplies movement and is the only "
+        f"series that survives past 15:29. The choice is not cosmetic: struck on cash the wing "
+        f"below is **{int(ev['n_wing'])} strikes**, struck on parity it would be wider, and the "
+        f"'at-the-money' strike whose premium sets every bound in §2 would sit "
+        f"{session.forward_premium:,.0f} points in the money against cash and carry intrinsic "
+        f"rather than pure time value.",
+        "",
+        f"**The published indicative path is not in this feed's option rows** "
         f"({INDICATIVE_0827['ref_1515']:,.2f} at 15:15 → {INDICATIVE_0827['low']:,.2f} between "
         f"{INDICATIVE_0827['low_window'][0]} and {INDICATIVE_0827['low_window'][1]} → close "
-        f"{INDICATIVE_0827['close']:,.2f}) is a set of published constants, not a measurement "
-        f"from this feed.",
+        f"{INDICATIVE_0827['close']:,.2f}). The 15:15 reference does appear in the broadcast "
+        f"`spot` column; the **indicative low does not appear anywhere**, which is the value "
+        f"the whole question turns on.",
         "",
-        "**Every change is between two bars that each printed volume**, and every row carries "
-        "`gap_min`. A `gap_min` above 1 is a multi-minute move and is not a one-minute spike.",
+        "**Every change is between two bars that each printed volume**, and every such row "
+        "carries `gap_min`. That guarantee covers the **spike leg only**. The checkpoint "
+        "columns — `px_1514`, `px_15:30/35/39`, `cover_px`, and every §3 column — are "
+        "last-trade-at-or-before their label with no gap reported, so a checkpoint may repeat "
+        "an earlier print. Where that matters it is called out beside the table.",
         "",
         "---",
         "",
         "## 1. Did the next-week wings reprice off the indicative?",
         "",
-        f"Implied index at 15:14: **{ref_spot:,.2f}** (parity, biased high — see §0). Its own "
-        f"path over the window and the wing put paths are in "
-        f"`fig/wings/{figs[0]}`; the full strike × minute change grid is "
-        f"`fig/wings/{figs[1]}`.",
+        f"Cash index at 15:14: **{ref_spot:,.2f}** — the reference every moneyness below is "
+        f"struck on. The wing put paths are in `fig/wings/{figs[0]}`; the full strike × minute "
+        f"change grid is `fig/wings/{figs[1]}`.",
+        "",
+        "**The forward's own move, which every premium change has to be read against.** This is "
+        "the quantity the study's conventions say is usable on a non-expiring chain — a change, "
+        "from one source, with the forward premium differencing out:",
+        "",
+        _md(fwd.round(3)) if len(fwd) else "_(no parity series)_",
+        "",
+        "So while the published indicative fell **2,199.72 points**, the traded forward fell "
+        f"**{abs(fwd.iloc[0]['change_pts']):,.0f}** by the end of the crash window — "
+        f"**{abs(fwd.iloc[0]['change_pts']) / 2199.72 * 100:.0f} %** of it. Most of the "
+        f"forward's eventual move arrives *after* the indicative recovered, and Nifty's forward "
+        f"moved almost identically over the same span (§3), so it is market-wide drift into the "
+        f"close rather than a response to the auction.",
         "",
         "### 1.1 Top 10 put strike-minutes by % change",
         "",
@@ -826,15 +1050,41 @@ def _render(
         f"{session.days_to_expiry}-day option neither is a settlement value — they are the "
         f"reference points the question asks for.",
         "",
-        "**This is the sharpest single statement in the study.** Had the index really been at "
-        f"{INDICATIVE_0827['low']:,.2f}, every strike above it was in the money by "
-        "construction, and `spike_over_intrinsic_low` would have to be at or above zero — "
-        "a put cannot trade below intrinsic. It is deeply **negative** across the whole "
-        "in-that-scenario-ITM range: the strikes read as hundreds of rupees below what they "
-        "would be worth if the indicative were a real index level. The options market did not "
-        "price the indicative as an index at all, at any strike, in any minute.",
+        f"Had the index really been at {INDICATIVE_0827['low']:,.2f}, every strike above it "
+        "would have been in the money and `spike_over_intrinsic_low` could not be negative. It "
+        "is negative from 75,300 upward (75,100 is −86, 75,200 is −182, and it widens from "
+        "there). **This is worth stating precisely, because on its own it is not independent "
+        "evidence:** that the wings did not price the indicative as a level is the same fact as "
+        "the forward not moving to it, already visible in the table above and established in "
+        "`CROSS_INDEX.md`. It is that fact in rupee units. Note also that the column compares "
+        "`px_spike`, a maximum over the whole window, against intrinsic at the 15:18–15:23 low, "
+        "so it mixes times.",
         "",
         _md(ref.round(3)),
+        "",
+        "#### 1.3.1 What the ±25 chain adds: how much of the wing move was delta?",
+        "",
+        "This is the part the ±10 ladder could not answer. For each wing strike, an empirical "
+        "delta is fitted from this chain — the slope of its traded premium change against the "
+        "simultaneous forward change, over every minute both printed — and the crash-window "
+        "move is split into the part that slope explains and the residual:",
+        "",
+        _md(decomp.round(4)) if len(decomp) else "_(too few paired prints to fit)_",
+        "",
+        "**The residual is most of the move at every wing strike.** The forward fell only "
+        f"{abs(fwd.iloc[0]['change_pts']):,.0f} points through the crash window, and at these "
+        "deltas that accounts for roughly a rupee or two; the rest is a volatility and skew "
+        "bid. So the wings did reprice — as *insurance getting more expensive*, not as a "
+        "directional mark to 74,983. `n` is the number of paired minutes behind each slope; a "
+        "slope fitted on a handful of prints is loose, and the fit absorbs some vega into the "
+        "delta term, which if anything makes the residual a conservative estimate.",
+        "",
+        "**Read `fit_ok` before reading any row.** A put's delta is negative by construction, "
+        "so a positive fitted slope means the regression failed on that strike — which is "
+        "exactly what happens at the headline 74,700, the thinnest contract on the board and "
+        "the one with no pre-crash print. Its split is not usable. Every strike whose fit does "
+        "hold lands in the same place: delta explains ₹1–3 of a ₹5–7 move and the residual is "
+        "the majority.",
         "",
         "### 1.4 Calls — were they sold down?",
         "",
@@ -851,9 +1101,12 @@ def _render(
         f"the same session with the index at the floor: `intrinsic at the floor + time value`, "
         f"with time value estimated as the 15:14 at-the-money put premium "
         f"(**₹{tv:.2f}** at K={tv_strike:,.0f}). "
-        f"That estimate holds implied volatility at its pre-dislocation level and ignores "
-        f"gamma over a 2,200-point distance, so it **understates** the adverse mark. Every "
-        f"`reward_risk` below is therefore optimistic in the direction that flatters the trade.",
+        f"**The direction of that estimate's error is indeterminate, and it does not matter.** "
+        f"Holding volatility at its pre-dislocation level understates the mark; applying an "
+        f"at-the-money time value unchanged to strikes that would be hundreds of points in the "
+        f"money at the floor overstates it. Intrinsic at the floor is exact — what is estimated "
+        f"is only the time value's dependence on volatility and moneyness. The ratios below are "
+        f"two orders of magnitude from break-even, so no plausible correction reaches them.",
         "",
         _md(rr.round(3)),
         "",
@@ -866,10 +1119,18 @@ def _render(
         "",
         "## 3. Nifty cross-check at the same moneyness",
         "",
-        f"Nifty's front expiry is a Tuesday weekly, so its tenor does not match Sensex's "
-        f"{session.days_to_expiry} days. Both Nifty expiries are shown so the comparison cannot "
-        f"be read as a tenor artifact. `*_1518_1523_pct` is the largest traded premium in "
-        f"15:18–15:23 against the same strike's 15:14 price — the crash window itself.",
+        f"**Nifty is a no-event control, not a second response.** NSE runs no closing auction, "
+        f"so there was no indicative to reprice off; the comparison measures what an ordinary "
+        f"session's wings did over the same minutes. Nifty's front expiry is a Tuesday weekly, "
+        f"so its tenor does not match Sensex's {session.days_to_expiry} days — both Nifty "
+        f"expiries are shown so the result cannot be read as a tenor artifact.",
+        "",
+        "`*_1518_1523_pct` is the largest traded premium in 15:18–15:23 against the price at "
+        "`*_base_min`, which is the same `crash_base` rule §1.1 uses. **Read the rupee columns "
+        "first:** at these moneynesses a Nifty put costs ₹1.60, where one tick is a double-digit "
+        "percentage, so a ratio of two such percentages is a ratio of ticks. `*_max_1min_pct` is "
+        "a maximum over traded-to-traded changes whose gaps are not shown, so the `1min` in its "
+        "name is not guaranteed.",
         "",
         _md(cross.round(4)),
         "",
@@ -880,35 +1141,64 @@ def _render(
         f"## 4. Controls — how often does a wing put move ≥ {threshold:.0f} % in this window?",
         "",
         f"The wing is every put with moneyness ≤ **{wing_m}** against that session's own 15:14 "
-        f"implied index, because listed depth differs session to session. `hits` counts distinct "
-        f"wing strikes whose largest traded-to-traded move in {WINDOW_START:%H:%M}–"
-        f"{WINDOW_END:%H:%M} reached the threshold.",
+        f"**cash** index, because listed depth differs session to session. `hits_*` counts "
+        f"distinct wing strikes whose largest traded-to-traded move in {WINDOW_START:%H:%M}–"
+        f"{WINDOW_END:%H:%M} reached the threshold; `crash_hits_*` and `postauction_hits_*` "
+        f"split that count by **when** the move landed. **The split is the point.** Only a move "
+        f"inside 15:18–15:23 is a response to the indicative. A move at 15:30–15:31 lands after "
+        f"matching has begun and the close is about to be published — a different event with a "
+        f"different cause, and one an ordinary session can produce too.",
         "",
         _md(controls.round(4)),
         "",
-        f"**At the {threshold:.0f} % threshold the trigger fires nowhere — {n_hits} of {n_wing} "
-        f"control wing strike-sessions across {len(ctl)} sessions, and "
-        f"{int(ev[f'hits_{threshold:.0f}pct'])} of {int(ev['n_wing'])} on the event session "
-        f"itself.** A trigger with no false positives and no true positives is not a trigger; "
-        f"it is a threshold above the entire distribution. The sweep is what carries the "
-        f"information: at **50 %** the event fires {int(ev['hits_50pct'])} of "
-        f"{int(ev['n_wing'])} while the controls fire {int(ctl['hits_50pct'].sum())} of "
-        f"{n_wing}, and at **25 %** the event fires {int(ev['hits_25pct'])} against "
-        f"{int(ctl['hits_25pct'].sum())} for the controls. The event session is separable from "
-        f"an ordinary one — but only at a threshold that describes a ₹8 move on a ₹12 premium.",
+        f"**At the {threshold:.0f} % threshold the trigger fires nowhere — {n_hits} across "
+        f"{len(ctl)} control sessions, and {int(ev[f'hits_{threshold:.0f}pct'])} on the event "
+        f"session itself.** A trigger with neither false positives nor true positives is not a "
+        f"trigger; it is a threshold above the entire distribution.",
+        "",
+        f"**Lowering it does not rescue the trigger, once the hits are read by phase.** At "
+        f"25 % the event fires {int(ev['hits_25pct'])} against "
+        f"{int(ctl['hits_25pct'].sum())} for the controls — but only "
+        f"**{int(ev['crash_hits_25pct'])} of those {int(ev['hits_25pct'])} landed in the crash "
+        f"window**; {int(ev['postauction_hits_25pct'])} landed at 15:30–15:31, after matching "
+        f"began and as the close was being published. Those are not responses to the "
+        f"indicative. The genuine crash-window separation on the event session is "
+        f"**{int(ev['crash_hits_25pct'])} strike**, against a control maximum wing move of "
+        f"{ctl['max_wing_move_pct'].max():.1f} %.",
+        "",
+        f"**And {n_wing} is not a denominator.** Strikes within a session move together, so the "
+        f"independent unit is the session and there are {len(ctl)} of them. The per-strike "
+        f"counts are reported for transparency, not as a rate. One control also carries a "
+        f"caveat: the 2026-08-20 session's tree holds only the 3 Sep expiry, so it is a 14-day "
+        f"chain with 2 wing strikes rather than a tenor-matched control.",
         "",
         "---",
         "",
         "## 5. Verdict",
         "",
-        f"**Yes, the next-week wings repriced off the indicative — and the size of the "
-        f"repricing is the finding.** The deepest listed put moved "
-        f"{peak['crash_1518_1523_pct']:+.1f} % through the crash window and "
-        f"{peak['d_pct']:+.1f} % in its largest single traded minute "
-        f"(**{peak['strike']:,.0f} PE, ₹{peak['px_before']:.2f} → ₹{peak['px_spike']:.2f}** at "
-        f"{peak['spike_min']}, gap {peak['gap_min']:.0f} min), and the response decays "
-        f"monotonically as the strike approaches the money. The move is real, it is ordered, "
-        f"and **it is ₹{peak['d_rs']:.2f}**.",
+        "**One claim, not two.** The wings repriced — as *insurance getting dearer*, not as a "
+        "mark to the indicative. Those are the same finding, and the earlier framing that "
+        "asserted both a repricing and a market that 'never made an error' was asserting a "
+        "contradiction. What the chain shows is narrower and consistent:",
+        "",
+        f"- **What moved.** The wing bid rose broadly with depth (not monotonically — 75,200 "
+        f"outruns 74,900 and 75,000, and 75,600 outruns 75,500). The largest wing mover is "
+        f"**{peak['strike']:,.0f} PE**: ₹{peak['px_before']:.2f} → "
+        f"**₹{peak['px_spike']:.2f}** at **{peak['spike_min']}** "
+        f"({peak['d_pct']:+.1f} %, ₹{peak['d_rs']:+.2f}, gap {peak['gap_min']:.0f} min, "
+        f"{peak['vol_spike'] / session.lot_size:.0f} lots traded that minute). It had no print "
+        f"before {peak['crash_base_min']}, so its base is itself inside the dislocation and it "
+        f"is a thin contract: the level that actually held afterwards was about ₹20.",
+        f"- **Why it moved.** Not delta. The forward fell only "
+        f"{abs(fwd.iloc[0]['change_pts']):,.0f} points through the crash window "
+        f"({abs(fwd.iloc[0]['change_pts']) / 2199.72 * 100:.0f} % of the indicative's move), "
+        f"which at these deltas explains a rupee or two of an ₹5–9 move (§1.3.1). The rest is a "
+        f"volatility and skew bid — the wings got more expensive without the forward going "
+        f"anywhere near 74,983.",
+        f"- **When it moved.** Only {int(ev['crash_hits_25pct'])} wing strike cleared 25 % "
+        f"inside 15:18–15:23; {int(ev['postauction_hits_25pct'])} of the session's hits landed "
+        f"at 15:30–15:31, around the close publication, which an ordinary session also produces "
+        f"(§4).",
         "",
         f"**The Nifty comparison has to be made in rupees, not in the ratio.** At the same "
         f"moneyness Nifty's front put moved "
@@ -928,12 +1218,20 @@ def _render(
         "**No, there was no defined-risk trade with positive expectancy.** Three independent "
         "reasons, any one of which is sufficient:",
         "",
-        "1. **The reward is a rounding error and the risk is not.** Selling the largest spike "
-        "on the board and covering at the last bar returns "
-        f"₹{rr['reward_rs_per_lot'].max():.0f} per lot at best. Against the same-session "
-        "mark at the band floor the ratio is about **1 : 100**, and that denominator is "
-        "already the most flattering one available — it holds volatility flat across a "
-        "2,200-point move.",
+        f"1. **The reward is a rounding error and the risk is not.** Fading the headline spike "
+        f"— sell {peak['strike']:,.0f} PE at ₹{peak_fade['sold_at']:.2f} at "
+        f"{peak_fade['entry']}, cover at ₹{peak_fade['cover_px']:.2f} at "
+        f"{peak_fade['cover_at']} — returns **₹{peak_fade['reward_rs_per_lot']:.0f} per lot** "
+        f"against an adverse same-session mark of "
+        f"**₹{abs(peak_fade['adverse_rs_per_lot']):,.0f}**: **1 : "
+        f"{1 / peak_fade['reward_risk']:.0f}**. The best of the eight wing fades is "
+        f"{best_fade['strike']:,.0f} PE at ₹{best_fade['reward_rs_per_lot']:.0f} per lot "
+        f"(1 : {1 / best_fade['reward_risk']:.0f}). **Capacity cuts both ways and neither way "
+        f"helps.** The headline strike is far too thin to trade — "
+        f"{peak['vol_spike'] / session.lot_size:.0f} lots printed in its entry minute, so the "
+        f"spike is a couple of prints rather than a market. The strikes that do carry size "
+        f"(3,404 lots at 75,000 in its entry minute) show the same arithmetic at a worse "
+        f"ratio.",
         "2. **The risk is genuinely unbounded.** The band constrains today's auction close. "
         f"These are {session.expiry} contracts: they carry the overnight gap, and the "
         "band says nothing about it. The one structural feature that made the expiring-series "
@@ -943,12 +1241,13 @@ def _render(
         "handful of rupees, and the corpus is 8 control sessions. There is no sample here "
         "capable of estimating the false-positive rate of a trigger that loose.",
         "",
-        "**What the data says instead, and it is the stronger result:** the wings priced the "
-        "indicative as noise, correctly and immediately. At the indicative low every strike "
-        f"above {INDICATIVE_0827['low']:,.2f} was notionally in the money, yet none of them "
-        "traded within hundreds of rupees of that intrinsic (§1.3). The mispricing the thesis "
-        "needs — wings marked to a crash that was not going to happen — **is not present to "
-        "be traded.** The market never made the error.",
+        "**The reason there is nothing to fade:** the thesis needs wings *marked to a crash "
+        "that was not going to happen*, and that is not what happened. The forward never went "
+        f"near {INDICATIVE_0827['low']:,.2f} (§1), the wings never traded at the intrinsic that "
+        "level implies (§1.3), and what did move was a few rupees of volatility premium — which "
+        "is the correct response to a genuine spike in uncertainty about where the close would "
+        "print, and which was itself largely justified: the eventual close came in 249 points "
+        "below the 15:15 reference. There is a repricing here. There is no mispricing.",
         "",
         "### What is still missing",
         "",

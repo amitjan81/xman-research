@@ -21,7 +21,13 @@ import pytest
 RESEARCH_DIR = Path(__file__).resolve().parents[1] / "research" / "expiry_cas"
 sys.path.insert(0, str(RESEARCH_DIR))
 
-from wings import band_floor_bound, spike_table, traded_changes  # noqa: E402
+from wings import (  # noqa: E402
+    band_floor_bound,
+    delta_decomposition,
+    phase_of,
+    spike_table,
+    traded_changes,
+)
 
 
 def _minutes(*hhmm: str) -> pd.DatetimeIndex:
@@ -76,14 +82,20 @@ def test_single_traded_bar_yields_no_change():
 
 
 class _Session:
-    """Minimal stand-in carrying only what :func:`spike_table` reads."""
+    """Minimal stand-in carrying only what :func:`spike_table` reads.
 
-    def __init__(self, pe_close, pe_vol, implied_spot):
+    ``ref_spot`` is the cash level moneyness is struck on; it is a separate input from
+    ``implied_spot`` precisely because the two differ on a live chain, and a stub that
+    conflated them would hide the distinction the code depends on.
+    """
+
+    def __init__(self, pe_close, pe_vol, implied_spot, ref_spot=None):
         self.pe_close = pe_close
         self.pe_vol = pe_vol
         self.ce_close = pe_close
         self.ce_vol = pe_vol
         self.implied_spot = implied_spot
+        self.ref_spot = float(implied_spot.iloc[0]) if ref_spot is None else ref_spot
 
 
 def test_spike_retracement_and_wing_flag():
@@ -149,3 +161,71 @@ def test_expiry_window_constants_bracket_the_session():
 
     assert dt.time(15, 14) == WINDOW_START
     assert dt.time(15, 39) == WINDOW_END
+
+
+def test_retracement_is_undefined_at_or_before_the_spike_minute():
+    """A checkpoint at or before the spike cannot measure how much the spike reversed.
+
+    A spike at 15:31 has a 15:30 price that predates it. Reporting (peak - pre)/height
+    there yields exactly 100 %, which reads as "fully reversed" when nothing has reversed
+    at all — the artifact this guards against.
+    """
+    idx = _minutes("15:14", "15:30", "15:31", "15:35", "15:39")
+    close = pd.DataFrame({75000.0: [20.0, 14.0, 21.0, 18.0, 17.0]}, index=idx)
+    vol = pd.DataFrame({75000.0: [100.0, 100.0, 500.0, 100.0, 100.0]}, index=idx)
+    spot = pd.Series([100000.0] * len(idx), index=idx)
+
+    row = spike_table(_Session(close, vol, spot), "PE", wing_max_moneyness=0.98).iloc[0]
+
+    assert row["spike_min"] == "15:31"
+    assert np.isnan(row["reversal_15:30_pct"]), "a pre-spike checkpoint is not a retracement"
+    assert row["reversal_15:35_pct"] == pytest.approx(300.0 / 7.0)
+    assert row["phase"] == "post_auction"
+
+
+def test_phase_labels_split_the_crash_window_from_the_auction_window():
+    """The three phases are distinguished, because a move means a different thing in each."""
+    assert phase_of(_minutes("15:16")[0]) == "pre"
+    assert phase_of(_minutes("15:18")[0]) == "crash"
+    assert phase_of(_minutes("15:23")[0]) == "crash"
+    assert phase_of(_minutes("15:24")[0]) == "pre"
+    assert phase_of(_minutes("15:31")[0]) == "post_auction"
+
+
+def test_moneyness_is_struck_on_cash_not_on_the_parity_forward():
+    """A forward premium must not reclassify a strike as a wing.
+
+    With cash at 77,181 the 75,900 strike is moneyness 0.983 and outside a 0.98 wing cut.
+    Struck on a parity forward 289 points higher it would read 0.980 and fall inside — the
+    misclassification this pins.
+    """
+    idx = _minutes("15:14", "15:21")
+    close = pd.DataFrame({75900.0: [10.0, 20.0]}, index=idx)
+    vol = pd.DataFrame({75900.0: [100.0, 500.0]}, index=idx)
+    parity = pd.Series([77470.15, 77470.15], index=idx)
+
+    on_cash = spike_table(
+        _Session(close, vol, parity, ref_spot=77181.61), "PE", wing_max_moneyness=0.98
+    )
+    on_parity = spike_table(_Session(close, vol, parity), "PE", wing_max_moneyness=0.98)
+
+    assert not bool(on_cash.iloc[0]["is_wing"])
+    assert bool(on_parity.iloc[0]["is_wing"])
+
+
+def test_delta_decomposition_flags_a_wrong_signed_fit():
+    """A put whose fitted slope comes out positive is marked unusable rather than reported.
+
+    The premium here rises while the forward rises, which no put does; the fit has failed
+    and ``fit_ok`` is what stops the split being read.
+    """
+    idx = _minutes("15:14", "15:18", "15:19", "15:20", "15:21", "15:22", "15:23")
+    close = pd.DataFrame({75000.0: [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0]}, index=idx)
+    vol = pd.DataFrame({75000.0: [100.0] * 7}, index=idx)
+    parity = pd.Series([77000.0, 77010.0, 77020.0, 77030.0, 77040.0, 77050.0, 77060.0], index=idx)
+
+    out = delta_decomposition(_Session(close, vol, parity, ref_spot=77000.0), [75000.0])
+
+    assert len(out) == 1
+    assert out.iloc[0]["empirical_delta"] > 0
+    assert not bool(out.iloc[0]["fit_ok"])
