@@ -121,6 +121,12 @@ Because derivatives trade continuously to 15:40 (§0.0), **every option bar span
 
 **What this does not establish.** With n = 4 and one dislocated session, "the options market discounts indicative noise" is a single observation, not a rate. It says nothing about whether the discount can be traded: doing so requires taking the other side of the indicative, which means transacting in the auction, which is exactly the thing this feed cannot see (§1.6 f–h).
 
+## 0.4 The cross-index test — `CROSS_INDEX.md`
+
+§0.3 shows the Sensex options discounting the indicative crash. The natural follow-up is whether the dislocation is visible as a *divergence against Nifty*, which shares most of the same risk factors and had no auction dislocation that day. **`research/expiry_cas/CROSS_INDEX.md`** runs that test over the 16 post-CAS sessions where both underlyings carry a parity-recoverable chain, minute by minute across 15:15–15:39.
+
+The short version: the divergence is real but **small and non-reverting**. Peak `d` on 08-27 is **−280.60 points (−0.36 %)** against a published indicative dislocation of −2,199.72 points, so the derivatives carried **12.8 %** of it; **2026-08-04, an ordinary Nifty expiry, diverged more (−365.89)**; the largest |d| anywhere in the corpus is **0.465 %**, so the trigger thresholds the owner's strategies need (≥0.5 %) **never fire on any session**. The band-bounded wing trade collects 3.80 points against a 1,274.97-point capped loss, and every listed strike sits inside the ±3 % auction band, so the structural-overpricing scan is arithmetically guaranteed to return nothing — the 75,000 PE that moved is 900 points below the lowest strike in the corpus.
+
 ---
 
 # §1 — Sensex

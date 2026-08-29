@@ -4,7 +4,7 @@ Sessions with a divergence series: **16** of 19.
 
 ## Beta (Sensex on Nifty, daily log returns, 08-27 excluded)
 
-beta = **0.8703** (SE 0.0853), R² = **0.7763**, n = 32, 2026-07-14 … 2026-08-26
+beta = **0.8703** (SE 0.0853), R2 = **0.7763**, n = 32, 2026-07-14 .. 2026-08-26
 
 ## Coverage
 

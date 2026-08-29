@@ -1,6 +1,6 @@
 """Cross-index divergence between Sensex and Nifty across the closing-auction window.
 
-Run: ``uv run python research/expiry_cas/cross_index.py --outdir research/expiry_cas/fig/cross_index``
+Run: ``uv run python research/expiry_cas/cross_index.py``
 
 **The question.** Cash trading ends 15:15 and the closing auction clears at 15:30-15:35,
 but equity derivatives trade continuously to 15:40. So for twenty-five minutes there are
@@ -126,9 +126,7 @@ def implied_index(session: SessionData) -> ImpliedIndex | None:
     frame = _implied_by_strike(session)
     if frame.empty:
         return None
-    window = frame[
-        (frame["ts"].dt.time >= dt.time(15, 0)) & (frame["ts"].dt.time <= WINDOW_END)
-    ]
+    window = frame[(frame["ts"].dt.time >= dt.time(15, 0)) & (frame["ts"].dt.time <= WINDOW_END)]
     if window.empty:
         return None
     counts = window.groupby("strike")["implied"].size()
@@ -294,7 +292,9 @@ def divergence_row(
         "d_peak": peak,
         "d_peak_pct": float(frame.loc[peak_idx, "d_pct"]),
         "t_peak": peak_idx.strftime("%H:%M"),
-        "d_peak_clean": float(clean.loc[peak_clean, "d_points"]) if peak_clean is not None else np.nan,
+        "d_peak_clean": (
+            float(clean.loc[peak_clean, "d_points"]) if peak_clean is not None else np.nan
+        ),
         # The owner's thesis is a statement about the two indices separately — one moved,
         # the other did not — so both raw moves are carried beside the divergence.
         "s_chg_pct": 100.0 * (float(frame["s_imp"].iloc[-1]) / sensex.reference - 1.0),
@@ -546,7 +546,7 @@ def strategy_paired_spread(
 
     hedge_lots = max(
         1,
-        int(round(beta * sensex.reference * s_sess.lot_size / (nifty.reference * n_sess.lot_size))),
+        round(beta * sensex.reference * s_sess.lot_size / (nifty.reference * n_sess.lot_size)),
     )
     s_move = (s_exit[0] - s_entry[0]) * (-direction)
     n_move = (n_exit[0] - n_entry[0]) * direction
@@ -650,7 +650,7 @@ def make_figures(
         ax.axhline(level, color="steelblue", ls=":", lw=0.9)
     ax.set_xticks([915, 920, 925, 930, 935, 939])
     ax.set_xticklabels(["15:15", "15:20", "15:25", "15:30", "15:35", "15:39"])
-    ax.set_ylabel("d = S_imp − S_fair  (% of fair)")
+    ax.set_ylabel("d = S_imp - S_fair  (% of fair)")
     ax.set_title("Sensex vs Nifty-implied fair value through the auction window (19 sessions)")
     ax.legend(loc="lower left", fontsize=8)
     fig.tight_layout()
@@ -682,8 +682,13 @@ def make_figures(
 
     fig, ax = plt.subplots(figsize=(9, 4))
     idx = np.arange(len(bands))
-    ax.bar(idx, bands["ladder_high_pct"] - bands["ladder_low_pct"],
-           bottom=bands["ladder_low_pct"], color="steelblue", label="strike ladder (ATM±10)")
+    ax.bar(
+        idx,
+        bands["ladder_high_pct"] - bands["ladder_low_pct"],
+        bottom=bands["ladder_low_pct"],
+        color="steelblue",
+        label="strike ladder (ATM±10)",
+    )
     ax.axhline(3.0, color="crimson", ls="--", label="auction band ±3 %")
     ax.axhline(-3.0, color="crimson", ls="--")
     ax.set_xticks(idx)
@@ -734,16 +739,10 @@ def main() -> None:
         date: divergence(s_imp, n_imp, beta_fit.beta) for date, (s_imp, n_imp) in implied.items()
     }
     frames = {d: f for d, f in frames.items() if not f.empty}
-    frames_unit = {
-        date: divergence(s_imp, n_imp, 1.0) for date, (s_imp, n_imp) in implied.items()
-    }
+    frames_unit = {date: divergence(s_imp, n_imp, 1.0) for date, (s_imp, n_imp) in implied.items()}
 
-    div = pd.DataFrame(
-        [divergence_row(d, *implied[d], frames[d]) for d in frames]
-    )
-    div_unit = pd.DataFrame(
-        [divergence_row(d, *implied[d], frames_unit[d]) for d in frames]
-    )
+    div = pd.DataFrame([divergence_row(d, *implied[d], frames[d]) for d in frames])
+    div_unit = pd.DataFrame([divergence_row(d, *implied[d], frames_unit[d]) for d in frames])
     bands = pd.DataFrame([band_row(implied[d][0]) for d in frames])
     over = pd.concat(
         [structural_overpricing(implied[d][0]).assign(date=d) for d in frames], ignore_index=True
@@ -794,8 +793,9 @@ def main() -> None:
         "",
         "## Beta (Sensex on Nifty, daily log returns, 08-27 excluded)",
         "",
-        f"beta = **{beta_fit.beta:.4f}** (SE {beta_fit.stderr:.4f}), R² = **{beta_fit.r_squared:.4f}**, "
-        f"n = {beta_fit.n}, {beta_fit.first} … {beta_fit.last}",
+        f"beta = **{beta_fit.beta:.4f}** (SE {beta_fit.stderr:.4f}), "
+        f"R2 = **{beta_fit.r_squared:.4f}**, n = {beta_fit.n}, "
+        f"{beta_fit.first} .. {beta_fit.last}",
         "",
         "## Coverage",
         "",
