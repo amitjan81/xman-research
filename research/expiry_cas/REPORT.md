@@ -104,7 +104,7 @@ Reliance minute bars summed over the day against the same day's daily candle vol
 
 Because derivatives trade continuously to 15:40 (§0.0), **every option bar spanning the 15:18–15:23 indicative collapse is a live trade.** The option-implied index — the anchor pair's parity level, computed only from strike-minutes where both legs printed volume — is therefore a *traded* opinion about where the auction would clear, published minute by minute while the indicative was in free fall. That comparison is the one measurement this corpus supports that no amount of index data would give:
 
-| Session | max \|implied − close\| 15:15–15:39 | at | implied − close @15:29 | @15:30 |
+| Session | max \|implied − reference\| 15:15–15:39 (reference = official close for 08-27, own 15:39 level otherwise) | at | implied − reference @15:29 | @15:30 |
 |---|---|---|---|---|
 | 2026-08-06 | 278.70 | 15:24 | +0.60 | +0.05 |
 | 2026-08-13 | 233.15 | 15:22 | −0.25 | −0.45 |
@@ -115,7 +115,7 @@ Because derivatives trade continuously to 15:40 (§0.0), **every option bar span
 
 **Three things follow.**
 
-1. **The derivatives market treated the indicative crash as auction noise, and was right.** At its extreme the indicative sat **1,950.40 points** below the eventual close (74,983.19 vs 76,933.59). The option-implied index was never more than **334.36** points away from it. The options market therefore discounted about **83%** of the indicative dislocation in real time — and the close proved the options right, not the indicative.
+1. **The derivatives market treated the indicative crash as auction noise, and was right.** At its extreme the indicative sat **1,950.40 points below** the eventual close (74,983.19 vs 76,933.59). Through 15:18–15:23 the option-implied index sat **229–334 points above** that same close and moved barely 100 points in total — it did not follow the indicative down at all. The two series were on opposite sides of the close by a combined ~2,200 points, and the close proved the options right, not the indicative.
 2. **On 08-27 the derivatives market looked ordinary.** Its 334.36-point maximum tracking error is in line with 278.70 and 233.15 on two other post-CAS expiries. A trader watching only the option chain would not have seen a crash that day; a trader watching the indicative index would have seen a 2,200-point one.
 3. **The 15:29 print is a forecast, not a stamp.** The implied level matched the official close to **0.01 of a point** at 15:29 — before matching had even begun, and roughly **six minutes** before the close was published at ≈15:35. That number comes from option prices that traded in that minute, so unlike the feed's 15:29 index print (which the vendor back-stamps, §1.3) it is a genuine live quantity. The mechanism is not mysterious: the exchange disseminates indicative equilibrium prices through CAS, and by 15:29 order entry has closed, so the clearing price is derivable from the book by anyone watching it. **What is notable is the accuracy, not the possibility.**
 
