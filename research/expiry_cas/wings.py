@@ -673,6 +673,11 @@ def build_report(
             row[f"{tag}_dte"] = sess.days_to_expiry
             row[f"{tag}_max_1min_pct"] = float(ch["d_pct"].max()) if len(ch) else np.nan
             row[f"{tag}_base_min"] = base_min
+            # The rupee levels travel with the percentage. At these moneynesses an option
+            # can cost ₹1.60, where a single tick is a double-digit percentage and a ratio
+            # of two such percentages is a ratio of ticks rather than of repricings.
+            row[f"{tag}_base_px"] = base_px if base_px is not None else np.nan
+            row[f"{tag}_crash_px"] = float(crash.max()) if len(crash) else np.nan
             row[f"{tag}_1518_1523_pct"] = (
                 (float(crash.max()) / base_px - 1.0) * 100.0
                 if len(crash) and base_px is not None
@@ -903,8 +908,22 @@ def _render(
         f"(**{peak['strike']:,.0f} PE, ₹{peak['px_before']:.2f} → ₹{peak['px_spike']:.2f}** at "
         f"{peak['spike_min']}, gap {peak['gap_min']:.0f} min), and the response decays "
         f"monotonically as the strike approaches the money. The move is real, it is ordered, "
-        f"it is {asymmetry:.0f}× the same-moneyness Nifty response, "
         f"and **it is ₹{peak['d_rs']:.2f}**.",
+        "",
+        f"**The Nifty comparison has to be made in rupees, not in the ratio.** At the same "
+        f"moneyness Nifty's front put moved "
+        f"₹{deepest.get('nifty_front_base_px', float('nan')):.2f} → "
+        f"₹{deepest.get('nifty_front_crash_px', float('nan')):.2f}, which is nominally "
+        f"{asymmetry:.0f}× smaller in percentage terms — but it is **one tick on a "
+        f"₹{deepest.get('nifty_front_base_px', float('nan')):.2f} option**, and a ratio of two "
+        f"such percentages is a ratio of ticks. The comparison that carries weight is the "
+        f"12-day Nifty put, whose premium "
+        f"(₹{deepest.get('nifty_next_base_px', float('nan')):.2f}) is within striking distance "
+        f"of the Sensex wing's ₹{peak['px_before']:.2f}: it moved "
+        f"₹{deepest.get('nifty_next_crash_px', float('nan')) - deepest.get('nifty_next_base_px', float('nan')):.2f} "
+        f"against the Sensex wing's ₹{peak['d_rs']:.2f}. Sensex's wing repriced roughly an "
+        f"order of magnitude harder than Nifty's on a comparable premium — and both moves are "
+        f"small enough that the whole comparison lives inside a few rupees.",
         "",
         "**No, there was no defined-risk trade with positive expectancy.** Three independent "
         "reasons, any one of which is sufficient:",

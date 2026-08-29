@@ -151,14 +151,14 @@ A percentage on an ₹12 premium is a few ticks, so the same scan is ranked by m
 
 Nifty's front expiry is a Tuesday weekly, so its tenor does not match Sensex's 7 days. Both Nifty expiries are shown so the comparison cannot be read as a tenor artifact. `*_1518_1523_pct` is the largest traded premium in 15:18–15:23 against the same strike's 15:14 price — the crash window itself.
 
-| moneyness | sensex_K | sensex_dte | sensex_max_1min_pct | sensex_base_min | sensex_1518_1523_pct | nifty_front_K | nifty_front_dte | nifty_front_max_1min_pct | nifty_front_base_min | nifty_front_1518_1523_pct | nifty_next_K | nifty_next_dte | nifty_next_max_1min_pct | nifty_next_base_min | nifty_next_1518_1523_pct |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 0.96 | 74700.00 | 7 | 66.81 | 15:20 | 76.72 | 23250.00 | 5 | 12.50 | 15:14 | 6.25 | 23250.00 | 12 | 6.67 | 15:15 | 3.12 |
-| 0.97 | 75100.00 | 7 | 22.51 | 15:14 | 24.26 | 23500.00 | 5 | 10.94 | 15:14 | 1.56 | 23500.00 | 12 | 6.12 | 15:14 | 3.39 |
-| 0.97 | 75500.00 | 7 | 20.97 | 15:14 | 24.78 | 23600.00 | 5 | 13.25 | 15:14 | 1.19 | 23650.00 | 12 | 8.11 | 15:14 | 3.81 |
-| 0.98 | 75900.00 | 7 | 15.32 | 15:14 | 15.38 | 23750.00 | 5 | 13.33 | 15:14 | 4.55 | 23750.00 | 12 | 8.62 | 15:14 | 3.07 |
-| 0.98 | 76300.00 | 7 | 11.55 | 15:14 | 11.38 | 23850.00 | 5 | 13.60 | 15:14 | 5.43 | 23900.00 | 12 | 5.56 | 15:14 | 3.85 |
-| 0.99 | 76700.00 | 7 | 10.99 | 15:14 | 7.67 | 23950.00 | 5 | 10.84 | 15:14 | 6.81 | 24000.00 | 12 | 6.26 | 15:14 | 3.81 |
+| moneyness | sensex_K | sensex_dte | sensex_max_1min_pct | sensex_base_min | sensex_base_px | sensex_crash_px | sensex_1518_1523_pct | nifty_front_K | nifty_front_dte | nifty_front_max_1min_pct | nifty_front_base_min | nifty_front_base_px | nifty_front_crash_px | nifty_front_1518_1523_pct | nifty_next_K | nifty_next_dte | nifty_next_max_1min_pct | nifty_next_base_min | nifty_next_base_px | nifty_next_crash_px | nifty_next_1518_1523_pct |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0.96 | 74700.00 | 7 | 66.81 | 15:20 | 11.60 | 20.50 | 76.72 | 23250.00 | 5 | 12.50 | 15:14 | 1.60 | 1.70 | 6.25 | 23250.00 | 12 | 6.67 | 15:15 | 8.00 | 8.25 | 3.12 |
+| 0.97 | 75100.00 | 7 | 22.51 | 15:14 | 20.20 | 25.10 | 24.26 | 23500.00 | 5 | 10.94 | 15:14 | 3.20 | 3.25 | 1.56 | 23500.00 | 12 | 6.12 | 15:14 | 14.75 | 15.25 | 3.39 |
+| 0.97 | 75500.00 | 7 | 20.97 | 15:14 | 29.05 | 36.25 | 24.78 | 23600.00 | 5 | 13.25 | 15:14 | 4.20 | 4.25 | 1.19 | 23650.00 | 12 | 8.11 | 15:14 | 22.30 | 23.15 | 3.81 |
+| 0.98 | 75900.00 | 7 | 15.32 | 15:14 | 48.10 | 55.50 | 15.38 | 23750.00 | 5 | 13.33 | 15:14 | 7.70 | 8.05 | 4.55 | 23750.00 | 12 | 8.62 | 15:14 | 30.95 | 31.90 | 3.07 |
+| 0.98 | 76300.00 | 7 | 11.55 | 15:14 | 84.35 | 93.95 | 11.38 | 23850.00 | 5 | 13.60 | 15:14 | 12.90 | 13.60 | 5.43 | 23900.00 | 12 | 5.56 | 15:14 | 52.00 | 54.00 | 3.85 |
+| 0.99 | 76700.00 | 7 | 10.99 | 15:14 | 149.95 | 161.45 | 7.67 | 23950.00 | 5 | 10.84 | 15:14 | 22.75 | 24.30 | 6.81 | 24000.00 | 12 | 6.26 | 15:14 | 73.55 | 76.35 | 3.81 |
 
 Figure: `fig/wings/cross_index_wing_2026-08-27.png`.
 
@@ -186,7 +186,9 @@ The wing is every put with moneyness ≤ **0.98** against that session's own 15:
 
 ## 5. Verdict
 
-**Yes, the next-week wings repriced off the indicative — and the size of the repricing is the finding.** The deepest listed put moved +76.7 % through the crash window and +66.8 % in its largest single traded minute (**74,700 PE, ₹11.60 → ₹19.35** at 15:21, gap 1 min), and the response decays monotonically as the strike approaches the money. The move is real, it is ordered, it is 12× the same-moneyness Nifty response, and **it is ₹7.75**.
+**Yes, the next-week wings repriced off the indicative — and the size of the repricing is the finding.** The deepest listed put moved +76.7 % through the crash window and +66.8 % in its largest single traded minute (**74,700 PE, ₹11.60 → ₹19.35** at 15:21, gap 1 min), and the response decays monotonically as the strike approaches the money. The move is real, it is ordered, and **it is ₹7.75**.
+
+**The Nifty comparison has to be made in rupees, not in the ratio.** At the same moneyness Nifty's front put moved ₹1.60 → ₹1.70, which is nominally 12× smaller in percentage terms — but it is **one tick on a ₹1.60 option**, and a ratio of two such percentages is a ratio of ticks. The comparison that carries weight is the 12-day Nifty put, whose premium (₹8.00) is within striking distance of the Sensex wing's ₹11.60: it moved ₹0.25 against the Sensex wing's ₹7.75. Sensex's wing repriced roughly an order of magnitude harder than Nifty's on a comparable premium — and both moves are small enough that the whole comparison lives inside a few rupees.
 
 **No, there was no defined-risk trade with positive expectancy.** Three independent reasons, any one of which is sufficient:
 
