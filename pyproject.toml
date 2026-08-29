@@ -34,7 +34,11 @@ build-backend = "hatchling.build"
 packages = ["src/xman_research"]
 
 [dependency-groups]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+dev = [
+    "matplotlib>=3.11.1",
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
