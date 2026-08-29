@@ -935,6 +935,10 @@ def _render(
     wing_puts = puts[puts["is_wing"]]
     peak = wing_puts.nlargest(1, "d_pct").iloc[0]
     crash_wings = wing_puts[wing_puts["phase"] == "crash"]
+    # Strikes with a genuine pre-crash print. The headline strike does not have one, so
+    # its base sits inside the dislocation and its percentage is not on the same footing
+    # as a control's — these are, and the cross-index claim is made on them.
+    clean = wing_puts[wing_puts["crash_base_min"] <= "15:14"]
     best_fade = rr.loc[rr["reward_rs_per_lot"].idxmax()]
     peak_fade = rr[(rr["strike"] == peak["strike"]) & (rr["cover_at"] == "15:39")]
     peak_fade = peak_fade.iloc[0] if len(peak_fade) else best_fade
@@ -1200,20 +1204,28 @@ def _render(
         f"at 15:30–15:31, around the close publication, which an ordinary session also produces "
         f"(§4).",
         "",
-        f"**The Nifty comparison has to be made in rupees, not in the ratio.** At the same "
-        f"moneyness Nifty's front put moved "
+        f"**The Nifty comparison, made on strikes that can carry it.** The headline 74,700 is "
+        f"the wrong numerator for a cross-index claim: it has no pre-crash print (its base is "
+        f"{peak['crash_base_min']}, inside the dislocation), {peak['vol_spike'] / session.lot_size:.0f} "
+        f"lots traded in its spike minute, and its delta fit fails (§1.3.1). Both Nifty legs "
+        f"base cleanly at 15:14, so the like-for-like comparison uses the "
+        f"{len(clean)} Sensex wing strikes that also base at or before 15:14: their median "
+        f"crash-window move is **{clean['crash_1518_1523_pct'].median():+.1f} %** "
+        f"(₹{clean['px_1514'].mul(clean['crash_1518_1523_pct'] / 100.0).median():.2f} on "
+        f"premiums of ₹{clean['px_1514'].min():.0f}–{clean['px_1514'].max():.0f}), measured "
+        f"inside 15:18-15:23 rather than over the whole window.",
+        "",
+        f"Against that: Nifty's **front** put at the same moneyness moved "
         f"₹{deepest.get('nifty_front_base_px', float('nan')):.2f} → "
-        f"₹{deepest.get('nifty_front_crash_px', float('nan')):.2f}, which is nominally "
-        f"{asymmetry:.0f}× smaller in percentage terms — but it is **one tick on a "
-        f"₹{deepest.get('nifty_front_base_px', float('nan')):.2f} option**, and a ratio of two "
-        f"such percentages is a ratio of ticks. The comparison that carries weight is the "
-        f"12-day Nifty put, whose premium "
-        f"(₹{deepest.get('nifty_next_base_px', float('nan')):.2f}) is within striking distance "
-        f"of the Sensex wing's ₹{peak['px_before']:.2f}: it moved "
-        f"₹{deepest.get('nifty_next_crash_px', float('nan')) - deepest.get('nifty_next_base_px', float('nan')):.2f} "
-        f"against the Sensex wing's ₹{peak['d_rs']:.2f}. Sensex's wing repriced roughly an "
-        f"order of magnitude harder than Nifty's on a comparable premium — and both moves are "
-        f"small enough that the whole comparison lives inside a few rupees.",
+        f"₹{deepest.get('nifty_front_crash_px', float('nan')):.2f} — **one tick on a "
+        f"₹{deepest.get('nifty_front_base_px', float('nan')):.2f} option**, so the nominal "
+        f"{asymmetry:.0f}× is a ratio of ticks and carries nothing. Nifty's **12-day** put is "
+        f"the usable comparator at ₹{deepest.get('nifty_next_base_px', float('nan')):.2f}: it "
+        f"moved ₹{deepest.get('nifty_next_crash_px', float('nan')) - deepest.get('nifty_next_base_px', float('nan')):.2f} "
+        f"(**{deepest.get('nifty_next_1518_1523_pct', float('nan')):+.1f} %**). So Sensex's "
+        f"wings repriced roughly **five times harder in percentage terms** and an order of "
+        f"magnitude more in rupees — a real asymmetry, and one that still lives inside a few "
+        f"rupees per contract.",
         "",
         "**No, there was no defined-risk trade with positive expectancy.** Three independent "
         "reasons, any one of which is sufficient:",
