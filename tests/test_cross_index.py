@@ -27,6 +27,7 @@ sys.path.insert(0, str(RESEARCH_DIR))
 from cross_index import (  # noqa: E402
     BAND,
     ImpliedIndex,
+    _closure_by_match_end,
     divergence,
     implied_index,
     structural_overpricing,
@@ -205,3 +206,28 @@ def test_a_put_priced_below_its_band_bounded_maximum_is_not_flagged() -> None:
 def test_no_price_is_structurally_overpriced_on_a_chain_that_does_not_expire_today() -> None:
     """The band bounds today's close; tomorrow's gap is unbounded, so no cap applies."""
     assert _overpricing_session(2_500.0, expiry=dt.date(2026, 9, 3)).empty
+
+
+# ------------------------------------------------------------------- closure statistic
+
+
+def test_a_widening_divergence_reports_no_closure() -> None:
+    """A series still widening at the last bar has reverted by nothing, not by a little.
+
+    Taking the peak over the whole window while measuring the level at 15:35 would divide
+    an earlier value by a later maximum and report a positive fraction here.
+    """
+    levels = {dt.time(15, 20): 0.0, dt.time(15, 35): 100.0, dt.time(15, 39): 400.0}
+    sensex = _implied({t: 77_000.0 + v for t, v in levels.items()}, reference=77_000.0)
+    nifty = _implied({t: 24_000.0 for t in levels}, reference=24_000.0)
+    frame = divergence(sensex, nifty, beta=1.0)
+    assert _closure_by_match_end(frame) == pytest.approx(0.0)
+
+
+def test_closure_is_measured_against_the_peak_reached_by_match_end() -> None:
+    """Half of the divergence built up by 15:35 having closed reads as 50 %."""
+    levels = {dt.time(15, 20): 200.0, dt.time(15, 35): 100.0}
+    sensex = _implied({t: 77_000.0 + v for t, v in levels.items()}, reference=77_000.0)
+    nifty = _implied({t: 24_000.0 for t in levels}, reference=24_000.0)
+    frame = divergence(sensex, nifty, beta=1.0)
+    assert _closure_by_match_end(frame) == pytest.approx(50.0)

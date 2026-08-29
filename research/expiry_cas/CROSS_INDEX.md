@@ -27,31 +27,33 @@ Both indices are recovered by put-call parity, `S = C − P + K`, at **one strik
 
 `d` in Sensex points. Positive = Sensex rich against Nifty-implied fair. `s_chg` / `n_chg` are each index's own implied move 15:14 → 15:39, which is the quantity the owner's thesis is stated in. **Q** = quarantined session.
 
-| Session | S expiry | N expiry | d peak | % | at | d @15:30 | d @15:35 | d @15:39 | reverted by 15:35 | s_chg % | n_chg % |
+| Session | S expiry | N expiry | d peak | % | at | d @15:30 | d @15:35 | d @15:39 | closed by 15:35 | s_chg % | n_chg % |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 2026-08-03 | | | −45.88 | −0.06 | 15:38 | −14.61 | −17.28 | −35.74 | 62.3 % | +0.03 | +0.09 |
-| **2026-08-04** | | ✓ | **−365.89** | **−0.46** | 15:39 | −320.45 | −356.71 | −365.89 | 2.5 % | −0.03 | **+0.50** |
+| 2026-08-03 | | | −45.88 | −0.06 | 15:38 ▲ | −14.61 | −17.28 | −35.74 | 17.9 % | +0.03 | +0.09 |
+| **2026-08-04** | | ✓ | **−365.89** | **−0.46** | 15:39 ▲ | −320.45 | −356.71 | −365.89 | 2.4 % | −0.03 | **+0.50** |
 | 2026-08-05 | | | −75.18 | −0.10 | 15:15 | −30.87 | −45.65 | −43.72 | 39.3 % | −0.15 | −0.11 |
 | 2026-08-06 | ✓ | | +325.28 | +0.41 | 15:24 | +54.66 | +64.88 | +57.55 | 80.1 % | +0.08 | +0.00 |
 | 2026-08-07 | | | +22.53 | +0.03 | 15:15 | −0.15 | +10.84 | +21.43 | 51.9 % | +0.01 | −0.02 |
-| 2026-08-10 | | | −19.15 | −0.02 | 15:37 | −2.17 | −12.71 | −11.30 | 33.6 % | −0.05 | −0.04 |
-| 2026-08-11 | | ✓ | −54.82 | −0.07 | 15:38 | −13.40 | −41.37 | −54.52 | 24.5 % | −0.10 | −0.03 |
+| 2026-08-10 | | | −19.15 | −0.02 | 15:37 ▲ | −2.17 | −12.71 | −11.30 | **0.0 %** | −0.05 | −0.04 |
+| 2026-08-11 | | ✓ | −54.82 | −0.07 | 15:38 ▲ | −13.40 | −41.37 | −54.52 | 17.3 % | −0.10 | −0.03 |
 | 2026-08-12 | | | +19.69 | +0.03 | 15:27 | +10.37 | +16.63 | +13.84 | 15.5 % | +0.04 | +0.03 |
-| 2026-08-13 | ✓ | | +215.95 | +0.28 | 15:38 | +205.30 | +205.66 | +215.92 | 4.8 % | +0.27 | −0.01 |
-| 2026-08-14 | | | −18.62 | −0.02 | 15:39 | −3.76 | −4.96 | −18.62 | 73.4 % | −0.04 | −0.02 |
+| 2026-08-13 | ✓ | | +215.95 | +0.28 | 15:38 ▲ | +205.30 | +205.66 | +215.92 | **0.0 %** | +0.27 | −0.01 |
+| 2026-08-14 | | | −18.62 | −0.02 | 15:39 ▲ | −3.76 | −4.96 | −18.62 | **0.0 %** | −0.04 | −0.02 |
 | 2026-08-17 | | | −10.83 | −0.01 | 15:25 | −1.24 | −0.82 | −4.76 | 92.4 % | −0.14 | −0.16 |
 | 2026-08-18 | | ✓ | +117.30 | +0.15 | 15:27 | +75.60 | +43.65 | −5.75 | 62.8 % | −0.15 | −0.16 |
-| 2026-08-19 | | | −25.59 | −0.03 | 15:39 | −9.92 | −12.26 | −25.59 | 52.1 % | −0.03 | +0.00 |
+| 2026-08-19 | | | −25.59 | −0.03 | 15:39 ▲ | −9.92 | −12.26 | −25.59 | 42.9 % | −0.03 | +0.00 |
 | 2026-08-25 **Q** | | ✓ | −185.78 | −0.24 | 15:28 | −157.48 | −101.28 | −99.88 | 45.5 % | +0.14 | +0.31 |
 | 2026-08-26 | | | −72.19 | −0.09 | 15:29 | −47.25 | −57.30 | −50.73 | 20.6 % | −0.25 | −0.21 |
 | **2026-08-27** | ✓ | | **−280.60** | **−0.36** | 15:27 | −227.00 | −193.28 | −195.16 | 31.1 % | **−0.40** | −0.17 |
+
+**Closure is measured against the peak reached by 15:35, not the peak over the whole window.** ▲ marks the seven sessions whose largest divergence arrives *after* matching ends — for those, a full-window peak divided by the 15:35 level would not be a reversion statistic at all, and would report a still-widening session as partly reverted. Under the correct definition three of them close by exactly nothing.
 
 Every session carries the full **25 of 25** minutes with **zero fallback minutes** — the fixed strike traded every minute of 15:15–15:39 on both indices, on all 16 sessions.
 
 **Three readings.**
 
 - **08-27 is not the extreme session.** The largest divergence in the corpus is **2026-08-04 at −365.89 points**, an ordinary Nifty expiry Tuesday, and it is driven entirely by the Nifty leg (+0.50 % while Sensex was flat) — an expiry pin on the *other* index, not a Sensex dislocation. A live detector keyed on |d| would have ranked the crash day **second**.
-- **Divergence does not reliably revert.** Median closure by 15:35 across the four largest sessions is **17.9 %**; on 08-04 and 08-13 essentially none of it closed inside the window. Reversion of the auction dislocation, if it happens, happens *after* the derivatives session ends.
+- **Divergence does not reliably revert.** Median closure by 15:35 across the four largest sessions is **16.7 %**, and on 08-10, 08-13 and 08-14 it is **exactly zero** — those sessions were at their widest at 15:35 and still widening. Reversion of the auction dislocation, if it happens, happens *after* the derivatives session ends.
 - **Both indices moved on 08-27.** The thesis's "Nifty didn't move" is true of the published Nifty *auction indicative* (−0.31 %) and false of Nifty's traded option-implied index over the same minutes (−0.17 %, against Sensex's −0.40 %). The asymmetry is real but is ~180 points, not ~2,200.
 
 ### |d| distribution, all 400 session-minutes
@@ -68,9 +70,9 @@ The 95th percentile of divergence is smaller than the smallest threshold the bri
 
 |d| ≥ X, over 16 sessions / 400 minutes:
 
-| X | sessions fired | trigger minutes | median run | median % closed by 15:35 | sessions |
+| X | sessions fired | trigger minutes | median of per-session longest run | median % closed by 15:35 | sessions |
 |---|---|---|---|---|---|
-| **0.25 %** *(exploratory, post-hoc)* | 4 / 16 | 37 | 10.5 min | 17.9 % | 08-04, 08-06, 08-13, **08-27** |
+| **0.25 %** *(exploratory, post-hoc)* | 4 / 16 | 37 | 10.5 min | 16.7 % | 08-04, 08-06, 08-13, **08-27** |
 | **0.50 %** | **0** / 16 | 0 | — | — | — |
 | **1.00 %** | **0** / 16 | 0 | — | — | — |
 | **1.50 %** | **0** / 16 | 0 | — | — | — |
@@ -172,6 +174,8 @@ Three NIFTY sessions are in the **published** corpus carrying calls only. Put-ca
 - **Structural overpricing is only defined on expiry sessions** — 08-06, 08-13, 08-27 for Sensex. On a chain with days to run no price can be called structurally too high, because the band does not bound tomorrow's gap.
 - **The parity level carries a forward bias on non-expiring chains.** It cancels to first order in the ratio to each index's own 15:14 reference, which is why levels are never compared across underlyings. It does not cancel exactly, and no bound on the residual is established here.
 - **BSE exchange transaction charges are substituted with NSE's.** The stack carries no BSE schedule; the direction of the error is unknown.
+- **"Closed by 15:35" is peak-to-15:35 within 15:15–15:35 only**, and says nothing about what happened after the derivatives session ended — which, given seven sessions peak in the last four minutes, is where any real reversion would have to live. The corpus ends at 15:39 and cannot follow it.
+- **"Median of per-session longest run"** is exactly that — the median across sessions of each session's longest unbroken trigger run. It is not the median length of a run, and it overstates typical persistence if read as one.
 - **`s_chg` / `n_chg` are implied moves, not index moves.** The traded index level does not exist in 15:15–15:39 on either underlying; that is the premise of the whole exercise.
 
 ---

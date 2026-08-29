@@ -272,6 +272,23 @@ def _at(frame: pd.DataFrame, column: str, when: dt.time) -> float:
     return float(rows[column].iloc[-1]) if len(rows) else float("nan")
 
 
+def _closure_by_match_end(frame: pd.DataFrame) -> float:
+    """Fraction of the divergence built up by 15:35 that had closed again by 15:35.
+
+    The peak is taken over minutes **at or before** 15:35, not over the whole window. A
+    peak set at 15:38 measured against the level at 15:35 is not a reversion statistic at
+    all — it divides an earlier value by a later maximum, and reports a session whose
+    divergence was still widening at the last bar as having partly reverted.
+    """
+    upto = frame[frame.index.time <= MATCH_END]
+    if upto.empty:
+        return float("nan")
+    peak = float(upto.loc[upto["d_points"].abs().idxmax(), "d_points"])
+    if not peak:
+        return float("nan")
+    return 100.0 * (1.0 - abs(float(upto["d_points"].iloc[-1])) / abs(peak))
+
+
 def divergence_row(
     date: dt.date, sensex: ImpliedIndex, nifty: ImpliedIndex, frame: pd.DataFrame
 ) -> dict[str, object]:
@@ -280,6 +297,7 @@ def divergence_row(
     peak_clean = clean["d_points"].abs().idxmax() if len(clean) else None
     d35 = _at(frame, "d_points", MATCH_END)
     peak = float(frame.loc[peak_idx, "d_points"])
+    closure = _closure_by_match_end(frame)
     return {
         "date": date,
         "s_expiry": sensex.session.is_expiry_session,
@@ -302,7 +320,8 @@ def divergence_row(
         "d_1530": _at(frame, "d_points", dt.time(15, 30)),
         "d_1535": d35,
         "d_1539": _at(frame, "d_points", WINDOW_END),
-        "reverted_pct": 100.0 * (1.0 - abs(d35) / abs(peak)) if peak else np.nan,
+        "peak_after_match": peak_idx.time() > MATCH_END,
+        "reverted_pct": closure,
     }
 
 
@@ -590,18 +609,16 @@ def trigger_stats(frames: dict[dt.date, pd.DataFrame], threshold_pct: float) -> 
             run = run + 1 if value else 0
             longest = max(longest, run)
         runs.append(longest)
-        peak_idx = frame["d_points"].abs().idxmax()
-        peak = float(frame.loc[peak_idx, "d_points"])
-        d35 = _at(frame, "d_points", MATCH_END)
-        if peak:
-            closed.append(1.0 - abs(d35) / abs(peak))
+        closure = _closure_by_match_end(frame)
+        if not np.isnan(closure):
+            closed.append(closure)
     return {
         "threshold_pct": threshold_pct,
         "sessions_fired": len(fired_sessions),
         "sessions_total": len(frames),
         "trigger_minutes": minutes,
-        "median_run_minutes": float(np.median(runs)) if runs else np.nan,
-        "median_closed_by_1535_pct": 100.0 * float(np.median(closed)) if closed else np.nan,
+        "median_longest_run_minutes": float(np.median(runs)) if runs else np.nan,
+        "median_closed_by_1535_pct": float(np.median(closed)) if closed else np.nan,
         "dates": ", ".join(d.isoformat()[5:] for d in fired_sessions) or "—",
     }
 
@@ -651,7 +668,9 @@ def make_figures(
     ax.set_xticks([915, 920, 925, 930, 935, 939])
     ax.set_xticklabels(["15:15", "15:20", "15:25", "15:30", "15:35", "15:39"])
     ax.set_ylabel("d = S_imp - S_fair  (% of fair)")
-    ax.set_title("Sensex vs Nifty-implied fair value through the auction window (19 sessions)")
+    ax.set_title(
+        f"Sensex vs Nifty-implied fair value through the auction window ({len(frames)} sessions)"
+    )
     ax.legend(loc="lower left", fontsize=8)
     fig.tight_layout()
     path = outdir / "divergence_paths.png"
