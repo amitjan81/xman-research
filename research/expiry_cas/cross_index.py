@@ -50,7 +50,8 @@ from load import DATASETS_ROOT, QUARANTINE_ROOT, SessionData, load_session
 
 from xman_research.backtest.costs import ChargeableTrade, Side, StatutoryCostStack, TradeKind
 
-#: Sessions where both underlyings carry option bars under the CAS regime.
+#: Candidate post-CAS sessions. Coverage decides which of them carry a parity-recoverable
+#: chain on both sides — three NIFTY sessions here are published with call bars only.
 SESSIONS = [
     "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07",
     "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14",
@@ -73,6 +74,11 @@ WINDOW_END = dt.time(15, 39)
 
 #: Constituent auction price band, as a fraction of the constituent's reference VWAP.
 BAND = 0.03
+
+#: Earliest last-index-bar a session may have and still contribute a daily close. A feed
+#: that dies before this carries no close, and a mid-day level differenced as one would
+#: report the rest of that day's move on the following session.
+MIN_CLOSE_TIME = dt.time(15, 20)
 
 LOT_DEFAULT = {"SENSEX": 20, "NIFTY": 65}
 
@@ -165,8 +171,12 @@ def _daily_closes(underlying: str) -> pd.Series:
     """Official daily closes from the index symbol's own bars, one per session.
 
     The last index bar of a session carries the settled close (the vendor back-stamps it),
-    which is the number a daily return should use. Sessions where the index symbol is
-    absent are dropped rather than filled.
+    which is the number a daily return should use — but only among **trading minutes**.
+    Some sessions carry a stub bar hours after the close (18:00, and later), and a session
+    whose index feed dies mid-afternoon has no close at all in its bars. Both are excluded
+    by the same rule the session loader applies: bars at or after 16:00 are not trading
+    minutes, and a session whose last surviving index bar predates ``MIN_CLOSE_TIME`` is
+    dropped rather than have a mid-day level stand in for its close.
     """
     out: dict[dt.date, float] = {}
     for root in (DATASETS_ROOT, QUARANTINE_ROOT):
@@ -184,7 +194,13 @@ def _daily_closes(underlying: str) -> pd.Series:
             )
             if frame.empty:
                 continue
-            frame = frame.sort_values("minute_ts")
+            stamps = pd.to_datetime(frame["minute_ts"], unit="us", utc=True).dt.tz_convert(
+                "Asia/Kolkata"
+            )
+            frame = frame.assign(ts=stamps).sort_values("ts")
+            frame = frame[frame["ts"].dt.hour < 16]
+            if frame.empty or frame["ts"].iloc[-1].time() < MIN_CLOSE_TIME:
+                continue
             out[day] = float(frame["close"].iloc[-1])
     return pd.Series(out).sort_index()
 
@@ -768,6 +784,29 @@ def main() -> None:
     )
     triggers = pd.DataFrame([trigger_stats(frames, x) for x in (0.25, 0.5, 1.0, 1.5)])
 
+    # Whether the trigger fires at all is the report's central claim, so it is recomputed
+    # across the estimator's own uncertainty rather than asserted from the point estimate.
+    # beta = 1 sits 1.3 standard errors away and is the case a reader is most likely to
+    # reach for, so it is named explicitly.
+    robustness = []
+    for label, candidate in (
+        ("beta - SE", beta_fit.beta - beta_fit.stderr),
+        ("beta (fitted)", beta_fit.beta),
+        ("beta + SE", beta_fit.beta + beta_fit.stderr),
+        ("beta = 1", 1.0),
+    ):
+        alt = {
+            date: divergence(s_imp, n_imp, candidate) for date, (s_imp, n_imp) in implied.items()
+        }
+        alt = {d: f for d, f in alt.items() if not f.empty}
+        pooled = pd.concat(alt.values())["d_pct"].abs()
+        row: dict[str, object] = {"case": label, "beta": candidate, "max_abs_d_pct": pooled.max()}
+        for x in (0.25, 0.5, 1.0, 1.5):
+            fired = trigger_stats(alt, x)
+            row[f"fired at {x}%"] = f"{fired['sessions_fired']} ({fired['dates']})"
+        robustness.append(row)
+    robustness_frame = pd.DataFrame(robustness)
+
     s1 = pd.DataFrame(
         [
             row
@@ -831,6 +870,9 @@ def main() -> None:
         "## Trigger statistics",
         "",
         _md(triggers),
+        "## Trigger robustness across the beta estimate's own uncertainty",
+        "",
+        _md(robustness_frame, "{:.4f}"),
         "## Band versus ladder",
         "",
         _md(bands),
