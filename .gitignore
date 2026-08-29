@@ -20,3 +20,4 @@ __pycache__/
 *.db-shm
 *.sqlite
 *.sqlite3
+research/expiry_cas/.err
