@@ -18,43 +18,39 @@ Implied index at 15:14: **77,470.15** (parity, biased high — see §0). Its own
 
 ### 1.1 Top 10 put strike-minutes by % change
 
-`crash_1518_1523_pct` is the extreme premium reached while the indicative was at its low, against the price in `crash_base_min`. That base is the last continuous-session print at or before 15:14 wherever one exists. **Where `crash_base_min` reads later than 15:14 the strike had not traded yet**, so the base is itself inside the dislocation and the percentage **understates** the move — which is the case for the deepest strike on the board, the one the verdict quotes.
-
-| strike | moneyness | crash_1518_1523_pct | crash_base_min | spike_min | gap_min | px_before | px_spike | d_pct | d_rs | vol_spike | px_15:30 | px_15:35 | px_15:39 | reversal_15:30_pct | reversal_15:35_pct | reversal_15:39_pct |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 74700.00 | 0.96 | 76.72 | 15:20 | 15:21 | 1.00 | 11.60 | 19.35 | 66.81 | 7.75 | 40.00 | 17.50 | 16.95 | 14.75 | 23.87 | 30.97 | 59.35 |
-| 74800.00 | 0.97 | 44.89 | 15:17 | 15:31 | 1.00 | 14.80 | 21.40 | 44.59 | 6.60 | 460.00 | 14.80 | 18.05 | 20.75 | 100.00 | 50.76 | 9.85 |
-| 75200.00 | 0.97 | 29.59 | 15:14 | 15:30 | 1.00 | 25.70 | 34.55 | 34.44 | 8.85 | 300.00 | 34.55 | 28.25 | 26.55 | 0.00 | 71.19 | 90.40 |
-| 74900.00 | 0.97 | 45.95 | 15:17 | 15:31 | 1.00 | 16.35 | 20.60 | 25.99 | 4.25 | 620.00 | 16.35 | 23.05 | 18.45 | 100.00 | -57.65 | 50.59 |
-| 75000.00 | 0.97 | 32.04 | 15:14 | 15:24 | 1.00 | 23.90 | 29.50 | 23.43 | 5.60 | 68080.00 | 21.65 | 25.20 | 25.00 | 140.18 | 76.79 | 80.36 |
-| 75100.00 | 0.97 | 24.26 | 15:14 | 15:24 | 1.00 | 25.10 | 30.75 | 22.51 | 5.65 | 6320.00 | 23.45 | 27.75 | 23.55 | 129.20 | 53.10 | 127.43 |
-| 75600.00 | 0.98 | 22.03 | 15:14 | 15:24 | 1.00 | 39.60 | 48.20 | 21.72 | 8.60 | 4140.00 | 42.80 | 46.45 | 39.90 | 62.79 | 20.35 | 96.51 |
-| 75500.00 | 0.97 | 24.78 | 15:14 | 15:24 | 1.00 | 36.25 | 43.85 | 20.97 | 7.60 | 23580.00 | 34.35 | 41.05 | 40.00 | 125.00 | 36.84 | 50.66 |
-| 75700.00 | 0.98 | 19.86 | 15:14 | 15:24 | 1.00 | 44.35 | 53.45 | 20.52 | 9.10 | 4740.00 | 47.95 | 53.00 | 53.85 | 60.44 | 4.95 | -4.40 |
-| 75800.00 | 0.98 | 17.34 | 15:14 | 15:24 | 1.00 | 49.40 | 59.45 | 20.34 | 10.05 | 3940.00 | 53.15 | 59.25 | 55.50 | 62.69 | 1.99 | 39.30 |
+| strike | moneyness | spike_min | gap_min | px_before | px_spike | d_pct | d_rs | vol_spike | px_15:30 | px_15:35 | px_15:39 | reversal_15:30_pct | reversal_15:35_pct | reversal_15:39_pct |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 74700.00 | 0.96 | 15:21 | 1.00 | 11.60 | 19.35 | 66.81 | 7.75 | 40.00 | 17.50 | 16.95 | 14.75 | 23.87 | 30.97 | 59.35 |
+| 74800.00 | 0.97 | 15:31 | 1.00 | 14.80 | 21.40 | 44.59 | 6.60 | 460.00 | 14.80 | 18.05 | 20.75 | 100.00 | 50.76 | 9.85 |
+| 75200.00 | 0.97 | 15:30 | 1.00 | 25.70 | 34.55 | 34.44 | 8.85 | 300.00 | 34.55 | 28.25 | 26.55 | 0.00 | 71.19 | 90.40 |
+| 74900.00 | 0.97 | 15:31 | 1.00 | 16.35 | 20.60 | 25.99 | 4.25 | 620.00 | 16.35 | 23.05 | 18.45 | 100.00 | -57.65 | 50.59 |
+| 75000.00 | 0.97 | 15:24 | 1.00 | 23.90 | 29.50 | 23.43 | 5.60 | 68080.00 | 21.65 | 25.20 | 25.00 | 140.18 | 76.79 | 80.36 |
+| 75100.00 | 0.97 | 15:24 | 1.00 | 25.10 | 30.75 | 22.51 | 5.65 | 6320.00 | 23.45 | 27.75 | 23.55 | 129.20 | 53.10 | 127.43 |
+| 75600.00 | 0.98 | 15:24 | 1.00 | 39.60 | 48.20 | 21.72 | 8.60 | 4140.00 | 42.80 | 46.45 | 39.90 | 62.79 | 20.35 | 96.51 |
+| 75500.00 | 0.97 | 15:24 | 1.00 | 36.25 | 43.85 | 20.97 | 7.60 | 23580.00 | 34.35 | 41.05 | 40.00 | 125.00 | 36.84 | 50.66 |
+| 75700.00 | 0.98 | 15:24 | 1.00 | 44.35 | 53.45 | 20.52 | 9.10 | 4740.00 | 47.95 | 53.00 | 53.85 | 60.44 | 4.95 | -4.40 |
+| 75800.00 | 0.98 | 15:24 | 1.00 | 49.40 | 59.45 | 20.34 | 10.05 | 3940.00 | 53.15 | 59.25 | 55.50 | 62.69 | 1.99 | 39.30 |
 
 ### 1.2 Top 10 put strike-minutes by ₹ change
 
-A percentage on an ₹12 premium is a few ticks, so the same scan is ranked by money. **Note `is_wing`:** the largest rupee moves are not wing repricing at all. They are deep in-the-money puts — moneyness above 1 — whose premium tracks the underlying nearly one-for-one, printing one or two lots at a time across multi-minute gaps. That is delta on an illiquid contract, and it is the opposite end of the board from the question.
+A percentage on an ₹8 premium is a tick. This is the same scan ranked by money.
 
-| strike | moneyness | is_wing | spike_min | gap_min | px_before | px_spike | d_pct | d_rs | vol_spike | reversal_15:39_pct |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 78700.00 | 1.02 | False | 15:36 | 9.00 | 1407.00 | 1639.45 | 16.52 | 232.45 | 20.00 | 0.00 |
-| 78900.00 | 1.02 | False | 15:31 | 4.00 | 1350.00 | 1541.05 | 14.15 | 191.05 | 20.00 | 0.00 |
-| 79200.00 | 1.02 | False | 15:37 | 2.00 | 1704.55 | 1822.00 | 6.89 | 117.45 | 20.00 | 0.00 |
-| 79500.00 | 1.03 | False | 15:27 | 5.00 | 2085.00 | 2180.10 | 4.56 | 95.10 | 40.00 | 19.45 |
-| 78200.00 | 1.01 | False | 15:27 | 1.00 | 948.00 | 1019.50 | 7.54 | 71.50 | 40.00 | 38.53 |
-| 79000.00 | 1.02 | False | 15:20 | 2.00 | 1526.80 | 1597.80 | 4.65 | 71.00 | 80.00 | -111.27 |
-| 78800.00 | 1.02 | False | 15:22 | 3.00 | 1347.00 | 1414.35 | 5.00 | 67.35 | 20.00 | -67.78 |
-| 78400.00 | 1.01 | False | 15:38 | 7.00 | 1107.50 | 1172.40 | 5.86 | 64.90 | 20.00 | -11.94 |
-| 78500.00 | 1.01 | False | 15:20 | 1.00 | 1099.35 | 1160.25 | 5.54 | 60.90 | 40.00 | -122.17 |
-| 78300.00 | 1.01 | False | 15:20 | 1.00 | 925.30 | 985.45 | 6.50 | 60.15 | 500.00 | -131.84 |
+| strike | moneyness | spike_min | gap_min | px_before | px_spike | d_pct | d_rs | vol_spike | reversal_15:39_pct |
+|---|---|---|---|---|---|---|---|---|---|
+| 78700.00 | 1.02 | 15:36 | 9.00 | 1407.00 | 1639.45 | 16.52 | 232.45 | 20.00 | 0.00 |
+| 78900.00 | 1.02 | 15:31 | 4.00 | 1350.00 | 1541.05 | 14.15 | 191.05 | 20.00 | 0.00 |
+| 79200.00 | 1.02 | 15:37 | 2.00 | 1704.55 | 1822.00 | 6.89 | 117.45 | 20.00 | 0.00 |
+| 79500.00 | 1.03 | 15:27 | 5.00 | 2085.00 | 2180.10 | 4.56 | 95.10 | 40.00 | 19.45 |
+| 78200.00 | 1.01 | 15:27 | 1.00 | 948.00 | 1019.50 | 7.54 | 71.50 | 40.00 | 38.53 |
+| 79000.00 | 1.02 | 15:20 | 2.00 | 1526.80 | 1597.80 | 4.65 | 71.00 | 80.00 | -111.27 |
+| 78800.00 | 1.02 | 15:22 | 3.00 | 1347.00 | 1414.35 | 5.00 | 67.35 | 20.00 | -67.78 |
+| 78400.00 | 1.01 | 15:38 | 7.00 | 1107.50 | 1172.40 | 5.86 | 64.90 | 20.00 | -11.94 |
+| 78500.00 | 1.01 | 15:20 | 1.00 | 1099.35 | 1160.25 | 5.54 | 60.90 | 40.00 | -122.17 |
+| 78300.00 | 1.01 | 15:20 | 1.00 | 925.30 | 985.45 | 6.50 | 60.15 | 500.00 | -131.84 |
 
-### 1.3 The wings never came close to the indicative's own intrinsic
+### 1.3 Every strike against its intrinsic at the indicative low and at the close
 
 `intrinsic_at_indicative_low` = max(K − 74,983.19, 0); `intrinsic_at_close` = max(K − 76,933.59, 0). For a 7-day option neither is a settlement value — they are the reference points the question asks for.
-
-**This is the sharpest single statement in the study.** Had the index really been at 74,983.19, every strike above it was in the money by construction, and `spike_over_intrinsic_low` would have to be at or above zero — a put cannot trade below intrinsic. It is deeply **negative** across the whole in-that-scenario-ITM range: the strikes read as hundreds of rupees below what they would be worth if the indicative were a real index level. The options market did not price the indicative as an index at all, at any strike, in any minute.
 
 | strike | moneyness | px_1514 | px_spike | spike_min | px_15:39 | intrinsic_at_indicative_low | intrinsic_at_close | spike_over_intrinsic_low |
 |---|---|---|---|---|---|---|---|---|
@@ -151,14 +147,14 @@ A percentage on an ₹12 premium is a few ticks, so the same scan is ranked by m
 
 Nifty's front expiry is a Tuesday weekly, so its tenor does not match Sensex's 7 days. Both Nifty expiries are shown so the comparison cannot be read as a tenor artifact. `*_1518_1523_pct` is the largest traded premium in 15:18–15:23 against the same strike's 15:14 price — the crash window itself.
 
-| moneyness | sensex_K | sensex_dte | sensex_max_1min_pct | sensex_base_min | sensex_1518_1523_pct | nifty_front_K | nifty_front_dte | nifty_front_max_1min_pct | nifty_front_base_min | nifty_front_1518_1523_pct | nifty_next_K | nifty_next_dte | nifty_next_max_1min_pct | nifty_next_base_min | nifty_next_1518_1523_pct |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 0.96 | 74700.00 | 7 | 66.81 | 15:20 | 76.72 | 23250.00 | 5 | 12.50 | 15:14 | 6.25 | 23250.00 | 12 | 6.67 | 15:15 | 3.12 |
-| 0.97 | 75100.00 | 7 | 22.51 | 15:14 | 24.26 | 23500.00 | 5 | 10.94 | 15:14 | 1.56 | 23500.00 | 12 | 6.12 | 15:14 | 3.39 |
-| 0.97 | 75500.00 | 7 | 20.97 | 15:14 | 24.78 | 23600.00 | 5 | 13.25 | 15:14 | 1.19 | 23650.00 | 12 | 8.11 | 15:14 | 3.81 |
-| 0.98 | 75900.00 | 7 | 15.32 | 15:14 | 15.38 | 23750.00 | 5 | 13.33 | 15:14 | 4.55 | 23750.00 | 12 | 8.62 | 15:14 | 3.07 |
-| 0.98 | 76300.00 | 7 | 11.55 | 15:14 | 11.38 | 23850.00 | 5 | 13.60 | 15:14 | 5.43 | 23900.00 | 12 | 5.56 | 15:14 | 3.85 |
-| 0.99 | 76700.00 | 7 | 10.99 | 15:14 | 7.67 | 23950.00 | 5 | 10.84 | 15:14 | 6.81 | 24000.00 | 12 | 6.26 | 15:14 | 3.81 |
+| moneyness | sensex_K | sensex_dte | sensex_max_1min_pct | sensex_1518_1523_pct | nifty_front_K | nifty_front_dte | nifty_front_max_1min_pct | nifty_front_1518_1523_pct | nifty_next_K | nifty_next_dte | nifty_next_max_1min_pct | nifty_next_1518_1523_pct |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0.96 | 74700.00 | 7 | 66.81 | 76.72 | 23250.00 | 5 | 12.50 | 6.25 | 23250.00 | 12 | 6.67 | 3.12 |
+| 0.97 | 75100.00 | 7 | 22.51 | 24.26 | 23500.00 | 5 | 10.94 | 1.56 | 23500.00 | 12 | 6.12 | 3.39 |
+| 0.97 | 75500.00 | 7 | 20.97 | 24.78 | 23600.00 | 5 | 13.25 | 1.19 | 23650.00 | 12 | 8.11 | 3.81 |
+| 0.98 | 75900.00 | 7 | 15.32 | 15.38 | 23750.00 | 5 | 13.33 | 4.55 | 23750.00 | 12 | 8.62 | 3.07 |
+| 0.98 | 76300.00 | 7 | 11.55 | 11.38 | 23850.00 | 5 | 13.60 | 5.43 | 23900.00 | 12 | 5.56 | 3.85 |
+| 0.99 | 76700.00 | 7 | 10.99 | 7.67 | 23950.00 | 5 | 10.84 | 6.81 | 24000.00 | 12 | 6.26 | 3.81 |
 
 Figure: `fig/wings/cross_index_wing_2026-08-27.png`.
 
@@ -168,35 +164,24 @@ Figure: `fig/wings/cross_index_wing_2026-08-27.png`.
 
 The wing is every put with moneyness ≤ **0.98** against that session's own 15:14 implied index, because listed depth differs session to session. `hits` counts distinct wing strikes whose largest traded-to-traded move in 15:14–15:39 reached the threshold.
 
-| underlying | session | expiry | dte | n_wing | min_moneyness | max_wing_move_pct | hits_25pct | hits_50pct | hits_100pct | row |
-|---|---|---|---|---|---|---|---|---|---|---|
-| SENSEX | 2026-08-27 | 2026-09-03 | 7 | 13 | 0.96 | 66.81 | 4 | 1 | 0 | EVENT |
-| SENSEX | 2026-08-20 | 2026-09-03 | 14 | 2 | 0.96 | 12.53 | 0 | 0 | 0 | control |
-| SENSEX | 2026-08-25 | 2026-09-03 | 9 | 9 | 0.96 | 13.03 | 0 | 0 | 0 | control |
-| SENSEX | 2026-08-26 | 2026-09-03 | 8 | 10 | 0.97 | 23.83 | 0 | 0 | 0 | control |
-| SENSEX | 2026-08-28 | 2026-09-03 | 6 | 13 | 0.96 | 11.21 | 0 | 0 | 0 | control |
-| NIFTY | 2026-08-25 | 2026-09-01 | 7 | 18 | 0.94 | 4.44 | 0 | 0 | 0 | control |
-| NIFTY | 2026-08-26 | 2026-09-01 | 6 | 17 | 0.95 | 7.83 | 0 | 0 | 0 | control |
-| NIFTY | 2026-08-27 | 2026-09-01 | 5 | 17 | 0.95 | 14.73 | 0 | 0 | 0 | control |
-| NIFTY | 2026-08-28 | 2026-09-01 | 4 | 17 | 0.95 | 15.38 | 0 | 0 | 0 | control |
+| underlying | session | expiry | dte | ref_spot | n_wing | min_moneyness | hits | max_wing_move_pct | row |
+|---|---|---|---|---|---|---|---|---|---|
+| SENSEX | 2026-08-27 | 2026-09-03 | 7 | 77470.15 | 13 | 0.96 | 0 | 66.81 | EVENT |
+| SENSEX | 2026-08-20 | 2026-09-03 | 14 | 77902.10 | 2 | 0.96 | 0 | 12.53 | control |
+| SENSEX | 2026-08-25 | 2026-09-03 | 9 | 77916.40 | 9 | 0.96 | 0 | 13.03 | control |
+| SENSEX | 2026-08-26 | 2026-09-03 | 8 | 77994.55 | 10 | 0.97 | 0 | 23.83 | control |
+| SENSEX | 2026-08-28 | 2026-09-03 | 6 | 77501.80 | 13 | 0.96 | 0 | 11.21 | control |
+| NIFTY | 2026-08-25 | 2026-09-01 | 7 | 24357.25 | 18 | 0.94 | 0 | 4.44 | control |
+| NIFTY | 2026-08-26 | 2026-09-01 | 6 | 24374.15 | 17 | 0.95 | 0 | 7.83 | control |
+| NIFTY | 2026-08-27 | 2026-09-01 | 5 | 24216.25 | 17 | 0.95 | 0 | 14.73 | control |
+| NIFTY | 2026-08-28 | 2026-09-01 | 4 | 24225.40 | 17 | 0.95 | 0 | 15.38 | control |
 
-**At the 100 % threshold the trigger fires nowhere — 0 of 103 control wing strike-sessions across 8 sessions, and 0 of 13 on the event session itself.** A trigger with no false positives and no true positives is not a trigger; it is a threshold above the entire distribution. The sweep is what carries the information: at **50 %** the event fires 1 of 13 while the controls fire 0 of 103, and at **25 %** the event fires 4 against 0 for the controls. The event session is separable from an ordinary one — but only at a threshold that describes a ₹8 move on a ₹12 premium.
+**False-positive rate: 0 of 103 control wing strike-sessions** (8 sessions). The event session contributes 0 of 13.
 
 ---
 
 ## 5. Verdict
 
-**Yes, the next-week wings repriced off the indicative — and the size of the repricing is the finding.** The deepest listed put moved +76.7 % through the crash window and +66.8 % in its largest single traded minute (**74,700 PE, ₹11.60 → ₹19.35** at 15:21, gap 1 min), and the response decays monotonically as the strike approaches the money. The move is real, it is ordered, it is 12× the same-moneyness Nifty response, and **it is ₹7.75**.
+Peak wing-put move on the session: **74,700 PE, +66.8 % (₹11.60 → ₹19.35, ₹+7.75) at 15:21**, gap 1 min.
 
-**No, there was no defined-risk trade with positive expectancy.** Three independent reasons, any one of which is sufficient:
-
-1. **The reward is a rounding error and the risk is not.** Selling the largest spike on the board and covering at the last bar returns ₹166 per lot at best. Against the same-session mark at the band floor the ratio is about **1 : 100**, and that denominator is already the most flattering one available — it holds volatility flat across a 2,200-point move.
-2. **The risk is genuinely unbounded.** The band constrains today's auction close. These are 2026-09-03 contracts: they carry the overnight gap, and the band says nothing about it. The one structural feature that made the expiring-series version of this trade *analysable* — a known worst case — does not exist here.
-3. **The trigger cannot be built.** A wing-put spike is only distinguishable from an ordinary session at a threshold of roughly 25–50 %, which on these premiums is a handful of rupees, and the corpus is 8 control sessions. There is no sample here capable of estimating the false-positive rate of a trigger that loose.
-
-**What the data says instead, and it is the stronger result:** the wings priced the indicative as noise, correctly and immediately. At the indicative low every strike above 74,983.19 was notionally in the money, yet none of them traded within hundreds of rupees of that intrinsic (§1.3). The mispricing the thesis needs — wings marked to a crash that was not going to happen — **is not present to be traded.** The market never made the error.
-
-### What is still missing
-
-- **The expiring series.** Zero bars in this corpus (§0), so the ~4,800 % move the thesis originates from cannot be examined on any feed available here. A trade in *that* instrument is neither confirmed nor refuted by anything above.
-- **Bid/ask.** Every price here is a trade print. Reward figures of ₹2–8 per unit sit inside a plausible wing spread, so a positive number in §2 may be entirely spread and the sign of the realised P&L is not determined by this data.
+*(verdict prose in the committed document)*

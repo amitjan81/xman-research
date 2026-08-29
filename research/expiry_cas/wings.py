@@ -45,9 +45,9 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 CHAIN_ROOT = Path("/home/qa/runtime/data/backtest/datasets/dhan_chain")
 
@@ -232,6 +232,24 @@ def traded_changes(close: pd.DataFrame, vol: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def crash_base(live: pd.Series) -> tuple[float | None, str]:
+    """The pre-crash reference price for one strike, and the minute it came from.
+
+    The natural reference is the last continuous-session print at or before 15:14. Some
+    deep-wing strikes do not trade until after that, so the first traded bar of the
+    window stands in — which understates the move if that bar is already inside the
+    dislocation. Every table reporting a crash-window change carries the minute this
+    came from, because the two cases are not the same measurement and a reader cannot
+    tell them apart from the percentage alone.
+    """
+    if not len(live):
+        return None, "—"
+    before = live[live.index.time <= WINDOW_START]
+    chosen = before.iloc[-1] if len(before) else live.iloc[0]
+    when = (before.index[-1] if len(before) else live.index[0]).strftime("%H:%M")
+    return (float(chosen), when) if chosen > 0 else (None, "—")
+
+
 def _px_at(close: pd.DataFrame, vol: pd.DataFrame, strike: float, when: dt.time) -> float:
     """Last traded price at or before ``when`` for one strike; NaN if it never traded."""
     live = close[strike].where(vol[strike] > 0).dropna()
@@ -265,10 +283,14 @@ def spike_table(session: ChainSession, kind: str, wing_max_moneyness: float) -> 
         k = r["strike"]
         pre, peak = r["from_px"], r["to_px"]
         height = peak - pre
-        after = {t: _px_at(close, vol, k, dt.time(15, m)) for t, m in
-                 (("15:30", 30), ("15:35", 35), ("15:39", 39))}
+        after = {
+            t: _px_at(close, vol, k, dt.time(15, m))
+            for t, m in (("15:30", 30), ("15:35", 35), ("15:39", 39))
+        }
         rev = {
-            f"reversal_{t}_pct": (np.nan if abs(height) < 1e-9 else (peak - after[t]) / height * 100.0)
+            f"reversal_{t}_pct": (
+                np.nan if abs(height) < 1e-9 else (peak - after[t]) / height * 100.0
+            )
             for t in after
         }
         # The crash window itself. This, not the largest one-minute move, is the direct
@@ -276,18 +298,19 @@ def spike_table(session: ChainSession, kind: str, wing_max_moneyness: float) -> 
         # reached while the indicative was at its low, against the same strike's last
         # continuous-session price.
         live = close[k].where(vol[k] > 0).dropna()
-        base = live[live.index.time <= WINDOW_START]
         crash = live[(live.index.time >= dt.time(15, 18)) & (live.index.time <= dt.time(15, 23))]
-        if len(base) and len(crash) and base.iloc[-1] > 0:
+        base_px, base_min = crash_base(live)
+        if base_px is not None and len(crash):
             extreme = float(crash.max() if kind == "PE" else crash.min())
-            crash_pct = (extreme / float(base.iloc[-1]) - 1.0) * 100.0
+            crash_pct = (extreme / base_px - 1.0) * 100.0
         else:
-            crash_pct = float("nan")
+            crash_pct, base_min = float("nan"), "—"
         rows.append(
             {
                 "strike": k,
                 "moneyness": k / ref_spot,
                 "crash_1518_1523_pct": crash_pct,
+                "crash_base_min": base_min,
                 "spike_min": r["to_ts"].strftime("%H:%M"),
                 "gap_min": r["gap_min"],
                 "px_before": pre,
@@ -302,7 +325,8 @@ def spike_table(session: ChainSession, kind: str, wing_max_moneyness: float) -> 
         )
     out = pd.DataFrame(rows)
     out["is_wing"] = (
-        out["moneyness"] <= wing_max_moneyness if kind == "PE"
+        out["moneyness"] <= wing_max_moneyness
+        if kind == "PE"
         else out["moneyness"] >= 2 - wing_max_moneyness
     )
     return out.sort_values("d_pct", ascending=(kind == "CE")).reset_index(drop=True)
@@ -392,34 +416,58 @@ def _fig_dir(repo: Path) -> Path:
     return out
 
 
-def figures(session: ChainSession, puts: pd.DataFrame, nifty: ChainSession | None, repo: Path
-            ) -> list[str]:
+def figures(
+    session: ChainSession, puts: pd.DataFrame, nifty: ChainSession | None, repo: Path
+) -> list[str]:
     out = _fig_dir(repo)
     names = []
 
     # 1. The wing's price paths against the implied index and the published indicative.
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 8), sharex=True,
-                                   gridspec_kw={"height_ratios": [2, 3]})
+    fig, (ax1, ax2) = plt.subplots(
+        2, 1, figsize=(11, 8), sharex=True, gridspec_kw={"height_ratios": [2, 3]}
+    )
     spot = session.implied_spot.dropna()
-    ax1.plot(spot.index, spot.values, color="#1f4e79", lw=1.8, label="option-implied index (parity)")
-    ax1.axhline(INDICATIVE_0827["low"], color="#c00000", ls="--", lw=1.2,
-                label=f"published indicative low {INDICATIVE_0827['low']:,.0f}")
-    ax1.axhline(INDICATIVE_0827["close"], color="#548235", ls=":", lw=1.4,
-                label=f"official close {INDICATIVE_0827['close']:,.0f}")
-    ax1.axvspan(spot.index[0].replace(hour=15, minute=18), spot.index[0].replace(hour=15, minute=23),
-                color="#c00000", alpha=0.08)
+    ax1.plot(
+        spot.index, spot.values, color="#1f4e79", lw=1.8, label="option-implied index (parity)"
+    )
+    ax1.axhline(
+        INDICATIVE_0827["low"],
+        color="#c00000",
+        ls="--",
+        lw=1.2,
+        label=f"published indicative low {INDICATIVE_0827['low']:,.0f}",
+    )
+    ax1.axhline(
+        INDICATIVE_0827["close"],
+        color="#548235",
+        ls=":",
+        lw=1.4,
+        label=f"official close {INDICATIVE_0827['close']:,.0f}",
+    )
+    ax1.axvspan(
+        spot.index[0].replace(hour=15, minute=18),
+        spot.index[0].replace(hour=15, minute=23),
+        color="#c00000",
+        alpha=0.08,
+    )
     ax1.set_ylabel("index")
     ax1.legend(fontsize=7, loc="lower right")
-    ax1.set_title(f"{session.underlying} {session.session_date} — {session.expiry} wings vs the "
-                  f"closing-auction indicative")
+    ax1.set_title(
+        f"{session.underlying} {session.session_date} — {session.expiry} wings vs the "
+        f"closing-auction indicative"
+    )
 
     wing = puts[puts["is_wing"]].nlargest(6, "d_pct")
     for _, r in wing.iterrows():
         k = r["strike"]
         live = session.pe_close[k].where(session.pe_vol[k] > 0).dropna()
         ax2.plot(live.index, live.values, marker=".", ms=3, lw=1.2, label=f"{k:,.0f} PE")
-    ax2.axvspan(spot.index[0].replace(hour=15, minute=18), spot.index[0].replace(hour=15, minute=23),
-                color="#c00000", alpha=0.08)
+    ax2.axvspan(
+        spot.index[0].replace(hour=15, minute=18),
+        spot.index[0].replace(hour=15, minute=23),
+        color="#c00000",
+        alpha=0.08,
+    )
     ax2.set_ylabel("premium (₹)")
     ax2.set_xlabel("IST minute")
     ax2.legend(fontsize=7, ncol=2)
@@ -431,8 +479,9 @@ def figures(session: ChainSession, puts: pd.DataFrame, nifty: ChainSession | Non
 
     # 2. Strike × minute traded-to-traded % change, puts.
     changes = traded_changes(session.pe_close, session.pe_vol)
-    grid = changes.pivot_table(index="strike", columns=changes["to_ts"].dt.strftime("%H:%M"),
-                               values="d_pct")
+    grid = changes.pivot_table(
+        index="strike", columns=changes["to_ts"].dt.strftime("%H:%M"), values="d_pct"
+    )
     fig, ax = plt.subplots(figsize=(12, 8))
     lim = float(np.nanmax(np.abs(grid.to_numpy()))) if grid.size else 1.0
     im = ax.imshow(grid.to_numpy(), aspect="auto", cmap="RdBu_r", vmin=-lim, vmax=lim)
@@ -440,8 +489,10 @@ def figures(session: ChainSession, puts: pd.DataFrame, nifty: ChainSession | Non
     ax.set_yticklabels([f"{k:,.0f}" for k in grid.index], fontsize=6)
     ax.set_xticks(range(len(grid.columns)))
     ax.set_xticklabels(grid.columns, rotation=90, fontsize=6)
-    ax.set_title(f"{session.underlying} {session.expiry} puts — traded-to-traded % change "
-                 f"(blank = no trade in that minute)")
+    ax.set_title(
+        f"{session.underlying} {session.expiry} puts — traded-to-traded % change "
+        f"(blank = no trade in that minute)"
+    )
     fig.colorbar(im, ax=ax, label="% change")
     fig.tight_layout()
     p = out / f"{session.underlying.lower()}_{session.session_date}_put_change_heatmap.png"
@@ -460,9 +511,15 @@ def figures(session: ChainSession, puts: pd.DataFrame, nifty: ChainSession | Non
                 live = sess.pe_close[k].where(sess.pe_vol[k] > 0).dropna()
                 if len(live) < 2:
                     continue
-                ax.plot(live.index.strftime("%H:%M"), live.values / live.iloc[0] * 100.0,
-                        style, color=colour, lw=1.3, alpha=0.8,
-                        label=f"{sess.underlying} {k:,.0f} (m={money[k]:.3f})")
+                ax.plot(
+                    live.index.strftime("%H:%M"),
+                    live.values / live.iloc[0] * 100.0,
+                    style,
+                    color=colour,
+                    lw=1.3,
+                    alpha=0.8,
+                    label=f"{sess.underlying} {k:,.0f} (m={money[k]:.3f})",
+                )
         ax.axhline(100, color="grey", lw=0.8)
         ax.set_ylabel("premium, 15:14 = 100")
         ax.set_xlabel("IST minute")
@@ -477,8 +534,9 @@ def figures(session: ChainSession, puts: pd.DataFrame, nifty: ChainSession | Non
     return names
 
 
-def build_report(underlying: str, session_date: dt.date, repo: Path, wing_m: float,
-                 threshold: float) -> str:
+def build_report(
+    underlying: str, session_date: dt.date, repo: Path, wing_m: float, threshold: float
+) -> str:
     session = load_chain(underlying, session_date)
     expiries = available_expiries(underlying, session_date)
     puts = spike_table(session, "PE", wing_m)
@@ -499,13 +557,40 @@ def build_report(underlying: str, session_date: dt.date, repo: Path, wing_m: flo
 
     # --- top strike-minutes, by % and by ₹ -------------------------------------------
     top_pct = puts.nlargest(10, "d_pct")[
-        ["strike", "moneyness", "crash_1518_1523_pct", "spike_min", "gap_min", "px_before",
-         "px_spike", "d_pct", "d_rs", "vol_spike", "px_15:30", "px_15:35", "px_15:39",
-         "reversal_15:30_pct", "reversal_15:35_pct", "reversal_15:39_pct"]
+        [
+            "strike",
+            "moneyness",
+            "crash_1518_1523_pct",
+            "crash_base_min",
+            "spike_min",
+            "gap_min",
+            "px_before",
+            "px_spike",
+            "d_pct",
+            "d_rs",
+            "vol_spike",
+            "px_15:30",
+            "px_15:35",
+            "px_15:39",
+            "reversal_15:30_pct",
+            "reversal_15:35_pct",
+            "reversal_15:39_pct",
+        ]
     ].copy()
     top_rs = puts.nlargest(10, "d_rs")[
-        ["strike", "moneyness", "is_wing", "spike_min", "gap_min", "px_before", "px_spike",
-         "d_pct", "d_rs", "vol_spike", "reversal_15:39_pct"]
+        [
+            "strike",
+            "moneyness",
+            "is_wing",
+            "spike_min",
+            "gap_min",
+            "px_before",
+            "px_spike",
+            "d_pct",
+            "d_rs",
+            "vol_spike",
+            "reversal_15:39_pct",
+        ]
     ].copy()
 
     # --- intrinsic references ---------------------------------------------------------
@@ -541,15 +626,32 @@ def build_report(underlying: str, session_date: dt.date, repo: Path, wing_m: flo
     rr = pd.DataFrame(rr_rows)
 
     # --- calls sold down ---------------------------------------------------------------
-    call_rows = calls[calls["is_wing"]].nsmallest(8, "d_pct")[
-        ["strike", "moneyness", "spike_min", "gap_min", "px_before", "px_spike", "d_pct", "d_rs",
-         "vol_spike", "px_15:35", "px_15:39"]
-    ].copy()
-    call_rows = call_rows.rename(columns={"px_spike": "px_trough", "d_pct": "drop_pct",
-                                          "d_rs": "drop_rs"})
+    call_rows = (
+        calls[calls["is_wing"]]
+        .nsmallest(8, "d_pct")[
+            [
+                "strike",
+                "moneyness",
+                "spike_min",
+                "gap_min",
+                "px_before",
+                "px_spike",
+                "d_pct",
+                "d_rs",
+                "vol_spike",
+                "px_15:35",
+                "px_15:39",
+            ]
+        ]
+        .copy()
+    )
+    call_rows = call_rows.rename(
+        columns={"px_spike": "px_trough", "d_pct": "drop_pct", "d_rs": "drop_rs"}
+    )
     call_rows["recovery_by_1539_pct"] = (
         (call_rows["px_15:39"] - call_rows["px_trough"])
-        / (call_rows["px_before"] - call_rows["px_trough"]).replace(0, np.nan) * 100.0
+        / (call_rows["px_before"] - call_rows["px_trough"]).replace(0, np.nan)
+        * 100.0
     )
 
     # --- Nifty cross-check --------------------------------------------------------------
@@ -563,40 +665,93 @@ def build_report(underlying: str, session_date: dt.date, repo: Path, wing_m: flo
             k = min(sess.pe_close.columns, key=lambda c: abs(c / r0 - target))
             ch = traded_changes(sess.pe_close[[k]], sess.pe_vol[[k]])
             live = sess.pe_close[k].where(sess.pe_vol[k] > 0).dropna()
-            crash = live[(live.index.time >= dt.time(15, 18)) & (live.index.time <= dt.time(15, 23))]
-            base = live.iloc[0] if len(live) else np.nan
+            crash = live[
+                (live.index.time >= dt.time(15, 18)) & (live.index.time <= dt.time(15, 23))
+            ]
+            base_px, base_min = crash_base(live)
             row[f"{tag}_K"] = float(k)
             row[f"{tag}_dte"] = sess.days_to_expiry
             row[f"{tag}_max_1min_pct"] = float(ch["d_pct"].max()) if len(ch) else np.nan
+            row[f"{tag}_base_min"] = base_min
             row[f"{tag}_1518_1523_pct"] = (
-                (float(crash.max()) / base - 1.0) * 100.0 if len(crash) and base else np.nan
+                (float(crash.max()) / base_px - 1.0) * 100.0
+                if len(crash) and base_px is not None
+                else np.nan
             )
         cross_rows.append(row)
     cross = pd.DataFrame(cross_rows)
 
     # --- controls ------------------------------------------------------------------------
     control_sessions = [
-        ("SENSEX", dt.date(2026, 8, 20)), ("SENSEX", dt.date(2026, 8, 25)),
-        ("SENSEX", dt.date(2026, 8, 26)), ("SENSEX", dt.date(2026, 8, 28)),
-        ("NIFTY", dt.date(2026, 8, 25)), ("NIFTY", dt.date(2026, 8, 26)),
-        ("NIFTY", dt.date(2026, 8, 27)), ("NIFTY", dt.date(2026, 8, 28)),
+        ("SENSEX", dt.date(2026, 8, 20)),
+        ("SENSEX", dt.date(2026, 8, 25)),
+        ("SENSEX", dt.date(2026, 8, 26)),
+        ("SENSEX", dt.date(2026, 8, 28)),
+        ("NIFTY", dt.date(2026, 8, 25)),
+        ("NIFTY", dt.date(2026, 8, 26)),
+        ("NIFTY", dt.date(2026, 8, 27)),
+        ("NIFTY", dt.date(2026, 8, 28)),
     ]
     controls = control_scan(control_sessions, wing_m, threshold)
     event = control_scan([(underlying, session_date)], wing_m, threshold)
-    controls = pd.concat([event.assign(row="EVENT"), controls.assign(row="control")],
-                         ignore_index=True)
+    controls = pd.concat(
+        [event.assign(row="EVENT"), controls.assign(row="control")], ignore_index=True
+    )
 
-    return _render(session, expiries, puts, top_pct, top_rs, ref, rr, call_rows, cross, controls,
-                   tv, tv_strike, figs, wing_m, threshold, ref_spot)
+    return _render(
+        session,
+        expiries,
+        puts,
+        top_pct,
+        top_rs,
+        ref,
+        rr,
+        call_rows,
+        cross,
+        controls,
+        tv,
+        tv_strike,
+        figs,
+        wing_m,
+        threshold,
+        ref_spot,
+    )
 
 
-def _render(session, expiries, puts, top_pct, top_rs, ref, rr, calls, cross, controls, tv,
-            tv_strike, figs, wing_m, threshold, ref_spot) -> str:
+def _render(
+    session,
+    expiries,
+    puts,
+    top_pct,
+    top_rs,
+    ref,
+    rr,
+    calls,
+    cross,
+    controls,
+    tv,
+    tv_strike,
+    figs,
+    wing_m,
+    threshold,
+    ref_spot,
+) -> str:
     ctl = controls[controls["row"] == "control"]
     n_hits = int(ctl[f"hits_{threshold:.0f}pct"].sum())
     n_wing = int(ctl["n_wing"].sum())
     ev = controls[controls["row"] == "EVENT"].iloc[0]
     peak = puts.nlargest(1, "d_pct").iloc[0]
+
+    # The cross-index asymmetry is read off the deepest moneyness bucket the cross-check
+    # covers, so it moves with the table rather than being asserted beside it.
+    deepest = cross.iloc[0]
+    asymmetry = (
+        deepest["sensex_1518_1523_pct"] / deepest["nifty_front_1518_1523_pct"]
+        if "nifty_front_1518_1523_pct" in cross.columns
+        and pd.notna(deepest.get("nifty_front_1518_1523_pct"))
+        and deepest.get("nifty_front_1518_1523_pct")
+        else float("nan")
+    )
 
     lines = [
         f"# The next-expiry wings on {session.session_date} — did they reprice off the "
@@ -638,6 +793,13 @@ def _render(session, expiries, puts, top_pct, top_rs, ref, rr, calls, cross, con
         f"`fig/wings/{figs[1]}`.",
         "",
         "### 1.1 Top 10 put strike-minutes by % change",
+        "",
+        "`crash_1518_1523_pct` is the extreme premium reached while the indicative was at its "
+        "low, against the price in `crash_base_min`. That base is the last continuous-session "
+        "print at or before 15:14 wherever one exists. **Where `crash_base_min` reads later "
+        "than 15:14 the strike had not traded yet**, so the base is itself inside the "
+        "dislocation and the percentage **understates** the move — which is the case for the "
+        "deepest strike on the board, the one the verdict quotes.",
         "",
         _md(top_pct.round(4)),
         "",
@@ -741,7 +903,7 @@ def _render(session, expiries, puts, top_pct, top_rs, ref, rr, calls, cross, con
         f"(**{peak['strike']:,.0f} PE, ₹{peak['px_before']:.2f} → ₹{peak['px_spike']:.2f}** at "
         f"{peak['spike_min']}, gap {peak['gap_min']:.0f} min), and the response decays "
         f"monotonically as the strike approaches the money. The move is real, it is ordered, "
-        f"it is {peak['crash_1518_1523_pct'] / 6.25:.0f}× the same-moneyness Nifty response, "
+        f"it is {asymmetry:.0f}× the same-moneyness Nifty response, "
         f"and **it is ₹{peak['d_rs']:.2f}**.",
         "",
         "**No, there was no defined-risk trade with positive expectancy.** Three independent "
@@ -786,24 +948,32 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--underlying", default="SENSEX")
     parser.add_argument("--date", default="2026-08-27")
-    parser.add_argument("--wing-moneyness", type=float, default=0.98,
-                        help="a put is a wing if K/S at 15:14 is at or below this")
-    parser.add_argument("--spike-threshold", type=float, default=100.0,
-                        help="percent move that counts as a spike in the control scan")
+    parser.add_argument(
+        "--wing-moneyness",
+        type=float,
+        default=0.98,
+        help="a put is a wing if K/S at 15:14 is at or below this",
+    )
+    parser.add_argument(
+        "--spike-threshold",
+        type=float,
+        default=100.0,
+        help="percent move that counts as a spike in the control scan",
+    )
     parser.add_argument("--repo", default=str(Path(__file__).resolve().parents[2]))
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
 
     repo = Path(args.repo)
     text = build_report(
-        args.underlying, dt.date.fromisoformat(args.date), repo, args.wing_moneyness,
+        args.underlying,
+        dt.date.fromisoformat(args.date),
+        repo,
+        args.wing_moneyness,
         args.spike_threshold,
     )
     stamp = dt.date.fromisoformat(args.date).strftime("%m%d")
-    out = (
-        Path(args.out) if args.out
-        else repo / "research" / "expiry_cas" / f"WINGS_{stamp}.md"
-    )
+    out = Path(args.out) if args.out else repo / "research" / "expiry_cas" / f"WINGS_{stamp}.md"
     out.write_text(text)
     print(f"wrote {out} ({len(text)} chars)")
 

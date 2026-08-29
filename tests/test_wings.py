@@ -26,10 +26,7 @@ from wings import band_floor_bound, spike_table, traded_changes  # noqa: E402
 
 def _minutes(*hhmm: str) -> pd.DatetimeIndex:
     return pd.DatetimeIndex(
-        [
-            pd.Timestamp(f"2026-08-27 {t}:00").tz_localize("Asia/Kolkata")
-            for t in hhmm
-        ]
+        [pd.Timestamp(f"2026-08-27 {t}:00").tz_localize("Asia/Kolkata") for t in hhmm]
     )
 
 
@@ -150,5 +147,5 @@ def test_expiry_window_constants_bracket_the_session():
     """The study window is the last continuous cash minute through the last option bar."""
     from wings import WINDOW_END, WINDOW_START
 
-    assert WINDOW_START == dt.time(15, 14)
-    assert WINDOW_END == dt.time(15, 39)
+    assert dt.time(15, 14) == WINDOW_START
+    assert dt.time(15, 39) == WINDOW_END
