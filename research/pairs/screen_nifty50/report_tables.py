@@ -25,7 +25,7 @@ def gate_margins(row: pd.Series) -> list[str]:
     misses = []
     if not row["bh_pass"]:
         ratio = row["coint_p"] / row["bh_bar"] if row["bh_bar"] > 0 else float("inf")
-        misses.append(f"BH: p {row['coint_p']:.3f} vs bar {row['bh_bar']:.2}, {ratio:.0f}x over")
+        misses.append(f"BH: p {row['coint_p']:.4f} vs bar {row['bh_bar']:.2}, {ratio:.1f}x over")
     if not row["gate_half_life"]:
         hl = row["half_life"]
         gap = "no reversion" if hl == float("inf") else f"+{hl - HALF_LIFE_MAX_SESSIONS:.1f} sessions"
