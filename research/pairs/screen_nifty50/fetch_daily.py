@@ -39,9 +39,9 @@ import pandas as pd
 sys.path.insert(0, "/home/qa/xman/.claude/worktrees/feat-dhan-banknifty/backtest/src")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from nifty50_members import NIFTY50  # noqa: E402
-from xman_backtest.dhan.auth import DhanCredentials, TokenProvider  # noqa: E402
-from xman_backtest.dhan.client import DhanClient, RateLimiter  # noqa: E402
+from nifty50_members import NIFTY50
+from xman_backtest.dhan.auth import DhanCredentials, TokenProvider
+from xman_backtest.dhan.client import DhanClient, RateLimiter
 
 SCRIP_MASTER_DIR = Path("/home/qa/runtime/data/backtest/dhan/scrip_master")
 DEFAULT_OUT = Path("/home/qa/runtime/data/research/pairs/nifty50_daily.parquet")
@@ -72,17 +72,23 @@ def resolve_security_ids(master_csv: Path, symbols: list[str]) -> tuple[dict[str
         & (master["SEM_SERIES"] == "EQ")
     ]
     by_symbol = dict(
-        zip(eq["SEM_TRADING_SYMBOL"].astype(str), eq["SEM_SMST_SECURITY_ID"].astype(str))
+        zip(
+            eq["SEM_TRADING_SYMBOL"].astype(str),
+            eq["SEM_SMST_SECURITY_ID"].astype(str),
+            strict=True,
+        )
     )
     resolved = {s: by_symbol[s] for s in symbols if s in by_symbol}
     missing = [s for s in symbols if s not in by_symbol]
     return resolved, missing
 
 
-def fetch_symbol(client: DhanClient, security_id: str, from_date: str, to_date: str) -> pd.DataFrame:
+def fetch_symbol(
+    client: DhanClient, security_id: str, from_date: str, to_date: str
+) -> pd.DataFrame:
     """Daily OHLCV for one security id as a frame of date, o/h/l/c/v."""
-    sdk = client._sdk_handle()  # noqa: SLF001 - the wrapper exposes no daily method
-    payload = client._call(  # noqa: SLF001
+    sdk = client._sdk_handle()
+    payload = client._call(
         "historical_daily_data",
         lambda: sdk.historical_daily_data(
             security_id=security_id,
