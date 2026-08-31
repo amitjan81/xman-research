@@ -1,0 +1,1 @@
+symbol_a,symbol_b,group,distance,beta,alpha,coint_p,bh_bar,bh_pass,hurst,half_life,sigma_bps,crossings,lots_a,lots_b,notional_a,notional_b,beta_effective,lot_error,lot_size_known,min_notional_for_lot_gate,cost_hard_bps,cost_allin_low_bps,cost_allin_high_bps,cost_coverage,z_today,gate_sigma,gate_half_life,gate_hurst,gate_lot,admitted,mwpl_ban_screen,event_screen

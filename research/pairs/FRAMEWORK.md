@@ -1,0 +1,133 @@
+# Pair trading — research framework for the Indian market
+
+Owner mandate: non-HFT, 1–5 session holds, limited capital. Evidence policy: model claims
+cite peer-reviewed or widely-cited work only; market mechanics cite exchange/broker
+documentation, labelled as mechanics. The evidence base behind every claim here is the
+2026-08-31 research report (sources listed at the end); citation counts are OpenAlex.
+
+## 0. The two inequalities that define admission
+
+Everything else in this document exists to find pairs that satisfy both, honestly:
+
+1. **Cost coverage.** The short leg must be a single-stock future (naked shorting is
+   prohibited and institutions settle gross; SLB is thin — mechanics). A two-leg futures
+   round trip costs **≈12.3 bps of one-leg notional N in hard costs (~82 % of it STT at
+   0.05 % on each sell), ≈17–27 bps all-in with slippage**. A 2σ-entry/0-exit rule captures
+   ≈2σ_spread, so admission requires **σ_spread ≥ 50–60 bps of N** (≥4–5× cost coverage).
+2. **Horizon.** The spread's **Ornstein–Uhlenbeck half-life must sit at ≈5 trading days or
+   less** (Elliott, van der Hoek & Malcolm 2005, *Quantitative Finance*). The mandate is a
+   **maximum holding period, not a minimum** (owner review, PR #39): a position unwinds the
+   same day whenever the exit, stop or event rule is touched, and a skewed-reward
+   high-conviction entry may be taken with an intraday unwind intended. One measurement
+   limit: sub-day half-lives cannot be estimated from daily closes — selecting pairs *for*
+   intraday reversion needs the minute-bar series from Phase 0's capture.
+
+Capital is the third constraint, not a gate: price-scan 14.2 % + ELM 3.5 % = **17.7 % of N
+per leg** with **no cross-underlying offset** (mechanics) → **≈35–44 % of N per pair** — the
+upper end reflects higher scan ranges on volatile names — and **≈40–50 % with an MTM
+buffer**. Delivery-margin escalation over the last ~4 sessions before expiry raises the leg
+margin above this before a roll executes. A small book runs tens of pairs; prefer fewer,
+higher-σ pairs over breadth, with a **book-level cap on net per-underlying exposure** so two
+pairs sharing a name cannot compound into a single-stock bet the per-pair sizing never sees.
+
+## 1. Model choices (ranked by estimation risk per unit of data, from the evidence)
+
+| Layer | Choice | Why (evidence) |
+|---|---|---|
+| Trading rule | **Distance method**, re-specified for short horizon | Zero estimated selection parameters; the strongest net-of-cost record (Do & Faff 2012, *JFR*: ~30 bps/mo through 2009; Rad, Low & Faff 2016, *QF*: 38 bps/mo net vs 33 cointegration, 5 copula, 1962–2014). Post-2009 the *frequency of opportunities* declines for distance and cointegration alike (Rad et al.) — a capacity fact, not a survival claim |
+| Hedge ratio | **Rolling Engle–Granger** (monthly re-fit); Kalman as an upgrade to evaluate, not a default | The SSF legs are lot-quantised, so an explicit ratio is operationally required; Kalman has no cost-aware evidence of its own |
+| Pre-selection | **PCA factor residuals + clustering** within sectors | Avellaneda & Lee 2010 (*QF*, 342 cites, Sharpe 1.44 after costs 1997–2007); attacks the ~21,500-pair multiple-testing problem in a ~208-name universe |
+| Gates | ADF on the spread, **Hurst < 0.5**, half-life bounds, mean-crossing count (belt-and-braces only — any spread passing the 1–5 day half-life gate crosses its mean several times a month), MWPL ban-history screen, event calendar | Sarmento & Horta 2020 (*ESWA*) pipeline; Hurst/variance-ratio as screens, not strategies |
+| Rejected | Copula (5 bps/mo net in the horse race), DL spread forecasting (no cost-aware evidence at this scale), ADR/dual-listing pairs (untradeable from a domestic account) | |
+
+India-specific prior: Aggarwal & Aggarwal 2021 (*Asia-Pacific Financial Markets*) reports
+pairs on **Indian stock futures** profitable up to 34 % annualised including costs — full
+text unread (paywall) and pre-dating the 2026 STT hike, so an upper bound, not a forecast.
+Johansen hit rate prior: ~9 % of candidate combinations cointegrate (Mahajan & Chandra 2019,
+arXiv, commodities).
+
+## 2. The workflow
+
+**Phase 0 — data (prerequisite, not yet in the corpus).** The corpus holds index options
+only. Stock pairs need: single-stock futures minute/EOD bars and cash closes for the ~208
+F&O names. Extend the Dhan `capture-chain` pattern: FUTSTK by security id from the scrip
+master, nightly, plus a one-time back-capture of as much history as contract listings
+allow; EOD continuous series (front-month, roll-adjusted) built with the roll on the NSE
+last-Tuesday cadence. Two structural breaks any history must stamp: the 2026-04-01 STT
+change (cost model is date-effective — `costs.py` pattern) and the 2026-08-03 CAS change
+(closing prices before/after are different statistical objects; never mix them in one
+formation window without a flag).
+
+**Phase 1 — universe and pre-filter (monthly).**
+F&O list (~208) → drop illiquid futures (volume/OI floor, spread proxy) → PCA on daily
+returns (≤15 components) → cluster residuals (DBSCAN/OPTICS) within and across sectors →
+candidate pairs = same-cluster combinations only. Record the candidate count — it is the
+denominator every later "significance" claim must be deflated by (trial-log family, as the
+alpha framework already enforces).
+
+**Phase 2 — pair admission (monthly, on the formation window).**
+Per candidate: normalised-price distance rank; EG hedge ratio β and ADF p on the spread;
+Hurst; OU fit → half-life and σ_spread; mean-crossings; **the two inequalities of §0**;
+lot-quantisation error of β at the intended N (reject if the nearest-lot portfolio distorts
+β by more than ~10 %); margin cost. Survivors become **CANDIDATE pair templates** in the
+alpha framework's library (`template = pair(A,B,β,params)`, underlying = the pair), with
+the ScreenSheet as evidence — the existing screen → gate → admit machinery applies
+unchanged, including the sealed holdout and DSR deflation by the family's trial count.
+
+**Phase 3 — trading rule (daily, per admitted pair).**
+Signal at a **pre-15:10 snapshot** — and therefore every backtest's signal series is the
+15:10 snapshot series, not the (auction) close series; fitting z/σ/half-life on closes and
+firing on snapshots would estimate one price object and trade another. Orders in futures
+**before 15:15** (after that the cash
+legs are in auction and the futures reference degrades) or at next open, chosen once and
+pre-registered — never "the close", which is discovered at 15:30–15:35 and cannot be traded
+(mechanics). Entry |z| ≥ 2; exit z = 0 and hard stop |z| ≥ 3 **evaluated whenever touched, including
+intraday on the entry day — holding to a next session is never required**; **time stop =
+min(2× half-life, 5 sessions)** — the 5-session cap is the mandate's maximum; 2× half-life
+alone would allow ~10-session holds at the admission bound — plus a structural-break exit if the rolling ADF p degrades
+past a pre-set bound. The 2σ capture in §0 is the full-convergence ideal; stop-outs,
+time-stop exits at non-zero z and slippage pull realised capture below it — the 4–5× cost
+coverage multiple is the buffer for exactly that. **Event exclusion:** no new entries within
+N sessions (pre-registered) of a scheduled result, and flatten-or-exempt rules for
+dividends/splits on either leg — scheduled earnings are the canonical "divergence that never
+reconverges". **MWPL ban handling:** names with recent ban-period history are excluded at
+admission; a position caught in a ban exits via the permitted closing trade before the roll
+window (no adds, no re-entry, no roll is possible in ban). Orders are carry-forward (NRML)
+product — broker intraday auto-square-off at 15:12 would otherwise flatten a 15:10 entry. Roll policy: positions opened within 2 sessions of the NSE last-Tuesday
+expiry open in the next month; open positions roll with the calendar (partial ELM relief on
+the far leg — mechanics).
+
+**Phase 4 — evaluation (the platform's existing discipline).**
+Every backtest run is a trial in the family log; formation/trading windows walk forward;
+the last ~3 months stay sealed as holdout; stage-2 gate on the pre-registered thresholds;
+paper-trade ledger (the tracking/demotion machinery) before any capital. The nightly ranker
+surfaces admitted pairs' signals on the research panel like any other template.
+
+## 3. What phase 1 can start on today
+
+Index pairs from data already captured (NIFTY/BANKNIFTY via options-implied series, SENSEX
+with its BSE Thursday calendar) are **explicitly second-choice**: Nifty–BankNifty is a
+sector-beta bet, and Nifty–Sensex straddles two exchanges and two expiry calendars — a
+structural roll mismatch. They are useful only to exercise the pipeline end-to-end while
+Phase 0 capture accumulates stock-futures history. The decision to spend capital waits for
+stock pairs.
+
+## 4. Risks the design carries knowingly
+
+Distance-method profitability decays secularly (Do & Faff 2010) and concentrates in
+turbulence; cointegration can break without warning (low test power at short windows);
+the India evidence base is thin (one strong paywalled study, two preprints) — it justifies
+building the backtest, not skipping it; the STT hike roughly doubled friction, so published
+profitability from any pre-2026 sample overstates today's; and lot quantisation puts a floor
+on N per pair that concentrates the book.
+
+## Sources
+
+Gatev, Goetzmann & Rouwenhorst 2006 *RFS* (818 cites); Do & Faff 2010 *FAJ*, 2012 *JFR*;
+Rad, Low & Faff 2016 *QF*; Krauss 2017 *J. Econ. Surveys*; Elliott, van der Hoek & Malcolm
+2005 *QF*; Avellaneda & Lee 2010 *QF* (342); Sarmento & Horta 2020 *ESWA*; Liew & Wu 2013
+(73); Vidyamurthy 2004 (Wiley); Aggarwal & Aggarwal 2021 *APFM*; Mahajan & Chandra 2019
+arXiv:1907.08397; Sen et al. 2022 arXiv:2211.07080. Mechanics: Zerodha charge sheet and
+support pages, Tradejini/Business Standard (session times), Ventura/Stocko (lots, F&O list),
+5paisa (expiry days), INDmoney (SPAN/ELM), ClearTax (tax), S&R Law/Lexology (shorting/SLB).
+Full URLs in the research report attached to the PR.
