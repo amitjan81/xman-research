@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from dataclasses import asdict, dataclass
 from datetime import date
 from itertools import combinations
@@ -52,12 +53,19 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.cluster import OPTICS
+from sklearn.cluster import OPTICS, KMeans
 from sklearn.decomposition import PCA
 from statsmodels.tsa.stattools import coint
 
-DEFAULT_DATA = Path("/home/qa/runtime/data/research/pairs/nifty50_daily.parquet")
-SCRIP_MASTER_DIR = Path("/home/qa/runtime/data/backtest/dhan/scrip_master")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from fno_universe import futures_underlyings, newest_scrip_master
+
+DATA_DIR = Path("/home/qa/runtime/data/research/pairs")
+DEFAULT_DATA = {
+    "nifty50": DATA_DIR / "nifty50_daily.parquet",
+    "fno": DATA_DIR / "fno_daily.parquet",
+}
 
 # The framework's two admission inequalities (FRAMEWORK.md §0).
 SIGMA_BPS_MIN = 50.0  # sigma_spread as bps of one-leg notional; 50-60 is the stated band
@@ -76,6 +84,14 @@ COST_ALLIN_BPS = (17.0, 27.0)
 DEGENERACY_MIN_CLUSTERS = 2
 DEGENERACY_MAX_LARGEST_SHARE = 0.60
 DEGENERACY_MAX_NOISE_SHARE = 0.70
+
+# Fallback when density clustering degenerates and the universe carries no sector map.
+# It must partition: putting every name in one group would make the candidate set all
+# C(n,2) pairs, which is both off-framework (§1 pairs within clusters) and, at 200+
+# names, ~22,000 cointegration tests. KMeans at a fixed average cluster size is
+# deterministic given the seed and yields a comparable m to the OPTICS branch.
+FALLBACK_NAMES_PER_CLUSTER = 8
+FALLBACK_SEED = 0
 
 CAS_BREAK = pd.Timestamp("2026-08-03").date()
 STT_BREAK = pd.Timestamp("2026-04-01").date()
@@ -295,27 +311,18 @@ def load_panel(path: Path) -> tuple[pd.DataFrame, list[str]]:
 
 def futures_lot_sizes() -> dict[str, int]:
     """Underlying -> F&O lot size, from the newest scrip master's FUTSTK rows."""
-    files = sorted(SCRIP_MASTER_DIR.glob("api-scrip-master-*.csv"))
-    master = pd.read_csv(files[-1], low_memory=False)
-    fut = master[
-        (master["SEM_EXM_EXCH_ID"] == "NSE") & (master["SEM_INSTRUMENT_NAME"] == "FUTSTK")
-    ].copy()
-    # The contract symbol is <UNDERLYING>-<MonYYYY>-FUT, and underlyings may themselves
-    # contain a hyphen (BAJAJ-AUTO), so only the expiry suffix is stripped.
-    fut["underlying"] = (
-        fut["SEM_TRADING_SYMBOL"].astype(str).str.replace(r"-\w{3}\d{4}-FUT$", "", regex=True)
-    )
-    fut = fut.dropna(subset=["SEM_LOT_UNITS"])
-    fut = fut.sort_values("SEM_EXPIRY_DATE")
-    return {
-        str(u): int(g["SEM_LOT_UNITS"].iloc[0])
-        for u, g in fut.groupby("underlying")
-        if g["SEM_LOT_UNITS"].iloc[0] > 0
-    }
+    lots, _excluded = futures_underlyings(newest_scrip_master())
+    return lots
 
 
 def group_universe(returns: pd.DataFrame, sectors: dict[str, str]) -> tuple[dict[str, str], dict]:
-    """Cluster PCA residual loadings; fall back to sectors when clustering degenerates."""
+    """Cluster PCA residual loadings, with a pre-registered fallback if that degenerates.
+
+    The fallback is sector grouping where a sector map for the universe exists, and
+    KMeans on the same loading vectors where it does not — the F&O universe has no
+    verifiable sector map on this host, and inventing one for 200+ names would put an
+    unverifiable list at the centre of the candidate count.
+    """
     standardised = (returns - returns.mean()) / returns.std(ddof=1)
     n_components = int(min(15, standardised.shape[1] - 1, standardised.shape[0] - 1))
     pca = PCA(n_components=n_components).fit(standardised.values)
@@ -344,10 +351,22 @@ def group_universe(returns: pd.DataFrame, sectors: dict[str, str]) -> tuple[dict
         "optics_noise_share": round(noise_share, 3),
         "optics_largest_share": round(largest_share, 3),
         "degenerate": bool(degenerate),
-        "branch": "sector-fallback" if degenerate else "optics",
+        "branch": "optics",
     }
-    if degenerate:
+    if degenerate and sectors:
+        diagnostics["branch"] = "sector-fallback"
         return {name: sectors.get(name, "Unclassified") for name in names}, diagnostics
+    if degenerate:
+        k = max(DEGENERACY_MIN_CLUSTERS, round(len(names) / FALLBACK_NAMES_PER_CLUSTER))
+        fallback_labels = KMeans(
+            n_clusters=k, n_init=10, random_state=FALLBACK_SEED
+        ).fit_predict(loadings)
+        diagnostics["branch"] = "kmeans-fallback"
+        diagnostics["kmeans_k"] = int(k)
+        return {
+            name: f"kmeans-{label}"
+            for name, label in zip(names, fallback_labels, strict=True)
+        }, diagnostics
     grouped = {
         name: f"optics-{label}"
         for name, label in zip(names, labels, strict=True)
@@ -394,6 +413,13 @@ def screen(
         for pair in combinations(sorted(groups), 2)
         if groups[pair[0]] == groups[pair[1]]
     ]
+    # m is the multiple-testing denominator and the cost of the run; both are worth
+    # knowing before the per-pair loop rather than after it.
+    print(
+        f"clustering branch={cluster_diag['branch']} groups={cluster_diag['optics_clusters']} "
+        f"m={len(candidates)} candidate pairs from {len(groups)} grouped names",
+        flush=True,
+    )
 
     normalised = window / window.iloc[0]
     raw: list[dict] = []
@@ -513,7 +539,8 @@ def refit_pre_cas(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Pair screen, FRAMEWORK.md §2 phases 1-2")
-    parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
+    parser.add_argument("--universe", choices=sorted(DEFAULT_DATA), default="nifty50")
+    parser.add_argument("--data", type=Path, default=None)
     parser.add_argument("--formation-months", type=int, default=12)
     parser.add_argument("--gap-sessions", type=int, default=5)
     parser.add_argument("--notional", type=float, default=1_000_000.0)
@@ -524,16 +551,19 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    import sys
-
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from nifty50_members import NIFTY50
+
+    # The F&O universe has no verifiable sector map on this host, so it carries none and
+    # the clustering fallback is KMeans rather than sectors (see group_universe).
+    sectors: dict[str, str] = NIFTY50 if args.universe == "nifty50" else {}
+    args.data = args.data or DEFAULT_DATA[args.universe]
 
     closes, incomplete_names = load_panel(args.data)
     lots = futures_lot_sizes()
     results, meta = screen(
         closes,
-        sectors=NIFTY50,
+        sectors=sectors,
         lots=lots,
         formation_months=args.formation_months,
         gap_sessions=args.gap_sessions,
@@ -622,6 +652,8 @@ def main() -> int:
         ),
     }
     meta["funnel"] = funnel
+    meta["universe_name"] = args.universe
+    meta["data"] = str(args.data)
     meta["entry_z"] = args.entry_z
     meta["names_dropped_for_incomplete_series"] = incomplete_names
     meta["entry_candidates"] = len(entry_candidates)

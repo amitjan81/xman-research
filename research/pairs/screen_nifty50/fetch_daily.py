@@ -39,23 +39,22 @@ import pandas as pd
 sys.path.insert(0, "/home/qa/xman/.claude/worktrees/feat-dhan-banknifty/backtest/src")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from fno_universe import futures_underlyings, newest_scrip_master
 from nifty50_members import NIFTY50
 from xman_backtest.dhan.auth import DhanCredentials, TokenProvider
 from xman_backtest.dhan.client import DhanClient, RateLimiter
 
-SCRIP_MASTER_DIR = Path("/home/qa/runtime/data/backtest/dhan/scrip_master")
-DEFAULT_OUT = Path("/home/qa/runtime/data/research/pairs/nifty50_daily.parquet")
+OUT_DIR = Path("/home/qa/runtime/data/research/pairs")
+# Each universe writes its own parquet: a bare re-run of one must not clobber the other.
+DEFAULT_OUT = {
+    "nifty50": OUT_DIR / "nifty50_daily.parquet",
+    "fno": OUT_DIR / "fno_daily.parquet",
+}
 STT_BREAK = "2026-04-01"
 CAS_BREAK = "2026-08-03"
 REQUESTS_PER_S = 2.5
-
-
-def newest_scrip_master(directory: Path = SCRIP_MASTER_DIR) -> Path:
-    """The most recent scrip-master CSV, by filename date."""
-    files = sorted(directory.glob("api-scrip-master-*.csv"))
-    if not files:
-        raise FileNotFoundError(f"no scrip master under {directory}")
-    return files[-1]
 
 
 def resolve_security_ids(master_csv: Path, symbols: list[str]) -> tuple[dict[str, str], list[str]]:
@@ -108,9 +107,16 @@ def fetch_symbol(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--universe", choices=sorted(DEFAULT_OUT), default="nifty50")
     parser.add_argument("--from-date", default="2023-09-01")
     parser.add_argument("--to-date", default=date.today().isoformat())
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument(
+        "--probe",
+        type=int,
+        default=0,
+        help="fetch only the first N symbols — a shape check before the paced batch",
+    )
     parser.add_argument(
         "--min-rows",
         type=int,
@@ -119,10 +125,21 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    args.out = args.out or DEFAULT_OUT[args.universe]
     master_csv = newest_scrip_master()
-    resolved, missing = resolve_security_ids(master_csv, sorted(NIFTY50))
+    excluded_test_scrips: list[str] = []
+    if args.universe == "fno":
+        lots, excluded_test_scrips = futures_underlyings(master_csv)
+        symbols = sorted(lots)
+    else:
+        symbols = sorted(NIFTY50)
+    resolved, missing = resolve_security_ids(master_csv, symbols)
+    if args.probe:
+        resolved = dict(list(resolved.items())[: args.probe])
     print(f"scrip master: {master_csv.name}")
-    print(f"resolved {len(resolved)}/{len(NIFTY50)} symbols; unresolved: {missing or 'none'}")
+    print(f"universe: {args.universe}, {len(symbols)} symbols")
+    print(f"excluded exchange test scrips: {len(excluded_test_scrips)}")
+    print(f"resolved {len(resolved)}/{len(symbols)} symbols; unresolved: {missing or 'none'}")
 
     client = DhanClient(
         TokenProvider(DhanCredentials.from_env_file()), RateLimiter(REQUESTS_PER_S)
@@ -157,6 +174,9 @@ def main() -> int:
 
     meta = {
         "fetched_on": date.today().isoformat(),
+        "universe": args.universe,
+        "universe_size": len(symbols),
+        "excluded_test_scrips": excluded_test_scrips,
         "scrip_master": master_csv.name,
         "endpoint": "charts/historical (daily), NSE_EQ / EQUITY",
         "from_date": args.from_date,
