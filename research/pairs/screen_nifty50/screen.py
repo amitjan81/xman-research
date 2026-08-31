@@ -93,6 +93,12 @@ DEGENERACY_MAX_NOISE_SHARE = 0.70
 FALLBACK_NAMES_PER_CLUSTER = 8
 FALLBACK_SEED = 0
 
+# A split or bonus that the price series does not adjust for appears as a one-session
+# level jump, and a spread fitted across one is fitted across an artefact. Names whose
+# window contains a jump this large are flagged rather than dropped: a threshold on
+# realised returns would make the universe itself data-dependent.
+CORPORATE_ACTION_LOG_JUMP = 0.4
+
 CAS_BREAK = pd.Timestamp("2026-08-03").date()
 STT_BREAK = pd.Timestamp("2026-04-01").date()
 
@@ -293,19 +299,35 @@ class PairResult:
     event_screen: str = "unchecked"
 
 
-def load_panel(path: Path) -> tuple[pd.DataFrame, list[str]]:
-    """Close panel of names present on every session, and the names that were dropped.
+def load_panel(path: Path) -> tuple[pd.DataFrame, dict[str, list[str]]]:
+    """Close panel of names present on every session, and every name dropped building it.
 
-    A name missing any session in the fetched span is dropped entirely rather than
-    interpolated, so every pair is fitted on genuinely aligned observations. That is
-    stricter than the fetch's own minimum-row rule, so the dropped names are returned
-    and reported: a shrinking universe must be visible, not inferred from a count.
+    Three rules, each of which shrinks the universe and so is reported rather than left
+    to be inferred from a count:
+
+    - **Repeated candles are collapsed only when identical.** The daily endpoint can
+      return a session's candle twice; where the two agree the repeat carries no
+      information and is dropped.
+    - **A name whose repeated candles disagree is dropped entirely.** Disagreement means
+      two price series share one symbol — an unadjusted and a corporate-action-adjusted
+      line, in the case that motivates this — and there is no basis here for choosing
+      between them. Picking either would fit a spread on a series the trade cannot
+      reference.
+    - **A name missing any session is dropped** rather than interpolated, so every pair
+      is fitted on genuinely aligned observations. This is stricter than the fetch's own
+      minimum-row rule.
     """
     frame = pd.read_parquet(path)
     frame["date"] = pd.to_datetime(frame["date"]).dt.date
+    frame = frame.drop_duplicates(["symbol", "date", "open", "high", "low", "close", "volume"])
+    ambiguous = sorted(
+        frame.loc[frame.duplicated(["symbol", "date"], keep=False), "symbol"].unique()
+    )
+    frame = frame[~frame["symbol"].isin(ambiguous)]
     closes = frame.pivot(index="date", columns="symbol", values="close").sort_index()
     complete = closes.dropna(axis=1, how="any")
-    dropped = sorted(set(closes.columns) - set(complete.columns))
+    incomplete = sorted(set(closes.columns) - set(complete.columns))
+    dropped = {"ambiguous_duplicate_series": ambiguous, "incomplete_series": incomplete}
     return complete.dropna(axis=0, how="any"), dropped
 
 
@@ -503,6 +525,9 @@ def screen(
         "notional": notional,
         "cluster": cluster_diag,
         "names_missing_lot_size": sorted(set(closes.columns) - set(lots)),
+        "names_with_possible_unadjusted_corporate_action": sorted(
+            returns.columns[(returns.abs() > CORPORATE_ACTION_LOG_JUMP).any()]
+        ),
         "cas_break_in_window": bool(window.index[0] <= CAS_BREAK <= formation_end),
         "stt_break_in_window": bool(window.index[0] <= STT_BREAK <= formation_end),
     }
@@ -559,7 +584,7 @@ def main() -> int:
     sectors: dict[str, str] = NIFTY50 if args.universe == "nifty50" else {}
     args.data = args.data or DEFAULT_DATA[args.universe]
 
-    closes, incomplete_names = load_panel(args.data)
+    closes, dropped_names = load_panel(args.data)
     lots = futures_lot_sizes()
     results, meta = screen(
         closes,
@@ -655,7 +680,7 @@ def main() -> int:
     meta["universe_name"] = args.universe
     meta["data"] = str(args.data)
     meta["entry_z"] = args.entry_z
-    meta["names_dropped_for_incomplete_series"] = incomplete_names
+    meta["names_dropped_building_panel"] = dropped_names
     meta["entry_candidates"] = len(entry_candidates)
     meta["watchlist"] = len(watchlist)
     meta["divergent_not_admitted"] = len(divergent)

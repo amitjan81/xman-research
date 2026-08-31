@@ -1,0 +1,74 @@
+{
+  "asof": "2026-08-28",
+  "formation_start": "2025-08-22",
+  "formation_end": "2026-08-21",
+  "formation_sessions": 247,
+  "gap_sessions": 5,
+  "gap_dates": [
+    "2026-08-24",
+    "2026-08-25",
+    "2026-08-26",
+    "2026-08-27",
+    "2026-08-28"
+  ],
+  "universe": 200,
+  "candidates": 347,
+  "fdr_q": 0.1,
+  "notional": 1000000.0,
+  "cluster": {
+    "pca_components": 15,
+    "pca_explained_variance_top5": [
+      0.3203,
+      0.0406,
+      0.034,
+      0.0222,
+      0.0191
+    ],
+    "optics_clusters": 19,
+    "optics_noise_share": 0.45,
+    "optics_largest_share": 0.065,
+    "degenerate": false,
+    "branch": "optics"
+  },
+  "names_missing_lot_size": [],
+  "names_with_possible_unadjusted_corporate_action": [],
+  "cas_break_in_window": true,
+  "stt_break_in_window": true,
+  "cas_refit_set": "nearest-miss-top10-by-coint-p",
+  "funnel": {
+    "universe_names": 200,
+    "candidate_pairs": 347,
+    "pass_bh": 0,
+    "pass_bh_and_half_life": 0,
+    "pass_bh_hl_hurst": 0,
+    "pass_bh_hl_hurst_sigma": 0,
+    "admitted": 0,
+    "solo_pass_bh": 0,
+    "solo_pass_half_life": 1,
+    "solo_pass_hurst": 257,
+    "solo_pass_sigma": 347,
+    "solo_pass_lot": 65,
+    "min_half_life": 4.999261588070023,
+    "min_coint_p": 0.0023936379250062067,
+    "bh_bar_at_rank_1": 0.00028818443804034583,
+    "n_half_life_le_10": 36,
+    "n_coint_p_le_0p05_unadjusted": 21,
+    "n_pass_all_but_half_life": 0,
+    "n_pass_all_but_bh": 0
+  },
+  "universe_name": "fno",
+  "data": "/home/qa/runtime/data/research/pairs/fno_daily.parquet",
+  "entry_z": 2.0,
+  "names_dropped_building_panel": {
+    "ambiguous_duplicate_series": [
+      "MOTHERSON"
+    ],
+    "incomplete_series": [
+      "FORCEMOT",
+      "IREDA"
+    ]
+  },
+  "entry_candidates": 0,
+  "watchlist": 0,
+  "divergent_not_admitted": 72
+}
