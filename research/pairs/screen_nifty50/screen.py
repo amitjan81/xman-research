@@ -90,6 +90,13 @@ def half_life_sessions(spread: np.ndarray) -> float:
     Regresses d_e_t on e_{t-1}: a negative slope b gives mean reversion with speed
     theta = -b and half-life ln(2)/theta. A non-negative slope means the fit found no
     reversion at all, reported as infinity so the horizon gate rejects it.
+
+    This is the continuous-time convention, ln(2)/theta. The exact half-life of the
+    fitted discrete AR(1) is ln(2) / -ln(1+b), which is the shorter of the two: near a
+    6.5-session estimate the two differ by about 5 %. The continuous form is the
+    conservative choice against an upper-bound horizon gate, and a pair whose reported
+    half-life sits within a few percent of the bar is inside that convention difference
+    rather than cleanly on one side of it.
     """
     e = np.asarray(spread, dtype=float)
     lag, delta = e[:-1], np.diff(e)
@@ -210,11 +217,17 @@ def min_notional_for_lot_gate(
 def round_trip_cost_bps(beta: float) -> dict[str, float]:
     """Two-leg round-trip cost in bps of leg-A notional, scaled for an unequal leg B.
 
-    The framework's 12.3 bps hard cost assumes both legs carry notional N. Leg B carries
-    beta * N here, and every component is proportional to its own leg's notional, so the
-    cost per bps of leg-A notional scales by (1 + beta) / 2. This is an approximation:
-    the brokerage component is a per-order min(0.03 %, Rs 20) and so does not scale
-    strictly linearly.
+    The framework's 12.3 bps hard cost assumes both legs carry notional N. Every cost
+    component is proportional to its own leg's notional, so a leg B carrying beta * N
+    scales the total by (1 + |beta|) / 2.
+
+    Pass the **realised** leg ratio, not the fitted one: whole lots are what actually
+    trade, and a small fitted beta whose leg B still rounds up to one lot pays for that
+    lot in full. Scaling on the fitted beta would understate the cost of exactly the
+    low-beta pairs whose quantisation error is largest.
+
+    This is an approximation: the brokerage component is a per-order min(0.03 %, Rs 20)
+    and so does not scale strictly linearly.
     """
     scale = (1.0 + abs(beta)) / 2.0
     return {
@@ -264,11 +277,20 @@ class PairResult:
     event_screen: str = "unchecked"
 
 
-def load_panel(path: Path) -> pd.DataFrame:
+def load_panel(path: Path) -> tuple[pd.DataFrame, list[str]]:
+    """Close panel of names present on every session, and the names that were dropped.
+
+    A name missing any session in the fetched span is dropped entirely rather than
+    interpolated, so every pair is fitted on genuinely aligned observations. That is
+    stricter than the fetch's own minimum-row rule, so the dropped names are returned
+    and reported: a shrinking universe must be visible, not inferred from a count.
+    """
     frame = pd.read_parquet(path)
     frame["date"] = pd.to_datetime(frame["date"]).dt.date
     closes = frame.pivot(index="date", columns="symbol", values="close").sort_index()
-    return closes.dropna(axis=1, how="any").dropna(axis=0, how="any")
+    complete = closes.dropna(axis=1, how="any")
+    dropped = sorted(set(closes.columns) - set(complete.columns))
+    return complete.dropna(axis=0, how="any"), dropped
 
 
 def futures_lot_sizes() -> dict[str, int]:
@@ -390,7 +412,8 @@ def screen(
             lot_b=lots.get(sym_b, 1),
             notional=notional,
         )
-        costs = round_trip_cost_bps(beta)
+        # Costs scale on the lot-quantised ratio that actually trades, not the fitted one.
+        costs = round_trip_cost_bps(quant["beta_effective"])
         sigma_bps = z_denominator * 1e4
         raw.append(
             {
@@ -461,7 +484,7 @@ def screen(
 
 
 def refit_pre_cas(
-    closes: pd.DataFrame, pairs: list[tuple[str, str]], *, formation_start: date, notional: float
+    closes: pd.DataFrame, pairs: list[tuple[str, str]], *, formation_start: date
 ) -> pd.DataFrame:
     """Refit a set of pairs on the same window truncated the session before the CAS change.
 
@@ -506,7 +529,7 @@ def main() -> int:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from nifty50_members import NIFTY50
 
-    closes = load_panel(args.data)
+    closes, incomplete_names = load_panel(args.data)
     lots = futures_lot_sizes()
     results, meta = screen(
         closes,
@@ -524,6 +547,20 @@ def main() -> int:
     admitted = frame[frame["admitted"]].copy()
     admitted.to_csv(args.out_dir / "admitted.csv", index=False)
 
+    # Entry candidates require admission. The divergent set — candidates at or beyond the
+    # entry threshold that were NOT admitted — is emitted separately and named for what it
+    # is, so a large z on an unqualified pair can never be read as a signal.
+    entry_candidates = admitted[admitted["z_today"].abs() >= args.entry_z]
+    entry_candidates.to_csv(args.out_dir / "entry_candidates.csv", index=False)
+    watchlist = admitted[admitted["z_today"].abs() < args.entry_z]
+    watchlist.sort_values("z_today", key=abs, ascending=False).to_csv(
+        args.out_dir / "watchlist.csv", index=False
+    )
+    divergent = frame[(frame["z_today"].abs() >= args.entry_z) & ~frame["admitted"]]
+    divergent.sort_values("z_today", key=abs, ascending=False).to_csv(
+        args.out_dir / "divergent_not_admitted.csv", index=False
+    )
+
     # The CAS refit measures the closing-price break rather than merely flagging it. It
     # runs on the admitted set when there is one, and otherwise on the strongest
     # candidates by cointegration p — a set that is explicitly NOT admitted, labelled as
@@ -535,7 +572,6 @@ def main() -> int:
             closes,
             list(zip(refit_source["symbol_a"], refit_source["symbol_b"], strict=True)),
             formation_start=pd.Timestamp(meta["formation_start"]).date(),
-            notional=args.notional,
         )
         merged = refit_source[
             ["symbol_a", "symbol_b", "beta", "coint_p", "half_life", "sigma_bps", "hurst"]
@@ -586,10 +622,20 @@ def main() -> int:
         ),
     }
     meta["funnel"] = funnel
+    meta["entry_z"] = args.entry_z
+    meta["names_dropped_for_incomplete_series"] = incomplete_names
+    meta["entry_candidates"] = len(entry_candidates)
+    meta["watchlist"] = len(watchlist)
+    meta["divergent_not_admitted"] = len(divergent)
     (args.out_dir / "meta.json").write_text(json.dumps(meta, indent=2))
 
     print(json.dumps({k: v for k, v in meta.items() if k != "gap_dates"}, indent=2)[:2000])
     print(f"\nadmitted {len(admitted)} of {len(frame)} candidates")
+    print(
+        f"entry candidates (|z| >= {args.entry_z}): {len(entry_candidates)}; "
+        f"watchlist: {len(watchlist)}; "
+        f"divergent but NOT admitted (not trades): {len(divergent)}"
+    )
     if not admitted.empty:
         cols = ["symbol_a", "symbol_b", "beta", "half_life", "sigma_bps", "coint_p", "bh_bar",
                 "hurst", "crossings", "lot_error", "z_today"]

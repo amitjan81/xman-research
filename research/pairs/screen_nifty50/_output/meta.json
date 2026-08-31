@@ -54,5 +54,10 @@
     "n_coint_p_le_0p05_unadjusted": 2,
     "n_pass_all_but_half_life": 0,
     "n_pass_all_but_bh": 0
-  }
+  },
+  "entry_z": 2.0,
+  "names_dropped_for_incomplete_series": [],
+  "entry_candidates": 0,
+  "watchlist": 0,
+  "divergent_not_admitted": 10
 }
