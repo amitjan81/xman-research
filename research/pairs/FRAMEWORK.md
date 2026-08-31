@@ -18,18 +18,22 @@ Everything else in this document exists to find pairs that satisfy both, honestl
    days** (Elliott, van der Hoek & Malcolm 2005, *Quantitative Finance*), or the 1–5 day
    mandate turns winners into timeouts.
 
-Capital is the third constraint, not a gate: SPAN+ELM ≈18 % of N per leg with **no
-cross-underlying offset** (mechanics) → **≈40–50 % of N per pair** with an MTM buffer. A
-small book runs tens of pairs; prefer fewer, higher-σ pairs over breadth.
+Capital is the third constraint, not a gate: price-scan 14.2 % + ELM 3.5 % = **17.7 % of N
+per leg** with **no cross-underlying offset** (mechanics) → **≈35–44 % of N per pair** — the
+upper end reflects higher scan ranges on volatile names — and **≈40–50 % with an MTM
+buffer**. Delivery-margin escalation over the last ~4 sessions before expiry raises the leg
+margin above this before a roll executes. A small book runs tens of pairs; prefer fewer,
+higher-σ pairs over breadth, with a **book-level cap on net per-underlying exposure** so two
+pairs sharing a name cannot compound into a single-stock bet the per-pair sizing never sees.
 
 ## 1. Model choices (ranked by estimation risk per unit of data, from the evidence)
 
 | Layer | Choice | Why (evidence) |
 |---|---|---|
-| Trading rule | **Distance method**, re-specified for short horizon | Zero estimated selection parameters; only method with net-of-cost survival through 2009 (Do & Faff 2012, *JFR*: ~30 bps/mo; Rad, Low & Faff 2016, *QF*: 38 bps/mo net vs 33 cointegration, 5 copula) |
+| Trading rule | **Distance method**, re-specified for short horizon | Zero estimated selection parameters; the strongest net-of-cost record (Do & Faff 2012, *JFR*: ~30 bps/mo through 2009; Rad, Low & Faff 2016, *QF*: 38 bps/mo net vs 33 cointegration, 5 copula, 1962–2014). Post-2009 the *frequency of opportunities* declines for distance and cointegration alike (Rad et al.) — a capacity fact, not a survival claim |
 | Hedge ratio | **Rolling Engle–Granger** (monthly re-fit); Kalman as an upgrade to evaluate, not a default | The SSF legs are lot-quantised, so an explicit ratio is operationally required; Kalman has no cost-aware evidence of its own |
 | Pre-selection | **PCA factor residuals + clustering** within sectors | Avellaneda & Lee 2010 (*QF*, 342 cites, Sharpe 1.44 after costs 1997–2007); attacks the ~21,500-pair multiple-testing problem in a ~208-name universe |
-| Gates | ADF on the spread, **Hurst < 0.5**, half-life bounds, ≥1 mean-crossing/month | Sarmento & Horta 2020 (*ESWA*) pipeline; Hurst/variance-ratio as screens, not strategies |
+| Gates | ADF on the spread, **Hurst < 0.5**, half-life bounds, mean-crossing count (belt-and-braces only — any spread passing the 1–5 day half-life gate crosses its mean several times a month), MWPL ban-history screen, event calendar | Sarmento & Horta 2020 (*ESWA*) pipeline; Hurst/variance-ratio as screens, not strategies |
 | Rejected | Copula (5 bps/mo net in the horse race), DL spread forecasting (no cost-aware evidence at this scale), ADR/dual-listing pairs (untradeable from a domestic account) | |
 
 India-specific prior: Aggarwal & Aggarwal 2021 (*Asia-Pacific Financial Markets*) reports
@@ -67,12 +71,24 @@ the ScreenSheet as evidence — the existing screen → gate → admit machinery
 unchanged, including the sealed holdout and DSR deflation by the family's trial count.
 
 **Phase 3 — trading rule (daily, per admitted pair).**
-Signal at a **pre-15:10 snapshot**; orders in futures **before 15:15** (after that the cash
+Signal at a **pre-15:10 snapshot** — and therefore every backtest's signal series is the
+15:10 snapshot series, not the (auction) close series; fitting z/σ/half-life on closes and
+firing on snapshots would estimate one price object and trade another. Orders in futures
+**before 15:15** (after that the cash
 legs are in auction and the futures reference degrades) or at next open, chosen once and
 pre-registered — never "the close", which is discovered at 15:30–15:35 and cannot be traded
-(mechanics). Entry |z| ≥ 2, exit z = 0, hard stop |z| ≥ 3, **time stop = 2× half-life**
-(caps the hold inside the mandate), structural-break exit if the rolling ADF p degrades past
-a pre-set bound. Roll policy: positions opened within 2 sessions of the NSE last-Tuesday
+(mechanics). Entry |z| ≥ 2, exit z = 0, hard stop |z| ≥ 3, **time stop = min(2× half-life, 5 sessions)**
+— the 5-session cap is what enforces the mandate; 2× half-life alone would allow ~10-session
+holds at the admission bound — plus a structural-break exit if the rolling ADF p degrades
+past a pre-set bound. The 2σ capture in §0 is the full-convergence ideal; stop-outs,
+time-stop exits at non-zero z and slippage pull realised capture below it — the 4–5× cost
+coverage multiple is the buffer for exactly that. **Event exclusion:** no new entries within
+N sessions (pre-registered) of a scheduled result, and flatten-or-exempt rules for
+dividends/splits on either leg — scheduled earnings are the canonical "divergence that never
+reconverges". **MWPL ban handling:** names with recent ban-period history are excluded at
+admission; a position caught in a ban exits via the permitted closing trade before the roll
+window (no adds, no re-entry, no roll is possible in ban). Orders are carry-forward (NRML)
+product — broker intraday auto-square-off at 15:12 would otherwise flatten a 15:10 entry. Roll policy: positions opened within 2 sessions of the NSE last-Tuesday
 expiry open in the next month; open positions roll with the calendar (partial ELM relief on
 the far leg — mechanics).
 

@@ -37,8 +37,7 @@ Ranking criterion: estimation risk per unit of available data (a ~208-name unive
    residuals as OU, Sharpe 1.44 after costs 1997–2007, 0.90 for 2003–07. Sarmento & Horta
    2020 *ESWA* 158: PCA→OPTICS→EG + Hurst<0.5 + half-life; reported Sharpe 3.79 — not
    comparable to A&L (different universe/costs). Use for candidate shrinkage.
-7. **Hurst / variance-ratio** — screens beside the half-life gate; Nasdaq-100 Hurst pairs
-   study 2021 (57).
+7. **Hurst / variance-ratio** — screens beside the half-life gate, not strategies.
 
 Top 3: distance (re-specified, half-life-gated) → rolling EG for the hedge ratio →
 PCA/clustering as pre-filter. Not ranked: copula, DL forecasting, stochastic control.
@@ -53,7 +52,7 @@ PCA/clustering as pre-filter. Not ranked: copula, DL forecasting, stochastic con
 | Expiries | NSE Tuesday (monthly last Tuesday), BSE Thursday, since 2025-09-01 |
 | STT | 0.05 % futures sell-side (hiked from 0.02 % on 2026-04-01 — the level verified on a broker sheet, the prior from snippets) |
 | Other costs | NSE txn 0.00183 %; stamp 0.002 % buy; SEBI ₹10/cr; GST 18 % on (brokerage+SEBI+txn); brokerage min(0.03 %, ₹20)/order |
-| Margin | Price scan 14.2 % + ELM 3.5 % ≈ 18 %/leg; no cross-underlying offset ⇒ ~36–44 % of N per pair (~40–50 % with buffer) |
+| Margin | Price scan 14.2 % + ELM 3.5 % = 17.7 %/leg; no cross-underlying offset ⇒ 35.4 % of N per pair at the base scan range, up to ~44 % on volatile names with higher scan ranges (~40–50 % with MTM buffer); delivery margins escalate over the last ~4 sessions before physical-settlement expiry |
 | Sessions | Derivatives 09:15–15:40 (since 2026-08-03); cash CAS stocks stop 15:15, auction to 15:35; F&O intraday auto-square-off 15:12 (broker) |
 | Circuits | F&O stocks: dynamic ±10 %; cash bands 2/5/10/20 %; CAS stock-futures band ±3 % of fresh reference |
 | Tax | F&O = non-speculative business income, slab rates, STT deductible, 8-yr carry-forward |
