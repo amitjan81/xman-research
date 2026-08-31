@@ -14,9 +14,13 @@ Everything else in this document exists to find pairs that satisfy both, honestl
    round trip costs **≈12.3 bps of one-leg notional N in hard costs (~82 % of it STT at
    0.05 % on each sell), ≈17–27 bps all-in with slippage**. A 2σ-entry/0-exit rule captures
    ≈2σ_spread, so admission requires **σ_spread ≥ 50–60 bps of N** (≥4–5× cost coverage).
-2. **Horizon.** The spread's **Ornstein–Uhlenbeck half-life must sit in ≈1–5 trading
-   days** (Elliott, van der Hoek & Malcolm 2005, *Quantitative Finance*), or the 1–5 day
-   mandate turns winners into timeouts.
+2. **Horizon.** The spread's **Ornstein–Uhlenbeck half-life must sit at ≈5 trading days or
+   less** (Elliott, van der Hoek & Malcolm 2005, *Quantitative Finance*). The mandate is a
+   **maximum holding period, not a minimum** (owner review, PR #39): a position unwinds the
+   same day whenever the exit, stop or event rule is touched, and a skewed-reward
+   high-conviction entry may be taken with an intraday unwind intended. One measurement
+   limit: sub-day half-lives cannot be estimated from daily closes — selecting pairs *for*
+   intraday reversion needs the minute-bar series from Phase 0's capture.
 
 Capital is the third constraint, not a gate: price-scan 14.2 % + ELM 3.5 % = **17.7 % of N
 per leg** with **no cross-underlying offset** (mechanics) → **≈35–44 % of N per pair** — the
@@ -77,9 +81,10 @@ firing on snapshots would estimate one price object and trade another. Orders in
 **before 15:15** (after that the cash
 legs are in auction and the futures reference degrades) or at next open, chosen once and
 pre-registered — never "the close", which is discovered at 15:30–15:35 and cannot be traded
-(mechanics). Entry |z| ≥ 2, exit z = 0, hard stop |z| ≥ 3, **time stop = min(2× half-life, 5 sessions)**
-— the 5-session cap is what enforces the mandate; 2× half-life alone would allow ~10-session
-holds at the admission bound — plus a structural-break exit if the rolling ADF p degrades
+(mechanics). Entry |z| ≥ 2; exit z = 0 and hard stop |z| ≥ 3 **evaluated whenever touched, including
+intraday on the entry day — holding to a next session is never required**; **time stop =
+min(2× half-life, 5 sessions)** — the 5-session cap is the mandate's maximum; 2× half-life
+alone would allow ~10-session holds at the admission bound — plus a structural-break exit if the rolling ADF p degrades
 past a pre-set bound. The 2σ capture in §0 is the full-convergence ideal; stop-outs,
 time-stop exits at non-zero z and slippage pull realised capture below it — the 4–5× cost
 coverage multiple is the buffer for exactly that. **Event exclusion:** no new entries within
