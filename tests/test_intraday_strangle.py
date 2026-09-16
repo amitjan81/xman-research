@@ -88,7 +88,7 @@ def test_entry_sells_one_otm_call_and_one_otm_put(tmp_path: Path) -> None:
 
 def test_only_one_strangle_a_session(tmp_path: Path) -> None:
     strategy = build()
-    view, positions = open_position(tmp_path, strategy)
+    view, _positions = open_position(tmp_path, strategy)
 
     # Flat again later the same session — the rule is one entry per session, not one at a time.
     later = minute_at(view, dt.time(11, 0))
@@ -138,7 +138,7 @@ def test_the_strike_breach_stop_scales_with_the_distance_to_the_strike(tmp_path:
     """Half the way from entry spot to the short call closes a 0.50-buffer position."""
     strategy = build(stop=SpotStop.STRIKE_BREACH, stop_strike_buffer=0.50)
     _, positions = open_position(tmp_path, strategy)
-    cycle = strategy._position  # noqa: SLF001 — the strike is what the rule measures against
+    cycle = strategy._position  # the strike is what the rule measures against
     assert cycle is not None
     halfway = SPOT + 0.6 * (cycle.strikes["short_call"] - SPOT)
 
