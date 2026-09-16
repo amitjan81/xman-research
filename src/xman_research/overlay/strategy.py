@@ -87,8 +87,8 @@ class OverlayParameters:
 
     ST-4 says "no later than 15:15", and a single attempt at 15:15 is not the same thing
     as meeting that deadline: a four-leg group needs every leg to print in the same minute,
-    and a far-out wing does not always oblige. Attempting from 14:30 gives the group
-    several minutes inside the rule rather than one minute at its edge. The first E2E run
+    and a far-out wing does not always oblige. Attempting from 14:00 gives the group
+    five decision minutes inside the rule rather than one at its edge. The first E2E run
     over 2026 Q1 carried a position into expiry morning for exactly this reason, and a
     2022 session then failed to settle at all because its 15:00-15:30 window was one bar
     short — a fixed rule broken by an execution detail, twice over."""
@@ -134,6 +134,13 @@ class CycleState:
     exit_requested: bool = False
     exit_rule: str | None = None
     exit_estimate: float | None = None
+    exit_attempted_at: dt.datetime | None = None
+    """The last minute at which a close was asked for.
+
+    Reported as the cycle's exit, rather than the minute the book was first *seen* empty.
+    The engine applies fills after :meth:`decide` returns, so an exit that fills at 15:15
+    is only observable at the next session's first decision minute — which would put a
+    perfectly compliant ST-4 close on expiry morning in every report that read it."""
 
     @property
     def units(self) -> int:
@@ -272,8 +279,16 @@ class IndexOptionOverlay:
             {
                 "expiry": cycle.expiry.isoformat(),
                 "entry_date": cycle.entry_date.isoformat(),
-                "exit_date": session.session_date.isoformat(),
-                "exit_minute": minute.isoformat(),
+                "exit_date": (
+                    cycle.exit_attempted_at.date().isoformat()
+                    if cycle.exit_attempted_at is not None
+                    else session.session_date.isoformat()
+                ),
+                "exit_minute": (
+                    cycle.exit_attempted_at.isoformat()
+                    if cycle.exit_attempted_at is not None
+                    else minute.isoformat()
+                ),
                 "lots": cycle.lots,
                 "lot_size": cycle.lot_size,
                 "wing_width": cycle.wing_width,
@@ -305,7 +320,7 @@ class IndexOptionOverlay:
         # honestly be applied to it is "close it".
         held = {position.contract.trading_symbol for position in book.positions()}
         if held and held != set(cycle.legs.values()):
-            return self._close(cycle, "ST-22_structure_mismatch_unwind", None, book)
+            return self._close(cycle, "ST-22_structure_mismatch_unwind", None, book, minute=minute)
         marks = self._marks(session, minute, cycle)
         pnl = None if marks is None else self._unrealised(cycle, marks)
 
@@ -319,16 +334,16 @@ class IndexOptionOverlay:
                 # session and did not complete. Recorded as a breach of a fixed rule
                 # rather than absorbed, because that is what it is.
                 rule = "ST-4_deadline_missed"
-            return self._close(cycle, rule, pnl, book, split_groups=days_left <= 0)
+            return self._close(cycle, rule, pnl, book, minute=minute, split_groups=days_left <= 0)
 
         if pnl is not None:
             if pnl <= -params.stop_multiple * cycle.credit_rupees:
-                return self._close(cycle, "ST-19_weekly_stop", pnl, book)
+                return self._close(cycle, "ST-19_weekly_stop", pnl, book, minute=minute)
             if pnl >= params.profit_take * cycle.credit_rupees:
-                return self._close(cycle, "ST-17_profit_target", pnl, book)
+                return self._close(cycle, "ST-17_profit_target", pnl, book, minute=minute)
             breach = self._risk_budget_breach(session.session_date, pnl)
             if breach is not None:
-                return self._close(cycle, breach, pnl, book)
+                return self._close(cycle, breach, pnl, book, minute=minute)
 
         # ST-20/ST-21: the tested side is the one whose short delta has run. A first touch
         # rolls, a second closes. The roll is emitted as one group with the untested side's
@@ -336,7 +351,7 @@ class IndexOptionOverlay:
         touched = self._tested_side(session, minute, cycle)
         if touched is not None:
             if cycle.rolled:
-                return self._close(cycle, "ST-21_second_touch", pnl, book)
+                return self._close(cycle, "ST-21_second_touch", pnl, book, minute=minute)
             rolled = self._roll(session, minute, cycle, touched, book)
             if rolled:
                 return rolled
@@ -400,6 +415,7 @@ class IndexOptionOverlay:
         pnl: float | None,
         book: BookView,
         *,
+        minute: dt.datetime,
         split_groups: bool = False,
     ) -> Sequence[TradeIntent]:
         """Ask the engine to flatten the cycle.
@@ -414,6 +430,7 @@ class IndexOptionOverlay:
         go first and the wings follow in the same minute."""
         cycle.exit_requested = True
         cycle.exit_rule = rule
+        cycle.exit_attempted_at = minute
         if pnl is not None:
             cycle.exit_estimate = pnl
         expiry = cycle.expiry.isoformat()

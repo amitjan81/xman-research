@@ -20,6 +20,7 @@ from typing import Any
 from xman_research import DataWindow, HypothesisRecord, open_session
 from xman_research.adapter import costs_by_date, feasibility_from_result
 from xman_research.backtest import BacktestConfig, BacktestResult, run_backtest
+from xman_research.backtest.costs import Side
 from xman_research.overlay.context import VIX_SUBSTITUTION, load_context
 from xman_research.overlay.fills import AbsoluteSlippageFillModel
 from xman_research.overlay.sizing import CollateralAssumption, MarginPerLotModel
@@ -220,8 +221,16 @@ def overlay_metrics(
         if row["outcome"] == "declined":
             declines[row["rule"]] = declines.get(row["rule"], 0) + 1
 
-    wins = [c for c in cycles if c["estimated_pnl"] > 0]
-    losses = [c for c in cycles if c["estimated_pnl"] <= 0]
+    # **Per-cycle P&L comes from the engine's fills, not from the strategy's own marks.**
+    # The strategy keeps a mark-based estimate because ST-32/ST-33 have to gate on
+    # something while a position is open, but that estimate is pre-cost and pre-slippage.
+    # Win rate, average win, profit factor and premium capture are all statistics *about
+    # completed trades*, so they are computed from what the book actually received.
+    realised = _pnl_by_expiry(result)
+    for cycle in cycles:
+        cycle["realised_pnl"] = realised.get(cycle["expiry"], 0.0)
+    wins = [c for c in cycles if c["realised_pnl"] > 0]
+    losses = [c for c in cycles if c["realised_pnl"] <= 0]
     gross_credit = sum(c["credit_rupees"] for c in cycles)
     costs = result.total_costs
 
@@ -249,9 +258,15 @@ def overlay_metrics(
         "entries": len(entries),
         "completed_cycles": len(cycles),
         "win_rate": len(wins) / len(cycles) if cycles else None,
-        "average_win_rupees": (sum(c["estimated_pnl"] for c in wins) / len(wins)) if wins else None,
+        "average_win_rupees": (sum(c["realised_pnl"] for c in wins) / len(wins)) if wins else None,
         "average_loss_rupees": (
-            sum(c["estimated_pnl"] for c in losses) / len(losses) if losses else None
+            sum(c["realised_pnl"] for c in losses) / len(losses) if losses else None
+        ),
+        "expectancy_rupees": (
+            sum(c["realised_pnl"] for c in cycles) / len(cycles) if cycles else None
+        ),
+        "median_premium_capture": _median(
+            [c["realised_pnl"] / c["credit_rupees"] for c in cycles if c["credit_rupees"] > 0]
         ),
         "profit_factor": (
             sum(c["estimated_pnl"] for c in wins) / abs(sum(c["estimated_pnl"] for c in losses))
@@ -276,6 +291,50 @@ def overlay_metrics(
         "feasibility": result.feasibility_counts(),
         "stale_mark_sessions": sum(1 for row in result.daily if row.stale_marks),
     }
+
+
+def _pnl_by_expiry(result: BacktestResult) -> dict[str, float]:
+    """Net rupees per expiry cycle, from fills and settlements, costs included.
+
+    The expiry is read off the trading symbol — the vendor's own format carries it — so a
+    roll's replacement legs and the original legs land in the same cycle, which is what a
+    "cycle P&L" means.
+    """
+    totals: dict[str, float] = {}
+    for fill in result.fills:
+        if not fill.filled:
+            continue
+        expiry = _expiry_of(fill.trading_symbol)
+        if expiry is None:
+            continue
+        direction = 1.0 if fill.side is Side.SELL else -1.0
+        totals[expiry] = totals.get(expiry, 0.0) + direction * fill.gross_value - fill.costs.total
+    for settlement in result.settlements:
+        expiry = _expiry_of(settlement.trading_symbol)
+        if expiry is None:
+            continue
+        totals[expiry] = totals.get(expiry, 0.0) + settlement.cash_flow - settlement.costs.total
+    return totals
+
+
+def _expiry_of(trading_symbol: str) -> str | None:
+    parts = trading_symbol.split("-")
+    if len(parts) != 4:
+        return None
+    try:
+        return dt.datetime.strptime(parts[1], "%d%b%Y").date().isoformat()
+    except ValueError:
+        return None
+
+
+def _median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2.0
 
 
 def _safe_sharpe(returns) -> float | None:

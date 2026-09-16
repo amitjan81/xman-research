@@ -32,13 +32,18 @@ import datetime as dt
 import math
 from dataclasses import dataclass, replace
 from itertools import pairwise
+from pathlib import Path
 
 import pandas as pd
 
 from xman_research.overlay.greeks import ObservedQuote, extrapolated_wing_price, year_fraction
 from xman_research.session_store import SessionRef, SessionStore
 
-__all__ = ["SYNTHETIC_WING_STAMP", "SyntheticWingStore"]
+__all__ = ["DEFAULT_CACHE_ROOT", "SYNTHETIC_WING_STAMP", "SyntheticWingStore"]
+
+#: Where extended session frames are kept between runs. Beside the corpus, never inside the
+#: repository: it is regenerable output, and it is large.
+DEFAULT_CACHE_ROOT = Path("/home/qa/runtime/data/research/overlay/extended")
 
 SYNTHETIC_WING_STAMP = (
     "corpus.synthetic_wing_bars: long wing legs outside the captured strike band are "
@@ -90,14 +95,35 @@ class SyntheticWingStore(SessionStore):
         minutes: tuple[dt.time, ...],
         extend_points: float = 1500.0,
         liquidity_haircut: float = 0.5,
+        cache_root: Path | None = DEFAULT_CACHE_ROOT,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
         self._minutes = frozenset(minutes)
         self._extend_points = extend_points
         self._liquidity_haircut = liquidity_haircut
+        self._cache_root = (
+            None
+            if cache_root is None
+            else Path(cache_root) / f"ext{int(extend_points)}_m{len(self._minutes)}"
+        )
         self.synthetic_rows = 0
         self.sessions_extended = 0
+        self.sessions_from_cache = 0
+
+    def _cache_path(self, ref: SessionRef) -> Path | None:
+        """Where this session's extended frame is kept.
+
+        **The extension is a pure function of the session, the strike window and the
+        decision grid**, so a sweep of seven arms over the same corpus was rebuilding the
+        same frames seven times — about fifty minutes an arm, most of it Black-Scholes on
+        bars the previous arm had already priced. The cache key carries the two parameters
+        that change the output; anything else that changes it is a code change, and the
+        cache directory is regenerable output that can simply be deleted.
+        """
+        if self._cache_root is None:
+            return None
+        return self._cache_root / ref.underlying / f"{ref.session_date.isoformat()}.parquet"
 
     def load_refdata(self, ref: SessionRef):  # type: ignore[override]
         """The session's instrument master, extended to the strikes the wing needs.
@@ -159,6 +185,10 @@ class SyntheticWingStore(SessionStore):
         return replace(refdata, nfo_instruments=tuple(rows + added))
 
     def load_session(self, ref: SessionRef, *, verify: bool = False) -> pd.DataFrame:
+        cache = self._cache_path(ref)
+        if cache is not None and cache.is_file():
+            self.sessions_from_cache += 1
+            return pd.read_parquet(cache)
         frame = super().load_session(ref, verify=verify)
         refdata = self.load_refdata(ref)
         listed: dict[tuple[dt.date, str], dict[float, tuple[str, int]]] = {}
@@ -256,6 +286,7 @@ class SyntheticWingStore(SessionStore):
                         }
                     )
         if not rows:
+            self._write_cache(cache, frame)
             return frame
         self.synthetic_rows += len(rows)
         self.sessions_extended += 1
@@ -263,7 +294,19 @@ class SyntheticWingStore(SessionStore):
         for column in frame.columns:
             if column not in extra.columns:
                 extra[column] = float("nan")
-        return pd.concat([frame, extra[list(frame.columns)]], ignore_index=True)
+        extended = pd.concat([frame, extra[list(frame.columns)]], ignore_index=True)
+        self._write_cache(cache, extended)
+        return extended
+
+    @staticmethod
+    def _write_cache(cache: Path | None, frame: pd.DataFrame) -> None:
+        if cache is None:
+            return
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        # Written through a temporary name so a concurrent reader never sees half a file.
+        temporary = cache.with_suffix(".parquet.tmp")
+        frame.to_parquet(temporary, index=False)
+        temporary.replace(cache)
 
 
 def _by_side(minute_frame: pd.DataFrame):
