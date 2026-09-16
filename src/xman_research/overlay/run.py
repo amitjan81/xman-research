@@ -19,7 +19,12 @@ from typing import Any
 
 from xman_research import DataWindow, HypothesisRecord, open_session
 from xman_research.adapter import costs_by_date, feasibility_from_result
-from xman_research.backtest import BacktestConfig, BacktestResult, run_backtest
+from xman_research.backtest import (
+    BacktestConfig,
+    BacktestResult,
+    ParticipationLimits,
+    run_backtest,
+)
 from xman_research.backtest.costs import Side
 from xman_research.overlay.context import VIX_SUBSTITUTION, load_context
 from xman_research.overlay.fills import AbsoluteSlippageFillModel
@@ -91,6 +96,13 @@ class OverlayRunConfig:
     corpus_root: Path = DEFAULT_CORPUS_ROOT
     trial_log: Path = DEFAULT_TRIAL_LOG
     decision_interval_minutes: int = 15
+    participation_volume_pct: float = 0.01
+    """Share of a minute's printed volume one order may be. The engine's default research
+    convention is 1%, and for this structure it is the binding execution constraint: four
+    legs must fill in the same minute, and the far wing's minute volume is small. Arms that
+    raise it are measuring how much of the result is the cap rather than the strategy."""
+    participation_oi_pct: float = 0.005
+    roll_trigger_delta: float = 0.28
     label: str = "observed_wings"
 
     def collateral_assumption(self) -> CollateralAssumption:
@@ -117,6 +129,9 @@ class OverlayRun:
             "wing_policy": self.config.wing_policy,
             "min_credit_ratio": self.config.min_credit_ratio,
             "slippage_rupees": self.config.slippage_rupees,
+            "participation_volume_pct": self.config.participation_volume_pct,
+            "participation_oi_pct": self.config.participation_oi_pct,
+            "roll_trigger_delta": self.config.roll_trigger_delta,
             "portfolio_capital": self.config.portfolio_capital,
             "margin_assumptions": self.config.margin_model.assumptions,
             "trial_id": self.result.trial_id,
@@ -139,7 +154,10 @@ def run_overlay(config: OverlayRunConfig) -> OverlayRun:
     context = load_context(corpus_root=config.corpus_root, underlying=config.underlying)
     strategy = IndexOptionOverlay(
         context=context,
-        params=OverlayParameters(min_credit_ratio=config.min_credit_ratio),
+        params=OverlayParameters(
+            min_credit_ratio=config.min_credit_ratio,
+            roll_trigger_delta=config.roll_trigger_delta,
+        ),
         collateral=config.collateral_assumption(),
         margin_model=config.margin_model,
         wing_policy=config.wing_policy,
@@ -156,6 +174,10 @@ def run_overlay(config: OverlayRunConfig) -> OverlayRun:
         starting_cash=config.portfolio_capital,
         decision_times=times,
         fill_model=AbsoluteSlippageFillModel(rupees_per_unit=config.slippage_rupees),
+        limits=ParticipationLimits(
+            max_pct_of_bar_volume=config.participation_volume_pct,
+            max_pct_of_open_interest=config.participation_oi_pct,
+        ),
         gap_reason=gap_reason,
     )
     session = open_session(config.trial_log)

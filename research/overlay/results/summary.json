@@ -1,0 +1,120 @@
+{
+  "H_relaxed_participation_caps": {
+    "sessions": 1206,
+    "years_observed": 4.785714285714286,
+    "net_pnl_rupees": 170715.19296490215,
+    "return_on_pc_total": 0.017071519296490215,
+    "return_on_pc_annualised": 0.003567183136580045,
+    "sharpe_annualised": 0.6332458418347354,
+    "sortino_annualised": 0.7785035221821148,
+    "max_drawdown_pct_of_pc": 0.0087055685120401,
+    "drawdown_peak": "2026-06-11",
+    "drawdown_trough": "2026-07-17",
+    "calmar": 0.40975878044570074,
+    "entries": 142,
+    "completed_cycles": 142,
+    "win_rate": 0.5492957746478874,
+    "average_win_rupees": 7611.274466031576,
+    "average_loss_rupees": -6608.815865400648,
+    "expectancy_rupees": 1202.2196687663481,
+    "median_premium_capture": 0.20053098564254668,
+    "profit_factor": 2.1997537991473206,
+    "gross_credit_rupees": 2151764.5401030937,
+    "total_costs_rupees": 47323.06141804204,
+    "cost_ratio": 0.021992676492277697,
+    "cost_breakdown": {
+      "brokerage": 34360.0,
+      "stt": 3868.9331265707356,
+      "exchange_transaction_charge": 2391.833947371045,
+      "sebi_turnover_fee": 5.5769349437086495,
+      "stt_on_exercise": 0.0,
+      "stamp_duty": 80.38345033988665,
+      "gst": 6616.333958816653
+    },
+    "exit_rules": {
+      "ST-17_profit_target": 66,
+      "ST-4_time_exit": 51,
+      "ST-21_second_touch": 3,
+      "ST-39_entry_never_filled": 8,
+      "ST-4_deadline_missed": 9,
+      "ST-22_structure_mismatch_unwind": 1,
+      "ST-19_weekly_stop": 4
+    },
+    "declines": {
+      "ST-12_trend_filter": 434,
+      "ST-11_vrp_filter": 1159,
+      "ST-6_no_strike_in_delta_band": 773,
+      "ST-13_gap_filter": 193
+    },
+    "peak_margin_no_netting": 3224075.4,
+    "feasibility": {
+      "fillable": 1547,
+      "resized": 171,
+      "no_bar": 0,
+      "no_liquidity": 1,
+      "capped_to_zero": 4,
+      "group_incomplete": 15,
+      "unsettleable": 28,
+      "settled": 0
+    },
+    "stale_mark_sessions": 0
+  },
+  "I_no_roll_relaxed_caps": {
+    "sessions": 1206,
+    "years_observed": 4.785714285714286,
+    "net_pnl_rupees": 321632.03381390683,
+    "return_on_pc_total": 0.032163203381390684,
+    "return_on_pc_annualised": 0.006720669363275666,
+    "sharpe_annualised": 0.8868616195652242,
+    "sortino_annualised": 1.1080729094685038,
+    "max_drawdown_pct_of_pc": 0.008330177310310596,
+    "drawdown_peak": "2026-06-11",
+    "drawdown_trough": "2026-07-17",
+    "calmar": 0.8067858717673659,
+    "entries": 142,
+    "completed_cycles": 142,
+    "win_rate": 0.7464788732394366,
+    "average_win_rupees": 8118.1409325894565,
+    "average_loss_rupees": -14969.191806684606,
+    "expectancy_rupees": 2265.014322632652,
+    "median_premium_capture": 0.5403604057806066,
+    "profit_factor": 1.9598659357576655,
+    "gross_credit_rupees": 2151764.5401030937,
+    "total_costs_rupees": 32514.351989748564,
+    "cost_ratio": 0.015110552936331388,
+    "cost_breakdown": {
+      "brokerage": 22880.0,
+      "stt": 3209.0689741741817,
+      "exchange_transaction_charge": 1898.5614331205502,
+      "sebi_turnover_fee": 4.443307804646873,
+      "stt_on_exercise": 0.0,
+      "stamp_duty": 61.337421282649174,
+      "gst": 4460.940853366536
+    },
+    "exit_rules": {
+      "ST-17_profit_target": 92,
+      "ST-19_weekly_stop": 18,
+      "ST-4_time_exit": 19,
+      "ST-39_entry_never_filled": 8,
+      "ST-4_deadline_missed": 5
+    },
+    "declines": {
+      "ST-12_trend_filter": 434,
+      "ST-11_vrp_filter": 1159,
+      "ST-6_no_strike_in_delta_band": 773,
+      "ST-13_gap_filter": 193
+    },
+    "peak_margin_no_netting": 3224075.4,
+    "feasibility": {
+      "fillable": 1052,
+      "resized": 92,
+      "no_bar": 0,
+      "no_liquidity": 0,
+      "capped_to_zero": 1,
+      "group_incomplete": 3,
+      "unsettleable": 28,
+      "settled": 0
+    },
+    "stale_mark_sessions": 0
+  }
+}

@@ -1,0 +1,2695 @@
+{
+ "note": "one row per (session, rule, outcome); the full per-decision-minute journal is regenerable with research/overlay/sweep.py",
+ "sessions": {
+  "2021-09-24": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2021-10-01": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2021-10-08": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2021-10-22": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2021-10-29": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2021-11-12": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2021-11-15": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2021-11-26": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2021-11-29": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2021-12-03": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2021-12-10": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2021-12-17": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-21_second_touch",
+    "outcome": "exit_requested"
+   },
+   {
+    "rule": "ST-19_weekly_stop",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2021-12-20": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2021-12-24": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2021-12-31": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-01-03": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2022-01-07": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-01-12": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2022-01-14": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-01-21": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   }
+  ],
+  "2022-01-28": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2022-02-04": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-02-11": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-02-18": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-02-25": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-03-04": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-03-11": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-04-01": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   }
+  ],
+  "2022-04-08": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-04-22": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-04-29": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-05-06": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2022-05-13": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-05-20": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-05-27": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-06-03": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-06-07": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2022-06-10": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-06-17": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-06-24": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   }
+  ],
+  "2022-07-01": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   }
+  ],
+  "2022-07-08": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-07-15": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   }
+  ],
+  "2022-07-22": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   }
+  ],
+  "2022-07-29": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-08-05": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-08-12": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-08-19": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-08-26": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_deadline_missed",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-08-29": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2022-09-02": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-09-09": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-09-16": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-09-23": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2022-09-30": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-10-07": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-10-14": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-10-21": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-10-28": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-10-31": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2022-11-04": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-11-11": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-11-18": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-11-25": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-12-02": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-12-09": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   },
+   {
+    "rule": "ST-4_deadline_missed",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-12-16": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2022-12-23": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2022-12-30": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2023-01-06": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-01-13": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-01-20": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-01-27": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2023-02-03": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-02-10": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-02-17": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-02-24": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-02-27": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2023-03-03": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2023-03-10": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2023-03-17": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-03-20": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2023-03-24": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-03-31": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-04-21": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2023-04-28": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-05-02": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2023-05-05": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-05-08": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2023-05-12": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2023-05-19": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-05-22": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2023-05-26": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-06-02": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-06-09": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-06-16": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   }
+  ],
+  "2023-06-23": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-06-30": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2023-07-07": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-07-14": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-07-17": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2023-07-21": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-07-28": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-08-04": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-08-11": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2023-08-18": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   }
+  ],
+  "2023-08-25": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-09-01": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-09-08": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-09-11": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2023-09-15": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-09-22": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   }
+  ],
+  "2023-09-29": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-10-06": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2023-10-13": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2023-10-20": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-10-23": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2023-10-27": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-11-03": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2023-11-10": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2023-11-17": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-11-24": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2023-12-01": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-19_weekly_stop",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2023-12-04": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2023-12-08": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2023-12-15": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2023-12-22": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2023-12-29": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-01-05": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-01-12": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-01-19": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-02-02": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-02-09": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-02-16": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-02-23": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-03-01": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-03-15": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-03-22": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-04-05": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-04-08": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2024-04-19": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2024-05-03": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   }
+  ],
+  "2024-05-10": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-05-17": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_deadline_missed",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-05-24": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   }
+  ],
+  "2024-05-31": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2024-06-07": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-06-14": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-06-21": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-06-28": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-07-05": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-07-09": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2024-07-12": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-4_deadline_missed",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-07-19": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2024-07-26": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   }
+  ],
+  "2024-08-02": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-08-09": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-08-16": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   },
+   {
+    "rule": "ST-4_deadline_missed",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-08-19": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2024-08-23": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-08-26": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2024-08-30": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-09-06": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   }
+  ],
+  "2024-09-13": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-09-20": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-09-27": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_deadline_missed",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-09-30": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2024-10-04": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-10-11": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-10-18": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-10-25": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2024-11-08": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-11-22": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2024-11-29": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-12-06": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2024-12-13": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-12-20": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2024-12-27": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2024-12-31": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2025-01-03": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2025-01-10": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2025-01-17": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-01-24": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-01-31": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2025-02-07": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2025-02-14": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-02-21": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_deadline_missed",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-02-24": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2025-02-28": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-03-03": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2025-03-07": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2025-03-21": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-03-24": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2025-03-28": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-04-04": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-19_weekly_stop",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-04-11": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2025-04-25": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2025-05-02": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2025-05-09": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2025-05-16": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2025-05-23": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2025-05-30": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2025-06-06": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-06-13": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2025-06-20": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2025-06-27": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-07-04": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-07-11": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-07-18": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-07-25": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-08-01": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-08-08": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-08-22": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-09-03": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2025-09-04": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2025-09-10": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-09-17": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   }
+  ],
+  "2025-09-18": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2025-09-24": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-09-26": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2025-10-01": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-10-08": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-10-15": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-19_weekly_stop",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-10-23": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-10-24": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2025-10-29": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-11-06": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-11-07": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2025-11-12": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-11-19": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-11-20": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2025-11-26": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-12-03": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2025-12-04": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   }
+  ],
+  "2025-12-10": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-12-17": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2025-12-22": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2025-12-24": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2025-12-31": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-01-01": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-01-07": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-01-08": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   }
+  ],
+  "2026-01-14": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-01-21": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_deadline_missed",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-01-22": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2026-01-28": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-01-29": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-02-04": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-02-05": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-02-11": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-02-13": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2026-02-18": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-02-19": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-02-25": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-03-04": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-03-05": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-03-11": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-03-12": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-03-18": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-03-19": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-03-25": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-04-01": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-04-02": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-04-08": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-04-15": [
+   {
+    "rule": "ST-13_gap_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-04-16": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-04-22": [
+   {
+    "rule": "ST-12_trend_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-04-23": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-04-29": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-04-30": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-05-06": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-05-07": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-05-11": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2026-05-13": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-05-14": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-05-20": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-05-21": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-05-27": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-05-29": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2026-06-03": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-06-04": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-06-10": [
+   {
+    "rule": "ST-6_no_strike_in_delta_band",
+    "outcome": "declined"
+   }
+  ],
+  "2026-06-11": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-19_weekly_stop",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-06-12": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2026-06-17": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-06-18": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-06-24": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-22_structure_mismatch_unwind",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-06-25": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2026-07-01": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-07-03": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2026-07-08": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   },
+   {
+    "rule": "ST-19_weekly_stop",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-07-15": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-07-16": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-07-22": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-07-24": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2026-07-29": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_time_exit",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-08-03": [
+   {
+    "rule": "ST-20_tested_side_roll",
+    "outcome": "rolled"
+   }
+  ],
+  "2026-08-05": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-08-06": [
+   {
+    "rule": "ST-11_vrp_filter",
+    "outcome": "declined"
+   }
+  ],
+  "2026-08-12": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-08-19": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   },
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   }
+  ],
+  "2026-08-26": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   }
+  ],
+  "2026-08-27": [
+   {
+    "rule": "ST-8_minimum_credit",
+    "outcome": "declined"
+   }
+  ],
+  "2026-09-02": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-17_profit_target",
+    "outcome": "exit_requested"
+   }
+  ],
+  "2026-09-09": [
+   {
+    "rule": "ST-5_entry",
+    "outcome": "entered"
+   },
+   {
+    "rule": "ST-4_deadline_missed",
+    "outcome": "exit_requested"
+   }
+  ]
+ }
+}

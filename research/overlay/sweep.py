@@ -35,6 +35,22 @@ def arms() -> list[OverlayRunConfig]:
             margin_model=MarginPerLotModel(include_expiry_day_elm=False),
             label="G_margin_defined_risk_only",
         ),
+        # Diagnostics, not variants of the strategy: H asks how much of the result is the
+        # participation cap rather than the trade, and I asks what the roll rule is worth
+        # once the cap is no longer what breaks it.
+        replace(
+            base,
+            participation_volume_pct=0.05,
+            participation_oi_pct=0.02,
+            label="H_relaxed_participation_caps",
+        ),
+        replace(
+            base,
+            participation_volume_pct=0.05,
+            participation_oi_pct=0.02,
+            roll_trigger_delta=0.99,
+            label="I_no_roll_relaxed_caps",
+        ),
     ]
 
 

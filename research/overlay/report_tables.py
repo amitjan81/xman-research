@@ -19,6 +19,8 @@ ARM_TITLES = {
     "E_slippage_zero": "E — zero slippage",
     "F_slippage_050": "F — slippage Rs 0.50 per unit per leg",
     "G_margin_defined_risk_only": "G — margin = defined risk only (no CA-12 ELM)",
+    "H_relaxed_participation_caps": "H — diagnostic: participation caps 5% volume / 2% OI",
+    "I_no_roll_relaxed_caps": "I — diagnostic: H, with ST-20 rolls switched off",
 }
 
 
@@ -40,7 +42,7 @@ def headline_table(runs: dict[str, dict[str, Any]]) -> str:
     )
     lines = [header]
     for label, payload in runs.items():
-        metrics = payload["metrics"] if "metrics" in payload else payload
+        metrics = payload.get("metrics", payload)
         if "error" in metrics:
             lines.append(f"| {ARM_TITLES.get(label, label)} | — | FAILED: {metrics['error']} |")
             continue
@@ -84,6 +86,28 @@ def decline_table(journal: list[dict[str, Any]]) -> str:
     for rule, count in counter.most_common():
         lines.append(f"| `{rule}` | {count} |")
     return "\n".join(lines)
+
+
+def _decisions(results: Path, arm: str) -> list[dict[str, Any]]:
+    """The arm's decisions, from whichever form is on disk.
+
+    A run writes the full per-decision-minute journal; the committed artefact is the
+    per-session digest, because the journal is 700KB of repetition and regenerable. Both
+    shapes answer the only question this module asks of them — which rule refused which
+    entry session — so both are accepted.
+    """
+    digest = results / f"{arm}.decisions.json"
+    if digest.is_file():
+        payload = json.loads(digest.read_text())
+        return [
+            {"session_date": date, **entry}
+            for date, entries in payload["sessions"].items()
+            for entry in entries
+        ]
+    journal = results / f"{arm}.journal.json"
+    if journal.is_file():
+        return json.loads(journal.read_text())
+    return []
 
 
 def cost_table(metrics: dict[str, Any]) -> str:
@@ -130,14 +154,15 @@ def main(argv: list[str] | None = None) -> int:
     print(cost_table(metrics))
     print("\n### Wing widths actually used\n")
     print(wing_width_table(detail["cycles"]))
-    journal_path = args.results / f"{args.arm}.journal.json"
-    if journal_path.is_file():
-        print("\n### Entry sessions refused, by rule\n")
-        print(decline_table(json.loads(journal_path.read_text())))
+    print("\n### Entry sessions refused, by rule\n")
+    print(decline_table(_decisions(args.results, args.arm)))
     print("\n### Execution\n")
     print(f"- feasibility verdicts: `{metrics['feasibility']}`")
     print(f"- sessions with stale marks: {metrics['stale_mark_sessions']}")
-    print(f"- entries attempted: {metrics['entries']}, cycles completed: {metrics['completed_cycles']}")
+    print(
+        f"- entries attempted: {metrics['entries']}, "
+        f"cycles completed: {metrics['completed_cycles']}"
+    )
     return 0
 
 
