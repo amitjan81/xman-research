@@ -1,0 +1,26 @@
+All checks passed!
+x_d0.08_e1200          FAILED SettlementWindowError: NIFTY 2023-02-02: the settlement window 15:00:0
+x_d0.08_e1300          n= 938  0.30%/yr dd  1.19% win 63.11% R:R  0.06 PF  1.17 onMargin  5.37% worst -0.57% carried 105
+x_d0.08_e1330          n= 925  0.21%/yr dd  1.71% win 59.35% R:R  0.06 PF  1.15 onMargin  3.74% worst -0.52% carried 90
+x_d0.10_e1200          n= 977  0.59%/yr dd  1.35% win 64.59% R:R  0.08 PF  1.21 onMargin 10.44% worst -0.56% carried 97
+x_d0.10_e1300          n= 985  0.53%/yr dd  1.83% win 65.18% R:R  0.08 PF  1.23 onMargin  9.38% worst -0.57% carried 83
+x_d0.10_e1330          n= 996  0.19%/yr dd  2.03% win 60.84% R:R  0.04 PF  1.10 onMargin  3.30% worst -0.51% carried 67
+x_d0.12_e1200          n=1025  0.38%/yr dd  1.96% win 64.29% R:R  0.04 PF  1.12 onMargin  6.82% worst -0.56% carried 85
+x_d0.12_e1300          n=1013  0.69%/yr dd  1.74% win 64.56% R:R  0.10 PF  1.27 onMargin 12.30% worst -0.56% carried 73
+x_d0.12_e1330          n=1008  0.59%/yr dd  1.77% win 61.01% R:R  0.11 PF  1.29 onMargin 10.45% worst -0.39% carried 60
+exp_d0.08_e0945        n= 250  0.57%/yr dd  0.72% win 78.00% R:R  0.12 PF  1.55 onMargin 10.33% worst -0.42% carried 0
+exp_d0.08_e1200        n= 250  0.54%/yr dd  0.65% win 82.40% R:R  0.11 PF  1.64 onMargin  9.68% worst -0.40% carried 0
+exp_d0.08_e1300        n= 243  0.33%/yr dd  0.76% win 82.72% R:R  0.07 PF  1.39 onMargin  5.81% worst -0.57% carried 0
+exp_d0.12_e0945        n= 250  0.65%/yr dd  0.72% win 73.60% R:R  0.10 PF  1.38 onMargin 11.77% worst -0.39% carried 0
+exp_d0.12_e1200        n= 246  0.45%/yr dd  1.14% win 80.08% R:R  0.06 PF  1.31 onMargin  8.01% worst -0.56% carried 0
+exp_d0.12_e1300        n= 237  0.57%/yr dd  1.00% win 82.28% R:R  0.10 PF  1.54 onMargin 10.24% worst -0.56% carried 0
+exp_d0.15_e0945        n= 250  0.69%/yr dd  1.32% win 71.20% R:R  0.09 PF  1.31 onMargin 12.47% worst -0.42% carried 0
+exp_d0.15_e1200        n= 239  0.81%/yr dd  1.26% win 76.99% R:R  0.13 PF  1.57 onMargin 14.45% worst -0.43% carried 0
+exp_d0.15_e1300        n= 217  0.61%/yr dd  1.15% win 82.03% R:R  0.10 PF  1.54 onMargin 10.89% worst -0.56% carried 0
+x_stop0.50pct          n= 988  0.56%/yr dd  1.04% win 62.85% R:R  0.10 PF  1.26 onMargin 10.03% worst -0.43% carried 82
+x_stop0.75pct          n= 985  0.53%/yr dd  1.83% win 65.18% R:R  0.08 PF  1.23 onMargin  9.38% worst -0.57% carried 83
+x_stop1.00pct          n= 985  0.72%/yr dd  1.83% win 65.48% R:R  0.12 PF  1.34 onMargin 12.92% worst -0.59% carried 83
+
+21 configurations; null to beat is H26's -10.5%/yr intraday
+
+[exited with code 0]

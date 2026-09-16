@@ -98,6 +98,114 @@ def stage_one() -> list[StrangleRunConfig]:
     return unique
 
 
+def stage_two() -> list[StrangleRunConfig]:
+    """The levers crossed, because stage one moved each one alone.
+
+    Stage one's directions all point the same way — further out of the money, a stop wide
+    enough not to be whipsawed, a later entry, and no early profit-taking — and each was
+    worth a fraction of a per cent on its own. Whether they add is the question this stage
+    asks, and it is not rhetorical: a later entry and a wider stop both reduce the number of
+    stop-outs, so they may be the same effect counted twice.
+
+    Expiry day gets its own arm throughout. It was the only tenor with **zero** positions
+    carried overnight — the options settle, so there is nothing to carry — which makes it the
+    one subset where an intraday result is uncontaminated by the overnight premium H26 found.
+    """
+    specs: list[StrangleRunConfig] = []
+
+    def add(params: StrangleParameters, label: str) -> None:
+        specs.append(
+            StrangleRunConfig(start=WINDOW_START, end=WINDOW_END, params=params, label=label)
+        )
+
+    best = replace(BASE, profit_take_pct=0.90, stop_move_pct=0.0075)
+    for target in (0.08, 0.10, 0.12):
+        for entry in (dt.time(12, 0), dt.time(13, 0), dt.time(13, 30)):
+            add(
+                replace(
+                    best,
+                    short_delta_target=target,
+                    delta_band=(max(target - 0.04, 0.02), target + 0.04),
+                    entry_time=entry,
+                ),
+                f"x_d{target:.2f}_e{entry.hour:02d}{entry.minute:02d}",
+            )
+    # The clean subset: expiry day only, where nothing can carry.
+    for target in (0.08, 0.12, 0.15):
+        for entry in (dt.time(9, 45), dt.time(12, 0), dt.time(13, 0)):
+            add(
+                replace(
+                    best,
+                    short_delta_target=target,
+                    delta_band=(max(target - 0.04, 0.02), target + 0.04),
+                    entry_time=entry,
+                    allowed_dte=(0,),
+                ),
+                f"exp_d{target:.2f}_e{entry.hour:02d}{entry.minute:02d}",
+            )
+    # And the stop, re-swept at the best structure, because stage one swept it at the base.
+    for move in (0.005, 0.0075, 0.010):
+        add(
+            replace(
+                best,
+                short_delta_target=0.10,
+                delta_band=(0.06, 0.14),
+                entry_time=dt.time(13, 0),
+                stop_move_pct=move,
+            ),
+            f"x_stop{move * 100:.2f}pct",
+        )
+
+    seen: set[str] = set()
+    unique: list[StrangleRunConfig] = []
+    for spec in specs:
+        if spec.label in seen:
+            continue
+        seen.add(spec.label)
+        unique.append(spec)
+    return unique
+
+
+def stage_three() -> list[StrangleRunConfig]:
+    """Refine the expiry-day arm, and split it in-sample against holdout.
+
+    Stage two's answer was unambiguous about *where* the intraday edge sits: every
+    expiry-day configuration beat every other configuration on win rate, profit factor and
+    drawdown, and carried nothing overnight because the options settle. The mechanism is the
+    obvious one — on expiry day theta is maximal and the time left for the index to travel is
+    minimal, which is the trade you want when short premium behind a stop.
+
+    Forty-two configurations have now been examined, so this stage stops widening and starts
+    checking: each candidate is run twice, once to the split date and once on the eighteen
+    months after it, and the holdout half is the only number worth quoting.
+    """
+    specs: list[StrangleRunConfig] = []
+    base = replace(BASE, allowed_dte=(0,), profit_take_pct=0.90, stop_move_pct=0.0075)
+    for target in (0.08, 0.12, 0.15, 0.20):
+        for entry in (dt.time(10, 0), dt.time(11, 0), dt.time(12, 0), dt.time(13, 0)):
+            params = replace(
+                base,
+                short_delta_target=target,
+                delta_band=(max(target - 0.04, 0.02), target + 0.04),
+                entry_time=entry,
+            )
+            label = f"e_d{target:.2f}_{entry.hour:02d}{entry.minute:02d}"
+            specs.append(
+                StrangleRunConfig(
+                    start=WINDOW_START, end=IN_SAMPLE_END, params=params, label=f"IS_{label}"
+                )
+            )
+            specs.append(
+                StrangleRunConfig(
+                    start=IN_SAMPLE_END + dt.timedelta(days=1),
+                    end=WINDOW_END,
+                    params=params,
+                    label=f"OOS_{label}",
+                )
+            )
+    return specs
+
+
 def _run(config: StrangleRunConfig) -> dict[str, Any]:
     scratch = Path(tempfile.mkdtemp(prefix="xman_strangle_")) / "t.db"
     try:
@@ -114,6 +222,8 @@ def _run(config: StrangleRunConfig) -> dict[str, Any]:
             "expectancy": metrics["expectancy_rupees"],
             "worst_trade_pct": metrics["worst_trade_pct_of_capital"],
             "sharpe": metrics["sharpe_annualised"],
+            "return_on_peak_margin": metrics["return_on_peak_margin"],
+            "peak_margin": metrics["peak_margin"],
             "carried_overnight": metrics["exit_rules"].get("carried_overnight_forced_close", 0),
             "exit_rules": metrics["exit_rules"],
             "exit_pnl": metrics["exit_pnl"],
@@ -134,6 +244,7 @@ def _line(row: dict[str, Any]) -> str:
         f"{row['label']:22s} n={row['trades']:4d} {pct(row['annualised'])}/yr "
         f"dd {pct(row['maxdd'])} win {pct(row['win_rate'])} "
         f"R:R {row['reward_to_risk'] or 0:5.2f} PF {row['profit_factor'] or 0:5.2f} "
+        f"onMargin {pct(row.get('return_on_peak_margin'))} "
         f"worst {pct(row['worst_trade_pct'])} carried {row['carried_overnight']}"
     )
 
@@ -146,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
 
-    specs = stage_one()
+    specs = {1: stage_one, 2: stage_two, 3: stage_three}[args.stage]()
     results: list[dict[str, Any]] = []
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         for row in pool.map(_run, specs):

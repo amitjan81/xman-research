@@ -776,5 +776,31 @@
       "carried_overnight_forced_close": 140989.42212874402
     },
     "median_credit_pct_of_spot": 0.002307153350960169
+  },
+  {
+    "label": "dte_5_6",
+    "trades": 257,
+    "annualised": 0.0006124405724903248,
+    "maxdd": 0.01716793329200799,
+    "win_rate": 0.5758754863813229,
+    "reward_to_risk": 0.1325215012720033,
+    "profit_factor": 1.3124589525404113,
+    "expectancy": 703.8865761638036,
+    "worst_trade_pct": -0.0051126456003612,
+    "sharpe": 0.08672320200349821,
+    "carried_overnight": 37,
+    "exit_rules": {
+      "stop_move_from_entry": 70,
+      "exit_time": 138,
+      "unknown": 12,
+      "carried_overnight_forced_close": 37
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -281205.3765609335,
+      "exit_time": 364850.1865889209,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 97254.04004611002
+    },
+    "median_credit_pct_of_spot": 0.002589999405775453
   }
 ]
