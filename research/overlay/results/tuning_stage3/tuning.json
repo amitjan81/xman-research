@@ -1,0 +1,84 @@
+[
+  {
+    "label": "lots50",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.18,
+        0.23
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 50,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "lots50"
+    },
+    "in_sample": {
+      "completed_cycles": 339,
+      "cycles_traded": null,
+      "net_pnl_rupees": 3802026.3009436,
+      "return_on_pc_total": 0.38020263009436,
+      "return_on_pc_annualised": 0.09568289191600154,
+      "max_drawdown_pct_of_pc": 0.05300058526597002,
+      "win_rate": 0.3185840707964602,
+      "sharpe_annualised": 1.466875916079285,
+      "mean_premium_capture": null,
+      "allocated_gearing_mean": 6.509631734147769,
+      "allocated_gearing_max": 8.47484625,
+      "lots_mean": 43.14159292035398,
+      "gross_credit_rupees": 63704899.29867907,
+      "cost_ratio": 0.00175852390062324,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 192,
+        "ST-4_time_exit": 72,
+        "ST-17_profit_target": 54,
+        "ST-19_weekly_stop": 7,
+        "ST-32_weekly_cap": 13,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 43,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1277130.3496896494,
+      "return_on_pc_total": 0.12771303496896494,
+      "return_on_pc_annualised": 0.08601913898403146,
+      "max_drawdown_pct_of_pc": 0.022499364018816966,
+      "win_rate": 0.3488372093023256,
+      "sharpe_annualised": 2.1303857868008507,
+      "mean_premium_capture": null,
+      "allocated_gearing_mean": 7.969394156976745,
+      "allocated_gearing_max": 8.32182,
+      "lots_mean": 46.51162790697674,
+      "gross_credit_rupees": 9488723.354184443,
+      "cost_ratio": 0.0012566684938635645,
+      "exit_rules": {
+        "ST-4_time_exit": 8,
+        "ST-39_entry_never_filled": 25,
+        "ST-17_profit_target": 9,
+        "ST-32_weekly_cap": 1
+      }
+    }
+  }
+]

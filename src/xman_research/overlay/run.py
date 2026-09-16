@@ -105,6 +105,16 @@ class OverlayRunConfig:
     profit_take: float = 0.60
     stop_multiple: float = 1.5
     max_gearing: float = 2.5
+    target_utilisation: float = 0.30
+    max_lots_absolute: int = 50
+    """CA-15's sanity cap, allowed 1-200. Stage two of the tuning search found it binding:
+    once the collateral mix stops stranding capacity, this is what stops the position."""
+    cash_equivalent_fraction: float | None = None
+    """CA-R2's lever: how much of the pledged portfolio sits in cash-equivalent collateral.
+
+    ``None`` keeps the section 8 mix (15%). The 50% rule caps Margin Capacity at twice the
+    cash-equivalent total, so this is the single largest determinant of position size — and
+    the document's own CA-R2 recommends raising it until no non-cash collateral is stranded."""
     participation_volume_pct: float = 0.01
     """Share of a minute's printed volume one order may be. The engine's default research
     convention is 1%, and for this structure it is the binding execution constraint: four
@@ -117,7 +127,14 @@ class OverlayRunConfig:
     def collateral_assumption(self) -> CollateralAssumption:
         if self.collateral is not None:
             return self.collateral
-        return CollateralAssumption(portfolio_capital=self.portfolio_capital)
+        if self.cash_equivalent_fraction is None:
+            return CollateralAssumption(portfolio_capital=self.portfolio_capital)
+        cash_equivalent = self.cash_equivalent_fraction
+        return CollateralAssumption(
+            portfolio_capital=self.portfolio_capital,
+            non_cash_fraction=max(0.0, 1.0 - cash_equivalent),
+            cash_equivalent_fraction=cash_equivalent,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +165,9 @@ class OverlayRun:
             "profit_take": self.config.profit_take,
             "stop_multiple": self.config.stop_multiple,
             "max_gearing": self.config.max_gearing,
+            "target_utilisation": self.config.target_utilisation,
+            "cash_equivalent_fraction": self.config.cash_equivalent_fraction,
+            "max_lots_absolute": self.config.max_lots_absolute,
             "portfolio_capital": self.config.portfolio_capital,
             "margin_assumptions": self.config.margin_model.assumptions,
             "trial_id": self.result.trial_id,
@@ -173,6 +193,7 @@ def run_overlay(config: OverlayRunConfig) -> OverlayRun:
         params=OverlayParameters(
             min_credit_ratio=config.min_credit_ratio,
             roll_trigger_delta=config.roll_trigger_delta,
+            max_lots_absolute=config.max_lots_absolute,
             short_delta_target=config.short_delta_target,
             delta_band=config.delta_band,
             wing_width=config.wing_width,
@@ -184,6 +205,7 @@ def run_overlay(config: OverlayRunConfig) -> OverlayRun:
         margin_model=config.margin_model,
         wing_policy=config.wing_policy,
         max_gearing=config.max_gearing,
+        target_utilisation=config.target_utilisation,
     )
     resolution = store.resolve(config.underlying, config.start, config.end)
     gap_reason = None
@@ -339,6 +361,26 @@ def overlay_metrics(
         },
         "exit_rules": exits,
         "declines": declines,
+        # **What the position actually was**, not what the caps allowed. A tuning result
+        # that reaches a return target by quietly running at six times the document's
+        # gearing cap has not reached it under the document's rules, and the only way a
+        # reader can tell is if the run reports the gearing it used.
+        "allocated_gearing_mean": _mean(
+            [
+                row["detail"]["allocation"]["allocated_gearing"]
+                for row in strategy.journal
+                if row["outcome"] == "entered"
+            ]
+        ),
+        "allocated_gearing_max": max(
+            (
+                row["detail"]["allocation"]["allocated_gearing"]
+                for row in strategy.journal
+                if row["outcome"] == "entered"
+            ),
+            default=None,
+        ),
+        "lots_mean": _mean([float(c["lots"]) for c in cycles]),
         "peak_margin_no_netting": result.peak_margin,
         "feasibility": result.feasibility_counts(),
         "stale_mark_sessions": sum(1 for row in result.daily if row.stale_marks),
@@ -384,8 +426,12 @@ def _captures(cycles: tuple[dict[str, Any], ...] | list[dict[str, Any]]) -> list
     return [
         cycle["realised_pnl"] / cycle["credit_rupees"]
         for cycle in cycles
-        if cycle["credit_rupees"] > 0 and cycle["exit_rule"] != "ST-39_entry_never_filled"
+        if cycle["credit_rupees"] > 0
     ]
+
+
+def _mean(values: list[float]) -> float | None:
+    return sum(values) / len(values) if values else None
 
 
 def _median(values: list[float]) -> float | None:

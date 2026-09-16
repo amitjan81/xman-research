@@ -1,0 +1,1643 @@
+[
+  {
+    "label": "ce15",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.18,
+        0.23
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.3,
+      "cash_equivalent_fraction": 0.15,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "ce15"
+    },
+    "in_sample": {
+      "completed_cycles": 339,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1617704.5647033732,
+      "return_on_pc_total": 0.16177045647033733,
+      "return_on_pc_annualised": 0.04343829136501265,
+      "max_drawdown_pct_of_pc": 0.07955808067576789,
+      "win_rate": 0.3185840707964602,
+      "sharpe_annualised": 1.0010051837957115,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 34955645.68498478,
+      "cost_ratio": 0.002321534128674395,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 191,
+        "ST-4_time_exit": 74,
+        "ST-17_profit_target": 56,
+        "ST-19_weekly_stop": 17,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 43,
+      "cycles_traded": null,
+      "net_pnl_rupees": 657203.4754711296,
+      "return_on_pc_total": 0.06572034754711296,
+      "return_on_pc_annualised": 0.04466912448681937,
+      "max_drawdown_pct_of_pc": 0.007526089100499787,
+      "win_rate": 0.32558139534883723,
+      "sharpe_annualised": 2.2973977453715317,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 4730699.1329970835,
+      "cost_ratio": 0.0016797613943336897,
+      "exit_rules": {
+        "ST-4_time_exit": 9,
+        "ST-39_entry_never_filled": 25,
+        "ST-17_profit_target": 9
+      }
+    }
+  },
+  {
+    "label": "ce25",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.18,
+        0.23
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.3,
+      "cash_equivalent_fraction": 0.25,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "ce25"
+    },
+    "in_sample": {
+      "completed_cycles": 339,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2515011.96820041,
+      "return_on_pc_total": 0.25150119682004096,
+      "return_on_pc_annualised": 0.06568654036345056,
+      "max_drawdown_pct_of_pc": 0.06634168033591283,
+      "win_rate": 0.31563421828908556,
+      "sharpe_annualised": 1.0316850701400673,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 57657336.95609381,
+      "cost_ratio": 0.001959402668004908,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 191,
+        "ST-4_time_exit": 75,
+        "ST-17_profit_target": 53,
+        "ST-19_weekly_stop": 9,
+        "ST-32_weekly_cap": 10,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 43,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1037656.9539960176,
+      "return_on_pc_total": 0.10376569539960176,
+      "return_on_pc_annualised": 0.07013252900318934,
+      "max_drawdown_pct_of_pc": 0.02088556134099503,
+      "win_rate": 0.32558139534883723,
+      "sharpe_annualised": 1.9504411342437638,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 8174330.045545223,
+      "cost_ratio": 0.0014078232789930727,
+      "exit_rules": {
+        "ST-4_time_exit": 8,
+        "ST-39_entry_never_filled": 25,
+        "ST-17_profit_target": 9,
+        "ST-32_weekly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "ce35",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.18,
+        0.23
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.3,
+      "cash_equivalent_fraction": 0.35,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "ce35"
+    },
+    "in_sample": {
+      "completed_cycles": 339,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2515011.96820041,
+      "return_on_pc_total": 0.25150119682004096,
+      "return_on_pc_annualised": 0.06568654036345056,
+      "max_drawdown_pct_of_pc": 0.06634168033591283,
+      "win_rate": 0.31563421828908556,
+      "sharpe_annualised": 1.0316850701400673,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 57657336.95609381,
+      "cost_ratio": 0.001959402668004908,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 191,
+        "ST-4_time_exit": 75,
+        "ST-17_profit_target": 53,
+        "ST-19_weekly_stop": 9,
+        "ST-32_weekly_cap": 10,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 43,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1037656.9539960176,
+      "return_on_pc_total": 0.10376569539960176,
+      "return_on_pc_annualised": 0.07013252900318934,
+      "max_drawdown_pct_of_pc": 0.02088556134099503,
+      "win_rate": 0.32558139534883723,
+      "sharpe_annualised": 1.9504411342437638,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 8174330.045545223,
+      "cost_ratio": 0.0014078232789930727,
+      "exit_rules": {
+        "ST-4_time_exit": 8,
+        "ST-39_entry_never_filled": 25,
+        "ST-17_profit_target": 9,
+        "ST-32_weekly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "ce50",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.18,
+        0.23
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.3,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "ce50"
+    },
+    "in_sample": {
+      "completed_cycles": 339,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2515011.96820041,
+      "return_on_pc_total": 0.25150119682004096,
+      "return_on_pc_annualised": 0.06568654036345056,
+      "max_drawdown_pct_of_pc": 0.06634168033591283,
+      "win_rate": 0.31563421828908556,
+      "sharpe_annualised": 1.0316850701400673,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 57657336.95609381,
+      "cost_ratio": 0.001959402668004908,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 191,
+        "ST-4_time_exit": 75,
+        "ST-17_profit_target": 53,
+        "ST-19_weekly_stop": 9,
+        "ST-32_weekly_cap": 10,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 43,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1037656.9539960176,
+      "return_on_pc_total": 0.10376569539960176,
+      "return_on_pc_annualised": 0.07013252900318934,
+      "max_drawdown_pct_of_pc": 0.02088556134099503,
+      "win_rate": 0.32558139534883723,
+      "sharpe_annualised": 1.9504411342437638,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 8174330.045545223,
+      "cost_ratio": 0.0014078232789930727,
+      "exit_rules": {
+        "ST-4_time_exit": 8,
+        "ST-39_entry_never_filled": 25,
+        "ST-17_profit_target": 9,
+        "ST-32_weekly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "ce50_util30",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.18,
+        0.23
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.3,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "ce50_util30"
+    },
+    "in_sample": {
+      "completed_cycles": 339,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2515011.96820041,
+      "return_on_pc_total": 0.25150119682004096,
+      "return_on_pc_annualised": 0.06568654036345056,
+      "max_drawdown_pct_of_pc": 0.06634168033591283,
+      "win_rate": 0.31563421828908556,
+      "sharpe_annualised": 1.0316850701400673,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 57657336.95609381,
+      "cost_ratio": 0.001959402668004908,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 191,
+        "ST-4_time_exit": 75,
+        "ST-17_profit_target": 53,
+        "ST-19_weekly_stop": 9,
+        "ST-32_weekly_cap": 10,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 43,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1037656.9539960176,
+      "return_on_pc_total": 0.10376569539960176,
+      "return_on_pc_annualised": 0.07013252900318934,
+      "max_drawdown_pct_of_pc": 0.02088556134099503,
+      "win_rate": 0.32558139534883723,
+      "sharpe_annualised": 1.9504411342437638,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 8174330.045545223,
+      "cost_ratio": 0.0014078232789930727,
+      "exit_rules": {
+        "ST-4_time_exit": 8,
+        "ST-39_entry_never_filled": 25,
+        "ST-17_profit_target": 9,
+        "ST-32_weekly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "ce50_util35",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.18,
+        0.23
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "ce50_util35"
+    },
+    "in_sample": {
+      "completed_cycles": 339,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2515011.96820041,
+      "return_on_pc_total": 0.25150119682004096,
+      "return_on_pc_annualised": 0.06568654036345056,
+      "max_drawdown_pct_of_pc": 0.06634168033591283,
+      "win_rate": 0.31563421828908556,
+      "sharpe_annualised": 1.0316850701400673,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 57657336.95609381,
+      "cost_ratio": 0.001959402668004908,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 191,
+        "ST-4_time_exit": 75,
+        "ST-17_profit_target": 53,
+        "ST-19_weekly_stop": 9,
+        "ST-32_weekly_cap": 10,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 43,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1037656.9539960176,
+      "return_on_pc_total": 0.10376569539960176,
+      "return_on_pc_annualised": 0.07013252900318934,
+      "max_drawdown_pct_of_pc": 0.02088556134099503,
+      "win_rate": 0.32558139534883723,
+      "sharpe_annualised": 1.9504411342437638,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 8174330.045545223,
+      "cost_ratio": 0.0014078232789930727,
+      "exit_rules": {
+        "ST-4_time_exit": 8,
+        "ST-39_entry_never_filled": 25,
+        "ST-17_profit_target": 9,
+        "ST-32_weekly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "full_d0.12_dte12",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.12,
+      "delta_band": [
+        0.1,
+        0.14
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        1,
+        2
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.12_dte12"
+    },
+    "in_sample": {
+      "completed_cycles": 245,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1509473.0287585016,
+      "return_on_pc_total": 0.15094730287585018,
+      "return_on_pc_annualised": 0.04067243735669157,
+      "max_drawdown_pct_of_pc": 0.04862379297537615,
+      "win_rate": 0.3836734693877551,
+      "sharpe_annualised": 1.1390896190458182,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 21093756.67148118,
+      "cost_ratio": 0.0035036144527768034,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 116,
+        "ST-17_profit_target": 40,
+        "ST-4_time_exit": 77,
+        "ST-19_weekly_stop": 12
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 81,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1091251.3354464415,
+      "return_on_pc_total": 0.10912513354464415,
+      "return_on_pc_annualised": 0.07369727524300251,
+      "max_drawdown_pct_of_pc": 0.0040592616129838145,
+      "win_rate": 0.41975308641975306,
+      "sharpe_annualised": 4.0462170423895865,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 7954991.938639293,
+      "cost_ratio": 0.0024633734899484564,
+      "exit_rules": {
+        "ST-4_time_exit": 31,
+        "ST-39_entry_never_filled": 40,
+        "ST-17_profit_target": 10
+      }
+    }
+  },
+  {
+    "label": "full_d0.12_dte23",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.12,
+      "delta_band": [
+        0.1,
+        0.14
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.12_dte23"
+    },
+    "in_sample": {
+      "completed_cycles": 322,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1761607.885195367,
+      "return_on_pc_total": 0.1761607885195367,
+      "return_on_pc_annualised": 0.047087292278003456,
+      "max_drawdown_pct_of_pc": 0.07676431240245021,
+      "win_rate": 0.3416149068322981,
+      "sharpe_annualised": 1.2511175605711475,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 30596590.115202185,
+      "cost_ratio": 0.0025685540181937735,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 181,
+        "ST-4_time_exit": 48,
+        "ST-17_profit_target": 75,
+        "ST-19_weekly_stop": 16,
+        "ST-32_weekly_cap": 1,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 37,
+      "cycles_traded": null,
+      "net_pnl_rupees": 519298.1130872369,
+      "return_on_pc_total": 0.051929811308723685,
+      "return_on_pc_annualised": 0.03536918526587329,
+      "max_drawdown_pct_of_pc": 0.02369869401380657,
+      "win_rate": 0.43243243243243246,
+      "sharpe_annualised": 1.435336536008691,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 4229987.31693726,
+      "cost_ratio": 0.002023260288694816,
+      "exit_rules": {
+        "ST-4_time_exit": 6,
+        "ST-39_entry_never_filled": 20,
+        "ST-17_profit_target": 10,
+        "ST-19_weekly_stop": 1
+      }
+    }
+  },
+  {
+    "label": "full_d0.12_dte56",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.12,
+      "delta_band": [
+        0.1,
+        0.14
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.12_dte56"
+    },
+    "in_sample": {
+      "completed_cycles": 184,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1540382.2973660678,
+      "return_on_pc_total": 0.15403822973660677,
+      "return_on_pc_annualised": 0.04146421704300729,
+      "max_drawdown_pct_of_pc": 0.03044469327994389,
+      "win_rate": 0.391304347826087,
+      "sharpe_annualised": 1.3720287547615817,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 19300829.634645388,
+      "cost_ratio": 0.002424707075669843,
+      "exit_rules": {
+        "ST-17_profit_target": 61,
+        "ST-19_weekly_stop": 12,
+        "ST-4_time_exit": 15,
+        "ST-39_entry_never_filled": 96
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 88,
+      "cycles_traded": null,
+      "net_pnl_rupees": 335097.168418508,
+      "return_on_pc_total": 0.0335097168418508,
+      "return_on_pc_annualised": 0.022887353670044464,
+      "max_drawdown_pct_of_pc": 0.06107370161196765,
+      "win_rate": 0.375,
+      "sharpe_annualised": 0.30265970003733134,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 8438969.257354446,
+      "cost_ratio": 0.003063487773476979,
+      "exit_rules": {
+        "ST-19_weekly_stop": 6,
+        "ST-4_time_exit": 9,
+        "ST-17_profit_target": 30,
+        "ST-32_weekly_cap": 1,
+        "ST-39_entry_never_filled": 42
+      }
+    }
+  },
+  {
+    "label": "full_d0.16_dte12",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.16,
+      "delta_band": [
+        0.14,
+        0.18
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        1,
+        2
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.16_dte12"
+    },
+    "in_sample": {
+      "completed_cycles": 294,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1824531.6823862363,
+      "return_on_pc_total": 0.18245316823862362,
+      "return_on_pc_annualised": 0.048672824012162774,
+      "max_drawdown_pct_of_pc": 0.07797809018364167,
+      "win_rate": 0.3673469387755102,
+      "sharpe_annualised": 1.0350265524502746,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 32804949.777457368,
+      "cost_ratio": 0.002923023357636693,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 143,
+        "ST-17_profit_target": 29,
+        "ST-4_time_exit": 107,
+        "ST-19_weekly_stop": 13,
+        "ST-32_weekly_cap": 2
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 99,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1272393.5695961304,
+      "return_on_pc_total": 0.12723935695961305,
+      "return_on_pc_annualised": 0.08570593355116118,
+      "max_drawdown_pct_of_pc": 0.01317460862461849,
+      "win_rate": 0.3939393939393939,
+      "sharpe_annualised": 3.346233379354186,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 11630175.76268993,
+      "cost_ratio": 0.0025815736443930205,
+      "exit_rules": {
+        "ST-4_time_exit": 46,
+        "ST-39_entry_never_filled": 43,
+        "ST-17_profit_target": 10
+      }
+    }
+  },
+  {
+    "label": "full_d0.16_dte23",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.16,
+      "delta_band": [
+        0.14,
+        0.18
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.16_dte23"
+    },
+    "in_sample": {
+      "completed_cycles": 342,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2155324.1827997565,
+      "return_on_pc_total": 0.21553241827997566,
+      "return_on_pc_annualised": 0.05691005268079463,
+      "max_drawdown_pct_of_pc": 0.07098228790398597,
+      "win_rate": 0.3157894736842105,
+      "sharpe_annualised": 1.0852612824121453,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 44267907.54660366,
+      "cost_ratio": 0.002104688975820354,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 194,
+        "ST-4_time_exit": 64,
+        "ST-17_profit_target": 63,
+        "ST-19_weekly_stop": 12,
+        "ST-32_weekly_cap": 8,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 43,
+      "cycles_traded": null,
+      "net_pnl_rupees": 903868.1638461668,
+      "return_on_pc_total": 0.09038681638461668,
+      "return_on_pc_annualised": 0.06121000746023997,
+      "max_drawdown_pct_of_pc": 0.02420470120810273,
+      "win_rate": 0.3488372093023256,
+      "sharpe_annualised": 1.8964416422614052,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 6700076.16943406,
+      "cost_ratio": 0.0016212928762096076,
+      "exit_rules": {
+        "ST-4_time_exit": 7,
+        "ST-17_profit_target": 10,
+        "ST-39_entry_never_filled": 25,
+        "ST-32_weekly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "full_d0.16_dte56",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.16,
+      "delta_band": [
+        0.14,
+        0.18
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.16_dte56"
+    },
+    "in_sample": {
+      "completed_cycles": 224,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2475041.7764517628,
+      "return_on_pc_total": 0.24750417764517627,
+      "return_on_pc_annualised": 0.06472025304030571,
+      "max_drawdown_pct_of_pc": 0.04130206254659413,
+      "win_rate": 0.3392857142857143,
+      "sharpe_annualised": 1.504650937284791,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 33810877.889952995,
+      "cost_ratio": 0.001930270062841411,
+      "exit_rules": {
+        "ST-17_profit_target": 65,
+        "ST-19_weekly_stop": 16,
+        "ST-4_time_exit": 15,
+        "ST-39_entry_never_filled": 126,
+        "ST-32_weekly_cap": 2
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 90,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1536416.3441432118,
+      "return_on_pc_total": 0.1536416344143212,
+      "return_on_pc_annualised": 0.1031013623768362,
+      "max_drawdown_pct_of_pc": 0.07497813125742803,
+      "win_rate": 0.43333333333333335,
+      "sharpe_annualised": 1.1976998973226927,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 12387550.177423233,
+      "cost_ratio": 0.0026817531633686093,
+      "exit_rules": {
+        "ST-19_weekly_stop": 5,
+        "ST-4_time_exit": 8,
+        "ST-17_profit_target": 35,
+        "ST-32_weekly_cap": 4,
+        "ST-39_entry_never_filled": 38
+      }
+    }
+  },
+  {
+    "label": "full_d0.20_dte12",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.18,
+        0.23
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        1,
+        2
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.20_dte12"
+    },
+    "in_sample": {
+      "completed_cycles": 294,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1772969.11785095,
+      "return_on_pc_total": 0.177296911785095,
+      "return_on_pc_annualised": 0.04737401742975811,
+      "max_drawdown_pct_of_pc": 0.08811105440661773,
+      "win_rate": 0.3469387755102041,
+      "sharpe_annualised": 0.8532098682841132,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 42008695.6141554,
+      "cost_ratio": 0.0025559799480233104,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 143,
+        "ST-4_time_exit": 113,
+        "ST-19_weekly_stop": 10,
+        "ST-17_profit_target": 23,
+        "ST-32_weekly_cap": 5
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 110,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1404348.0868583191,
+      "return_on_pc_total": 0.1404348086858319,
+      "return_on_pc_annualised": 0.09441568003053846,
+      "max_drawdown_pct_of_pc": 0.018637947767709814,
+      "win_rate": 0.35454545454545455,
+      "sharpe_annualised": 3.0238271034534425,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 15884265.485992845,
+      "cost_ratio": 0.0022699922598061937,
+      "exit_rules": {
+        "ST-4_time_exit": 50,
+        "ST-39_entry_never_filled": 53,
+        "ST-17_profit_target": 7
+      }
+    }
+  },
+  {
+    "label": "full_d0.20_dte23",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.18,
+        0.23
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.20_dte23"
+    },
+    "in_sample": {
+      "completed_cycles": 339,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2515011.96820041,
+      "return_on_pc_total": 0.25150119682004096,
+      "return_on_pc_annualised": 0.06568654036345056,
+      "max_drawdown_pct_of_pc": 0.06634168033591283,
+      "win_rate": 0.31563421828908556,
+      "sharpe_annualised": 1.0316850701400673,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 57657336.95609381,
+      "cost_ratio": 0.001959402668004908,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 191,
+        "ST-4_time_exit": 75,
+        "ST-17_profit_target": 53,
+        "ST-19_weekly_stop": 9,
+        "ST-32_weekly_cap": 10,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 43,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1037656.9539960176,
+      "return_on_pc_total": 0.10376569539960176,
+      "return_on_pc_annualised": 0.07013252900318934,
+      "max_drawdown_pct_of_pc": 0.02088556134099503,
+      "win_rate": 0.32558139534883723,
+      "sharpe_annualised": 1.9504411342437638,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 8174330.045545223,
+      "cost_ratio": 0.0014078232789930727,
+      "exit_rules": {
+        "ST-4_time_exit": 8,
+        "ST-39_entry_never_filled": 25,
+        "ST-17_profit_target": 9,
+        "ST-32_weekly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "full_d0.20_dte56",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.18,
+        0.23
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.20_dte56"
+    },
+    "in_sample": {
+      "completed_cycles": 227,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2931013.8361564614,
+      "return_on_pc_total": 0.29310138361564614,
+      "return_on_pc_annualised": 0.07561456862572347,
+      "max_drawdown_pct_of_pc": 0.058753278633939095,
+      "win_rate": 0.30837004405286345,
+      "sharpe_annualised": 1.312326786574957,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 44608193.96799665,
+      "cost_ratio": 0.0017975208332534547,
+      "exit_rules": {
+        "ST-17_profit_target": 55,
+        "ST-19_weekly_stop": 13,
+        "ST-4_time_exit": 28,
+        "ST-39_entry_never_filled": 126,
+        "ST-32_weekly_cap": 5
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 119,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1119076.2153849173,
+      "return_on_pc_total": 0.11190762153849174,
+      "return_on_pc_annualised": 0.07554587375491928,
+      "max_drawdown_pct_of_pc": 0.07885370670316726,
+      "win_rate": 0.2857142857142857,
+      "sharpe_annualised": 0.7533240148059794,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 25576704.41211314,
+      "cost_ratio": 0.0015290463067769563,
+      "exit_rules": {
+        "ST-32_weekly_cap": 10,
+        "ST-39_entry_never_filled": 69,
+        "ST-4_time_exit": 7,
+        "ST-17_profit_target": 30,
+        "ST-19_weekly_stop": 3
+      }
+    }
+  },
+  {
+    "label": "full_d0.25_dte12",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.25,
+      "delta_band": [
+        0.22,
+        0.28
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        1,
+        2
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.25_dte12"
+    },
+    "in_sample": {
+      "completed_cycles": 305,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2196056.056475131,
+      "return_on_pc_total": 0.21960560564751308,
+      "return_on_pc_annualised": 0.05791318821455427,
+      "max_drawdown_pct_of_pc": 0.09807201386897049,
+      "win_rate": 0.32459016393442625,
+      "sharpe_annualised": 0.9257586016331085,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 57828991.08140676,
+      "cost_ratio": 0.002214351101256086,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 156,
+        "ST-4_time_exit": 122,
+        "ST-32_weekly_cap": 5,
+        "ST-17_profit_target": 13,
+        "ST-19_weekly_stop": 7,
+        "ST-32_monthly_cap": 2
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 101,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1439578.6924939118,
+      "return_on_pc_total": 0.1439578692493912,
+      "return_on_pc_annualised": 0.09673574697209442,
+      "max_drawdown_pct_of_pc": 0.025975607054811178,
+      "win_rate": 0.38613861386138615,
+      "sharpe_annualised": 2.6817897654574647,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 18102623.734804265,
+      "cost_ratio": 0.0023060423802706226,
+      "exit_rules": {
+        "ST-4_time_exit": 53,
+        "ST-39_entry_never_filled": 44,
+        "ST-17_profit_target": 4
+      }
+    }
+  },
+  {
+    "label": "full_d0.25_dte23",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.25,
+      "delta_band": [
+        0.22,
+        0.28
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.25_dte23"
+    },
+    "in_sample": {
+      "completed_cycles": 346,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2089905.795791464,
+      "return_on_pc_total": 0.20899057957914638,
+      "return_on_pc_annualised": 0.05529389137845486,
+      "max_drawdown_pct_of_pc": 0.07842742655937113,
+      "win_rate": 0.2861271676300578,
+      "sharpe_annualised": 0.7395224651635062,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 75159951.67114723,
+      "cost_ratio": 0.0017875498152996367,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 199,
+        "ST-4_time_exit": 83,
+        "ST-17_profit_target": 40,
+        "ST-19_weekly_stop": 6,
+        "ST-32_weekly_cap": 16,
+        "ST-32_monthly_cap": 2
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 43,
+      "cycles_traded": null,
+      "net_pnl_rupees": 967782.6736895535,
+      "return_on_pc_total": 0.09677826736895535,
+      "return_on_pc_annualised": 0.06547679167470277,
+      "max_drawdown_pct_of_pc": 0.023313500126714806,
+      "win_rate": 0.27906976744186046,
+      "sharpe_annualised": 1.4908973533501981,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 10051551.779601874,
+      "cost_ratio": 0.0014735069396948394,
+      "exit_rules": {
+        "ST-4_time_exit": 8,
+        "ST-39_entry_never_filled": 25,
+        "ST-17_profit_target": 8,
+        "ST-32_weekly_cap": 2
+      }
+    }
+  },
+  {
+    "label": "full_d0.25_dte56",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.25,
+      "delta_band": [
+        0.22,
+        0.28
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.25_dte56"
+    },
+    "in_sample": {
+      "completed_cycles": 223,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2149259.8091886546,
+      "return_on_pc_total": 0.21492598091886547,
+      "return_on_pc_annualised": 0.05676049475853051,
+      "max_drawdown_pct_of_pc": 0.08412820229108145,
+      "win_rate": 0.3004484304932735,
+      "sharpe_annualised": 0.8369818647898277,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 56387578.219189495,
+      "cost_ratio": 0.0016378952645778493,
+      "exit_rules": {
+        "ST-17_profit_target": 48,
+        "ST-19_weekly_stop": 10,
+        "ST-32_weekly_cap": 9,
+        "ST-39_entry_never_filled": 126,
+        "ST-4_time_exit": 29,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 127,
+      "cycles_traded": null,
+      "net_pnl_rupees": -494267.064908728,
+      "return_on_pc_total": -0.0494267064908728,
+      "return_on_pc_annualised": -0.03420312439236983,
+      "max_drawdown_pct_of_pc": 0.11133472620517508,
+      "win_rate": 0.2440944881889764,
+      "sharpe_annualised": -0.3522861342976854,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 26138057.05046146,
+      "cost_ratio": 0.0016230097503691899,
+      "exit_rules": {
+        "ST-32_weekly_cap": 8,
+        "ST-39_entry_never_filled": 79,
+        "ST-32_monthly_cap": 3,
+        "ST-17_profit_target": 20,
+        "ST-4_time_exit": 14,
+        "ST-19_weekly_stop": 3
+      }
+    }
+  },
+  {
+    "label": "full_d0.30_dte12",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.3,
+      "delta_band": [
+        0.27,
+        0.33
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        1,
+        2
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.30_dte12"
+    },
+    "in_sample": {
+      "completed_cycles": 298,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1219042.4177180491,
+      "return_on_pc_total": 0.12190424177180491,
+      "return_on_pc_annualised": 0.033157238041949144,
+      "max_drawdown_pct_of_pc": 0.09641591225330762,
+      "win_rate": 0.348993288590604,
+      "sharpe_annualised": 0.4778623986756067,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 70000990.02125444,
+      "cost_ratio": 0.002110267684689497,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 147,
+        "ST-4_time_exit": 128,
+        "ST-32_weekly_cap": 12,
+        "ST-17_profit_target": 7,
+        "ST-19_weekly_stop": 3,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 99,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1326400.7575733792,
+      "return_on_pc_total": 0.1326400757573379,
+      "return_on_pc_annualised": 0.08927455671885065,
+      "max_drawdown_pct_of_pc": 0.03247642569541904,
+      "win_rate": 0.35353535353535354,
+      "sharpe_annualised": 2.14604630828641,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 22413693.038412005,
+      "cost_ratio": 0.002188961381215181,
+      "exit_rules": {
+        "ST-4_time_exit": 54,
+        "ST-39_entry_never_filled": 43,
+        "ST-17_profit_target": 2
+      }
+    }
+  },
+  {
+    "label": "full_d0.30_dte23",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.3,
+      "delta_band": [
+        0.27,
+        0.33
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.30_dte23"
+    },
+    "in_sample": {
+      "completed_cycles": 335,
+      "cycles_traded": null,
+      "net_pnl_rupees": 854959.4505659696,
+      "return_on_pc_total": 0.08549594505659695,
+      "return_on_pc_annualised": 0.023536696148713565,
+      "max_drawdown_pct_of_pc": 0.11146465274387524,
+      "win_rate": 0.28059701492537314,
+      "sharpe_annualised": 0.274974627577869,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 91205507.84829074,
+      "cost_ratio": 0.0016742570338668626,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 192,
+        "ST-4_time_exit": 92,
+        "ST-17_profit_target": 25,
+        "ST-32_weekly_cap": 19,
+        "ST-32_monthly_cap": 2,
+        "ST-19_weekly_stop": 5
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 42,
+      "cycles_traded": null,
+      "net_pnl_rupees": 941672.0526980162,
+      "return_on_pc_total": 0.09416720526980162,
+      "return_on_pc_annualised": 0.06373465138657997,
+      "max_drawdown_pct_of_pc": 0.02801577374821543,
+      "win_rate": 0.2619047619047619,
+      "sharpe_annualised": 1.29329918920523,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 11973151.644812683,
+      "cost_ratio": 0.0014160354298348573,
+      "exit_rules": {
+        "ST-4_time_exit": 8,
+        "ST-39_entry_never_filled": 25,
+        "ST-17_profit_target": 7,
+        "ST-32_weekly_cap": 2
+      }
+    }
+  },
+  {
+    "label": "full_d0.30_dte56",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.3,
+      "delta_band": [
+        0.27,
+        0.33
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.30_dte56"
+    },
+    "in_sample": {
+      "completed_cycles": 220,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2430777.188650025,
+      "return_on_pc_total": 0.2430777188650025,
+      "return_on_pc_annualised": 0.06364755605227224,
+      "max_drawdown_pct_of_pc": 0.07265542092101156,
+      "win_rate": 0.2772727272727273,
+      "sharpe_annualised": 0.8899545510917376,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 69453611.16767761,
+      "cost_ratio": 0.001530066609005588,
+      "exit_rules": {
+        "ST-4_time_exit": 44,
+        "ST-17_profit_target": 30,
+        "ST-32_weekly_cap": 14,
+        "ST-39_entry_never_filled": 126,
+        "ST-19_weekly_stop": 6
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 122,
+      "cycles_traded": null,
+      "net_pnl_rupees": -286661.51482068375,
+      "return_on_pc_total": -0.028666151482068376,
+      "return_on_pc_annualised": -0.0197705838962996,
+      "max_drawdown_pct_of_pc": 0.1909414979484437,
+      "win_rate": 0.22950819672131148,
+      "sharpe_annualised": -0.10462515032218733,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 31490672.103284806,
+      "cost_ratio": 0.0015805660324161425,
+      "exit_rules": {
+        "ST-32_weekly_cap": 9,
+        "ST-39_entry_never_filled": 73,
+        "ST-17_profit_target": 17,
+        "ST-4_time_exit": 19,
+        "ST-19_weekly_stop": 3,
+        "ST-32_monthly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "full_d0.20_dte23_wing500",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.18,
+        0.23
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "full_d0.20_dte23_wing500"
+    },
+    "in_sample": {
+      "completed_cycles": 339,
+      "cycles_traded": null,
+      "net_pnl_rupees": 3802026.3009436,
+      "return_on_pc_total": 0.38020263009436,
+      "return_on_pc_annualised": 0.09568289191600154,
+      "max_drawdown_pct_of_pc": 0.05300058526597002,
+      "win_rate": 0.3185840707964602,
+      "sharpe_annualised": 1.466875916079285,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 63704899.29867907,
+      "cost_ratio": 0.00175852390062324,
+      "exit_rules": {
+        "ST-39_entry_never_filled": 192,
+        "ST-4_time_exit": 72,
+        "ST-17_profit_target": 54,
+        "ST-19_weekly_stop": 7,
+        "ST-32_weekly_cap": 13,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 43,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1277130.3496896494,
+      "return_on_pc_total": 0.12771303496896494,
+      "return_on_pc_annualised": 0.08601913898403146,
+      "max_drawdown_pct_of_pc": 0.022499364018816966,
+      "win_rate": 0.3488372093023256,
+      "sharpe_annualised": 2.1303857868008507,
+      "mean_premium_capture": null,
+      "gross_credit_rupees": 9488723.354184443,
+      "cost_ratio": 0.0012566684938635645,
+      "exit_rules": {
+        "ST-4_time_exit": 8,
+        "ST-39_entry_never_filled": 25,
+        "ST-17_profit_target": 9,
+        "ST-32_weekly_cap": 1
+      }
+    }
+  }
+]

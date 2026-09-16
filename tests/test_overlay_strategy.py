@@ -482,5 +482,7 @@ def test_a_week_whose_entry_never_filled_is_not_spent(tmp_path: Path) -> None:
     retry = strategy.decide(session=view, minute=later, book=BookView({}, 10_000_000.0))
 
     assert retry, "the week was spent on an entry that never traded"
-    closed = strategy.completed_cycles
-    assert closed and closed[0]["exit_rule"] == "ST-39_entry_never_filled"
+    # And the order that never traded is a journal entry, not a completed position: counting
+    # it as one put a zero-P&L "loss" into the win rate and the exit-rule table.
+    assert strategy.completed_cycles == ()
+    assert any(row["rule"] == "ST-39_entry_never_filled" for row in strategy.journal)

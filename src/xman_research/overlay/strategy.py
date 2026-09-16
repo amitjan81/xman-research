@@ -193,6 +193,13 @@ class IndexOptionOverlay:
     cash settlement. What "observed" can honestly mean for a five-session hold is that
     every price the *decision* rested on was printed."""
     event_calendar: Mapping[dt.date, str] = field(default_factory=dict)
+    target_utilisation: float = 0.30
+    """CA-9's sizing basis, as a share of Margin Capacity. The register allows 0.15-0.35.
+
+    With the section 8 collateral mix this, and not the gearing cap, is what sets the
+    position: 30% of a Rs 28 lakh capacity is Rs 8.4 lakh of margin budget, which buys a
+    fraction of the 2.5x gearing the same document allows."""
+
     max_gearing: float = 2.5
     """CA-14's cap on Allocated Notional / Portfolio Capital. A tuning knob, and one of the
     few that can move the return by a multiple rather than by a fraction."""
@@ -256,6 +263,9 @@ class IndexOptionOverlay:
             "margin_assumptions": self.margin_model.assumptions,
             "event_calendar_entries": len(self.event_calendar),
             "max_gearing": self.max_gearing,
+            "target_utilisation": self.target_utilisation,
+            "collateral_ce_fraction": self.collateral.cash_equivalent_fraction,
+            "margin_capacity": self.collateral.margin_capacity,
             "hedge_cash_reserve": self.hedge_cash_reserve,
             "wing_width_configured": params.wing_width,
         }
@@ -302,12 +312,21 @@ class IndexOptionOverlay:
         if book.positions():
             self._confirm(cycle, book)
             return
-        if not cycle.exit_requested:
-            # The book never held this cycle at all: the entry group was unfillable. It is
-            # recorded so the count of entries and the count of positions can disagree
-            # visibly rather than silently.
-            cycle.exit_rule = "ST-39_entry_never_filled"
-            cycle.exit_estimate = 0.0
+        if not cycle.filled:
+            # **The book never held this cycle: the entry group was unfillable, so there is
+            # no position to record.** It goes in the journal, where refusals live, and not
+            # in the completed-position list — an order that never traded is not a trade,
+            # and counting it as one put a zero-P&L "loss" into the win rate, the profit
+            # factor and the exit-rule table. The five-year run recorded 279 "cycles" of
+            # which a third had never existed, and the win rate read 29%.
+            self._log(
+                cycle.entry_date,
+                rule="ST-39_entry_never_filled",
+                outcome="declined",
+                detail={"expiry": cycle.expiry.isoformat(), "lots": cycle.lots},
+            )
+            self._cycle = None
+            return
         estimate = cycle.exit_estimate
         if estimate is None:
             estimate = 0.0
@@ -862,6 +881,7 @@ class IndexOptionOverlay:
                 max_lots_absolute=params.max_lots_absolute,
                 hedge_cash_reserve=self.hedge_cash_reserve,
                 max_gearing=self.max_gearing,
+                target_utilisation=self.target_utilisation,
             )
         )
         lots = int(record.allocated_lots * lot_fraction)

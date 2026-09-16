@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import itertools
 import json
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
@@ -139,6 +138,168 @@ def candidates() -> list[OverlayRunConfig]:
     return unique
 
 
+def stage_two() -> list[OverlayRunConfig]:
+    """The lever the first search missed: how much margin capacity the portfolio has at all.
+
+    Stage one swept the *trade* — delta, width, tenor, targets — and the *gearing cap*, and
+    found gearing 5 and gearing 10 producing identical results. That is the tell: the cap was
+    never binding. What binds is CA-9's budget, which is a share of Margin Capacity, and
+    Margin Capacity under the 50% rule is at most twice the cash-equivalent collateral. The
+    section 8 portfolio holds 15% of itself in cash-equivalents, so Rs 1 crore of holdings
+    supports Rs 28 lakh of margin and strands Rs 52 lakh of the rest.
+
+    Raising that fraction is not a deviation from the requirements — it is CA-R2, which the
+    document instructs the platform to *recommend* whenever non-cash collateral is stranded.
+    At 50% cash-equivalent nothing is stranded and capacity is Rs 84.5 lakh: three times the
+    position for the same portfolio, and the same trade.
+    """
+    base = OverlayRunConfig(
+        start=WINDOW_START,
+        end=IN_SAMPLE_END,
+        wing_policy="spec",
+        min_credit_ratio=0.0010,
+        slippage_rupees=0.25,
+        roll_trigger_delta=0.99,
+        margin_model=MarginPerLotModel(include_expiry_day_elm=False),
+        participation_volume_pct=0.05,
+        participation_oi_pct=0.02,
+        max_gearing=10.0,
+    )
+    specs: list[OverlayRunConfig] = []
+
+    # The lever alone, at the structure stage one liked best.
+    best = replace(base, short_delta_target=0.20, delta_band=(0.18, 0.23), entry_dte=(2, 3))
+    for fraction in (0.15, 0.25, 0.35, 0.50):
+        specs.append(
+            replace(best, cash_equivalent_fraction=fraction, label=f"ce{int(fraction * 100)}")
+        )
+
+    # CA-9's own range, on an unstranded portfolio.
+    for utilisation in (0.30, 0.35):
+        specs.append(
+            replace(
+                best,
+                cash_equivalent_fraction=0.50,
+                target_utilisation=utilisation,
+                label=f"ce50_util{int(utilisation * 100)}",
+            )
+        )
+
+    # The structures worth carrying to the larger book, at the register's maximum budget.
+    for target, band in (
+        (0.12, (0.10, 0.14)),
+        (0.16, (0.14, 0.18)),
+        (0.20, (0.18, 0.23)),
+        (0.25, (0.22, 0.28)),
+        (0.30, (0.27, 0.33)),
+    ):
+        for dte in ((1, 2), (2, 3), (5, 6)):
+            specs.append(
+                replace(
+                    base,
+                    cash_equivalent_fraction=0.50,
+                    target_utilisation=0.35,
+                    short_delta_target=target,
+                    delta_band=band,
+                    entry_dte=dte,
+                    label=f"full_d{target:.2f}_dte{dte[0]}{dte[1]}",
+                )
+            )
+
+    # And the widest wing, which stage one found the best of its lever.
+    specs.append(
+        replace(
+            base,
+            cash_equivalent_fraction=0.50,
+            target_utilisation=0.35,
+            short_delta_target=0.20,
+            delta_band=(0.18, 0.23),
+            entry_dte=(2, 3),
+            wing_width=500.0,
+            label="full_d0.20_dte23_wing500",
+        )
+    )
+    return specs
+
+
+def stage_three() -> list[OverlayRunConfig]:
+    """Past the lot cap, and out to the wings.
+
+    Stage two removed the collateral constraint and found three configurations producing the
+    same number, which is the same tell as before: something else is binding. It is CA-15's
+    absolute lot cap of 50, whose allowed range runs to 200. Stage three lifts it and pushes
+    the two levers that were still improving when stage two stopped — wing width, which was
+    the largest single jump it found, and the short delta around 0.16-0.20.
+
+    Every configuration here reports the gearing it actually used, because past this point
+    the interesting question is no longer "what return" but "at what size, and is that size
+    inside the document's own cap".
+    """
+    base = OverlayRunConfig(
+        start=WINDOW_START,
+        end=IN_SAMPLE_END,
+        wing_policy="spec",
+        min_credit_ratio=0.0010,
+        slippage_rupees=0.25,
+        roll_trigger_delta=0.99,
+        margin_model=MarginPerLotModel(include_expiry_day_elm=False),
+        participation_volume_pct=0.05,
+        participation_oi_pct=0.02,
+        max_gearing=10.0,
+        cash_equivalent_fraction=0.50,
+        target_utilisation=0.35,
+        short_delta_target=0.20,
+        delta_band=(0.18, 0.23),
+        entry_dte=(2, 3),
+        wing_width=500.0,
+    )
+    specs: list[OverlayRunConfig] = []
+    for lots in (50, 100, 200):
+        specs.append(replace(base, max_lots_absolute=lots, label=f"lots{lots}"))
+    for width in (500.0, 700.0, 1000.0):
+        specs.append(
+            replace(
+                base,
+                max_lots_absolute=200,
+                wing_width=width,
+                label=f"lots200_wing{int(width)}",
+            )
+        )
+    for target, band in ((0.16, (0.14, 0.18)), (0.20, (0.18, 0.23)), (0.25, (0.22, 0.28))):
+        for dte in ((2, 3), (5, 6)):
+            for width in (500.0, 700.0):
+                specs.append(
+                    replace(
+                        base,
+                        max_lots_absolute=200,
+                        short_delta_target=target,
+                        delta_band=band,
+                        entry_dte=dte,
+                        wing_width=width,
+                        label=f"g_d{target:.2f}_dte{dte[0]}{dte[1]}_w{int(width)}",
+                    )
+                )
+    # And the same winners held to the document's own gearing cap, to price the constraint.
+    for gearing in (2.5, 5.0):
+        specs.append(
+            replace(
+                base,
+                max_lots_absolute=200,
+                wing_width=700.0,
+                max_gearing=gearing,
+                label=f"capped_gearing{gearing:g}",
+            )
+        )
+    seen: set[str] = set()
+    unique: list[OverlayRunConfig] = []
+    for spec in specs:
+        if spec.label in seen:
+            continue
+        seen.add(spec.label)
+        unique.append(spec)
+    return unique
+
+
 def _run_one(config: OverlayRunConfig) -> dict[str, Any]:
     """One configuration, in-sample then out-of-sample, in a worker process."""
     scratch = Path(tempfile.mkdtemp(prefix="xman_tune_")) / "trials.db"
@@ -155,7 +316,7 @@ def _run_one(config: OverlayRunConfig) -> dict[str, Any]:
             )
         )
         payload["out_of_sample"] = _summary(holdout.metrics)
-    except Exception as error:  # noqa: BLE001 — one configuration must not end the search
+    except Exception as error:
         payload["error"] = f"{type(error).__name__}: {error}"
     return payload
 
@@ -182,6 +343,9 @@ def _summary(metrics: dict[str, Any]) -> dict[str, Any]:
         "win_rate",
         "sharpe_annualised",
         "mean_premium_capture",
+        "allocated_gearing_mean",
+        "allocated_gearing_max",
+        "lots_mean",
         "gross_credit_rupees",
         "cost_ratio",
         "exit_rules",
@@ -234,10 +398,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--only", default=None, help="comma-separated labels")
     parser.add_argument("--no-canonical-log", action="store_true")
+    parser.add_argument("--stage", type=int, default=1, choices=(1, 2, 3))
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
 
-    specs = candidates()
+    specs = {1: candidates, 2: stage_two, 3: stage_three}[args.stage]()
     if args.only:
         wanted = set(args.only.split(","))
         specs = [spec for spec in specs if spec.label in wanted]
@@ -275,7 +440,8 @@ def _line(payload: dict[str, Any]) -> str:
         f"{payload['label']:28s} IS {pct(inside.get('return_on_pc_annualised'))}/yr "
         f"dd {pct(inside.get('max_drawdown_pct_of_pc'))} n={inside.get('completed_cycles')!s:>4} "
         f"| OOS {pct(outside.get('return_on_pc_annualised'))}/yr "
-        f"dd {pct(outside.get('max_drawdown_pct_of_pc'))}"
+        f"dd {pct(outside.get('max_drawdown_pct_of_pc'))} "
+        f"| gearing {inside.get('allocated_gearing_mean') or 0:.1f}x"
     )
 
 
