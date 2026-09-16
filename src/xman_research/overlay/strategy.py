@@ -193,6 +193,10 @@ class IndexOptionOverlay:
     cash settlement. What "observed" can honestly mean for a five-session hold is that
     every price the *decision* rested on was printed."""
     event_calendar: Mapping[dt.date, str] = field(default_factory=dict)
+    max_gearing: float = 2.5
+    """CA-14's cap on Allocated Notional / Portfolio Capital. A tuning knob, and one of the
+    few that can move the return by a multiple rather than by a fraction."""
+
     hedge_cash_reserve: float = 180_000.0
     """CA-11's reserve, subtracted from the sizing budget before lots are computed.
 
@@ -251,6 +255,9 @@ class IndexOptionOverlay:
             "portfolio_capital": self.collateral.portfolio_capital,
             "margin_assumptions": self.margin_model.assumptions,
             "event_calendar_entries": len(self.event_calendar),
+            "max_gearing": self.max_gearing,
+            "hedge_cash_reserve": self.hedge_cash_reserve,
+            "wing_width_configured": params.wing_width,
         }
 
     @property
@@ -854,6 +861,7 @@ class IndexOptionOverlay:
                 margin_model=self.margin_model,
                 max_lots_absolute=params.max_lots_absolute,
                 hedge_cash_reserve=self.hedge_cash_reserve,
+                max_gearing=self.max_gearing,
             )
         )
         lots = int(record.allocated_lots * lot_fraction)

@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import os
 from dataclasses import dataclass, replace
 from itertools import pairwise
 from pathlib import Path
@@ -310,10 +311,16 @@ class SyntheticWingStore(SessionStore):
         if cache is None:
             return
         cache.parent.mkdir(parents=True, exist_ok=True)
-        # Written through a temporary name so a concurrent reader never sees half a file.
-        temporary = cache.with_suffix(".parquet.tmp")
-        frame.to_parquet(temporary, index=False)
-        temporary.replace(cache)
+        # Written through a temporary name so a concurrent reader never sees half a file, and
+        # the name carries the writer's pid: the tuning search runs a dozen workers over the
+        # same sessions, and a shared temporary name means one worker renames the file the
+        # next is still writing. That failed every configuration in the first parallel batch.
+        temporary = cache.with_suffix(f".parquet.{os.getpid()}.tmp")
+        try:
+            frame.to_parquet(temporary, index=False)
+            temporary.replace(cache)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def _by_side(minute_frame: pd.DataFrame):

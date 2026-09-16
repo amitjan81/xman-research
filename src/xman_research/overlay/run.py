@@ -96,6 +96,15 @@ class OverlayRunConfig:
     corpus_root: Path = DEFAULT_CORPUS_ROOT
     trial_log: Path = DEFAULT_TRIAL_LOG
     decision_interval_minutes: int = 15
+    short_delta_target: float = 0.12
+    """ST-6's target. The register allows 0.10-0.14; the tuning study goes outside that on
+    purpose and every run says where it stands."""
+    delta_band: tuple[float, float] = (0.10, 0.14)
+    wing_width: float = 350.0
+    entry_dte: tuple[int, ...] = (5, 6)
+    profit_take: float = 0.60
+    stop_multiple: float = 1.5
+    max_gearing: float = 2.5
     participation_volume_pct: float = 0.01
     """Share of a minute's printed volume one order may be. The engine's default research
     convention is 1%, and for this structure it is the binding execution constraint: four
@@ -132,6 +141,13 @@ class OverlayRun:
             "participation_volume_pct": self.config.participation_volume_pct,
             "participation_oi_pct": self.config.participation_oi_pct,
             "roll_trigger_delta": self.config.roll_trigger_delta,
+            "short_delta_target": self.config.short_delta_target,
+            "delta_band": list(self.config.delta_band),
+            "wing_width": self.config.wing_width,
+            "entry_dte": list(self.config.entry_dte),
+            "profit_take": self.config.profit_take,
+            "stop_multiple": self.config.stop_multiple,
+            "max_gearing": self.config.max_gearing,
             "portfolio_capital": self.config.portfolio_capital,
             "margin_assumptions": self.config.margin_model.assumptions,
             "trial_id": self.result.trial_id,
@@ -157,10 +173,17 @@ def run_overlay(config: OverlayRunConfig) -> OverlayRun:
         params=OverlayParameters(
             min_credit_ratio=config.min_credit_ratio,
             roll_trigger_delta=config.roll_trigger_delta,
+            short_delta_target=config.short_delta_target,
+            delta_band=config.delta_band,
+            wing_width=config.wing_width,
+            entry_dte=config.entry_dte,
+            profit_take=config.profit_take,
+            stop_multiple=config.stop_multiple,
         ),
         collateral=config.collateral_assumption(),
         margin_model=config.margin_model,
         wing_policy=config.wing_policy,
+        max_gearing=config.max_gearing,
     )
     resolution = store.resolve(config.underlying, config.start, config.end)
     gap_reason = None
