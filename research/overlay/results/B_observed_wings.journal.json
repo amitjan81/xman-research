@@ -7267,6 +7267,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 12
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-7_no_wing_available",
   "outcome": "declined",
   "detail": {
@@ -7324,6 +7333,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 12
   }
  },
  {
@@ -7421,6 +7439,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 12
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-7_no_wing_available",
   "outcome": "declined",
   "detail": {
@@ -7474,6 +7501,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 12
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -7519,6 +7555,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 12
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -7560,6 +7605,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 12
   }
  },
  {

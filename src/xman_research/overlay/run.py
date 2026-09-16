@@ -339,12 +339,21 @@ def overlay_metrics(
         "expectancy_rupees": (
             sum(c["realised_pnl"] for c in cycles) / len(cycles) if cycles else None
         ),
-        "median_premium_capture": _median(
-            [c["realised_pnl"] / c["credit_rupees"] for c in cycles if c["credit_rupees"] > 0]
+        # **Capture is reported as a mean and a median.** The median alone is a knife-edge
+        # statistic here: with a win rate near 50% it sits on the boundary between a position
+        # that hit its 60% target and one that did not, so it swings from 0.02 to 0.54 on a
+        # few positions changing side while the money involved barely moves.
+        "median_premium_capture": _median(_captures(cycles)),
+        "mean_premium_capture": _mean(_captures(cycles)),
+        "entry_orders_unfilled": sum(
+            1 for row in strategy.journal if row["rule"] == "ST-39_entry_never_filled"
         ),
+        # Realised, not the strategy's own mark-based estimate: the estimate is pre-cost and
+        # pre-slippage, and it partitioned wins and losses on a different series than the one
+        # it divided, which reported 2.52 where the traded numbers give 1.1.
         "profit_factor": (
-            sum(c["estimated_pnl"] for c in wins) / abs(sum(c["estimated_pnl"] for c in losses))
-            if losses and sum(c["estimated_pnl"] for c in losses) != 0
+            sum(c["realised_pnl"] for c in wins) / abs(sum(c["realised_pnl"] for c in losses))
+            if losses and sum(c["realised_pnl"] for c in losses) != 0
             else None
         ),
         "gross_credit_rupees": gross_credit,

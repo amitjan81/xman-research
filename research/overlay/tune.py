@@ -300,6 +300,86 @@ def stage_three() -> list[OverlayRunConfig]:
     return unique
 
 
+def stage_four() -> list[OverlayRunConfig]:
+    """Is the winner a peak or a plateau, and what does it cost to execute?
+
+    Stage three produced a configuration that reaches the target: 0.25 delta, two-to-three
+    days to expiry, 500-point wings, on an unstranded portfolio at 8.4x gearing. A single
+    configuration out of seventy-odd is exactly what a search produces whether or not
+    anything is there, so this stage does the two things that separate the cases.
+
+    **The neighbourhood.** A result that sits alone on a spike is a fit to this corpus; one
+    that sits on a smooth rise with its neighbours nearby is a property of the trade. Delta,
+    wing width and tenor are each stepped either side of the winner.
+
+    **The execution.** The winner runs at roughly 54 lots — 3,500 units a leg — under caps
+    that were loosened to 5% of a minute's volume. Slippage and the caps are stepped to see
+    how much of the return survives a less friendly fill, because at this size that is the
+    assumption doing the most work.
+    """
+    winner = OverlayRunConfig(
+        start=WINDOW_START,
+        end=IN_SAMPLE_END,
+        wing_policy="spec",
+        min_credit_ratio=0.0010,
+        slippage_rupees=0.25,
+        roll_trigger_delta=0.99,
+        margin_model=MarginPerLotModel(include_expiry_day_elm=False),
+        participation_volume_pct=0.05,
+        participation_oi_pct=0.02,
+        max_gearing=10.0,
+        max_lots_absolute=200,
+        cash_equivalent_fraction=0.50,
+        target_utilisation=0.35,
+        short_delta_target=0.25,
+        delta_band=(0.22, 0.28),
+        entry_dte=(2, 3),
+        wing_width=500.0,
+    )
+    specs: list[OverlayRunConfig] = []
+
+    for target in (0.22, 0.25, 0.28):
+        for width in (400.0, 500.0, 600.0):
+            specs.append(
+                replace(
+                    winner,
+                    short_delta_target=target,
+                    delta_band=(target - 0.03, target + 0.03),
+                    wing_width=width,
+                    label=f"n_d{target:.2f}_w{int(width)}",
+                )
+            )
+    for dte in ((1, 2), (2, 3), (3, 4), (4, 5)):
+        specs.append(replace(winner, entry_dte=dte, label=f"n_dte{dte[0]}{dte[1]}"))
+    for slippage in (0.0, 0.25, 0.50, 1.00):
+        specs.append(replace(winner, slippage_rupees=slippage, label=f"n_slip{slippage:g}"))
+    for volume, oi in ((0.01, 0.005), (0.05, 0.02), (0.10, 0.05)):
+        specs.append(
+            replace(
+                winner,
+                participation_volume_pct=volume,
+                participation_oi_pct=oi,
+                label=f"n_caps{volume:g}",
+            )
+        )
+    # Does ST-20 still destroy the trade at this delta, or was that a 0.12-delta effect?
+    specs.append(replace(winner, roll_trigger_delta=0.40, label="n_roll_on_0.40"))
+    # And the document's margin rule, at the winner's structure.
+    specs.append(
+        replace(winner, margin_model=MarginPerLotModel(include_expiry_day_elm=True), label="n_ca12")
+    )
+    specs.append(replace(winner, min_credit_ratio=0.0015, label="n_credit015"))
+
+    seen: set[str] = set()
+    unique: list[OverlayRunConfig] = []
+    for spec in specs:
+        if spec.label in seen:
+            continue
+        seen.add(spec.label)
+        unique.append(spec)
+    return unique
+
+
 def _run_one(config: OverlayRunConfig) -> dict[str, Any]:
     """One configuration, in-sample then out-of-sample, in a worker process."""
     scratch = Path(tempfile.mkdtemp(prefix="xman_tune_")) / "trials.db"
@@ -398,11 +478,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--only", default=None, help="comma-separated labels")
     parser.add_argument("--no-canonical-log", action="store_true")
-    parser.add_argument("--stage", type=int, default=1, choices=(1, 2, 3))
+    parser.add_argument("--stage", type=int, default=1, choices=(1, 2, 3, 4))
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
 
-    specs = {1: candidates, 2: stage_two, 3: stage_three}[args.stage]()
+    specs = {1: candidates, 2: stage_two, 3: stage_three, 4: stage_four}[args.stage]()
     if args.only:
         wanted = set(args.only.split(","))
         specs = [spec for spec in specs if spec.label in wanted]
