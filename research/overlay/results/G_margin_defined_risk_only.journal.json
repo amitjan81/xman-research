@@ -2291,6 +2291,15 @@
  },
  {
   "session_date": "2022-01-21",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-01-27",
+   "lots": 21
+  }
+ },
+ {
+  "session_date": "2022-01-21",
   "rule": "ST-6_no_strike_in_delta_band",
   "outcome": "declined",
   "detail": {
@@ -2372,6 +2381,15 @@
  },
  {
   "session_date": "2022-01-21",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-01-27",
+   "lots": 21
+  }
+ },
+ {
+  "session_date": "2022-01-21",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -2413,6 +2431,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-01-21",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-01-27",
+   "lots": 21
   }
  },
  {
@@ -2510,6 +2537,15 @@
  },
  {
   "session_date": "2022-01-21",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-01-27",
+   "lots": 21
+  }
+ },
+ {
+  "session_date": "2022-01-21",
   "rule": "ST-6_no_strike_in_delta_band",
   "outcome": "declined",
   "detail": {
@@ -2567,6 +2603,15 @@
  },
  {
   "session_date": "2022-01-21",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-01-27",
+   "lots": 21
+  }
+ },
+ {
+  "session_date": "2022-01-21",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -2608,6 +2653,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-01-21",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-01-27",
+   "lots": 21
   }
  },
  {
@@ -2669,6 +2723,15 @@
  },
  {
   "session_date": "2022-01-21",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-01-27",
+   "lots": 21
+  }
+ },
+ {
+  "session_date": "2022-01-21",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -2710,6 +2773,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-01-21",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-01-27",
+   "lots": 21
   }
  },
  {
@@ -2759,6 +2831,15 @@
  },
  {
   "session_date": "2022-01-21",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-01-27",
+   "lots": 21
+  }
+ },
+ {
+  "session_date": "2022-01-21",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -2800,6 +2881,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-01-21",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-01-27",
+   "lots": 21
   }
  },
  {
@@ -4364,6 +4454,15 @@
  },
  {
   "session_date": "2022-04-01",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-04-07",
+   "lots": 21
+  }
+ },
+ {
+  "session_date": "2022-04-01",
   "rule": "ST-6_no_strike_in_delta_band",
   "outcome": "declined",
   "detail": {
@@ -4517,6 +4616,15 @@
  },
  {
   "session_date": "2022-04-01",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-04-07",
+   "lots": 21
+  }
+ },
+ {
+  "session_date": "2022-04-01",
   "rule": "ST-6_no_strike_in_delta_band",
   "outcome": "declined",
   "detail": {
@@ -4598,6 +4706,15 @@
  },
  {
   "session_date": "2022-04-01",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-04-07",
+   "lots": 21
+  }
+ },
+ {
+  "session_date": "2022-04-01",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -4643,6 +4760,15 @@
  },
  {
   "session_date": "2022-04-01",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-04-07",
+   "lots": 21
+  }
+ },
+ {
+  "session_date": "2022-04-01",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -4684,6 +4810,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-04-01",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-04-07",
+   "lots": 21
   }
  },
  {
@@ -4741,6 +4876,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-04-01",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-04-07",
+   "lots": 21
   }
  },
  {
@@ -6858,6 +7002,15 @@
  },
  {
   "session_date": "2022-06-24",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-06-30",
+   "lots": 24
+  }
+ },
+ {
+  "session_date": "2022-06-24",
   "rule": "ST-6_no_strike_in_delta_band",
   "outcome": "declined",
   "detail": {
@@ -7095,6 +7248,15 @@
  },
  {
   "session_date": "2022-07-01",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-07",
+   "lots": 24
+  }
+ },
+ {
+  "session_date": "2022-07-01",
   "rule": "ST-6_no_strike_in_delta_band",
   "outcome": "declined",
   "detail": {
@@ -7148,6 +7310,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-01",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-07",
+   "lots": 24
   }
  },
  {
@@ -7217,6 +7388,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-01",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-07",
+   "lots": 24
   }
  },
  {
@@ -7329,6 +7509,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 23
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -7370,6 +7559,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
   }
  },
  {
@@ -7419,6 +7617,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -7460,6 +7667,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
   }
  },
  {
@@ -7509,6 +7725,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -7550,6 +7775,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
   }
  },
  {
@@ -7599,6 +7833,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -7640,6 +7883,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
   }
  },
  {
@@ -7689,6 +7941,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -7730,6 +7991,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
   }
  },
  {
@@ -7779,6 +8049,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -7820,6 +8099,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
   }
  },
  {
@@ -7869,6 +8157,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -7910,6 +8207,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
   }
  },
  {
@@ -7959,6 +8265,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -8000,6 +8315,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
   }
  },
  {
@@ -8049,6 +8373,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -8090,6 +8423,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
   }
  },
  {
@@ -8139,6 +8481,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -8184,6 +8535,15 @@
  },
  {
   "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
+  }
+ },
+ {
+  "session_date": "2022-07-15",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -8225,6 +8585,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-15",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-21",
+   "lots": 24
   }
  },
  {
@@ -8274,6 +8643,15 @@
  },
  {
   "session_date": "2022-07-22",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-28",
+   "lots": 23
+  }
+ },
+ {
+  "session_date": "2022-07-22",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -8315,6 +8693,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2022-07-22",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2022-07-28",
+   "lots": 23
   }
  },
  {
@@ -19472,6 +19859,15 @@
  },
  {
   "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 16
+  }
+ },
+ {
+  "session_date": "2024-05-03",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -19513,6 +19909,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 16
   }
  },
  {
@@ -19562,6 +19967,15 @@
  },
  {
   "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 16
+  }
+ },
+ {
+  "session_date": "2024-05-03",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -19603,6 +20017,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 16
   }
  },
  {
@@ -19652,6 +20075,15 @@
  },
  {
   "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 16
+  }
+ },
+ {
+  "session_date": "2024-05-03",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -19693,6 +20125,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 16
   }
  },
  {
@@ -19742,6 +20183,15 @@
  },
  {
   "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 16
+  }
+ },
+ {
+  "session_date": "2024-05-03",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -19783,6 +20233,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
   }
  },
  {
@@ -19832,6 +20291,15 @@
  },
  {
   "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
+  }
+ },
+ {
+  "session_date": "2024-05-03",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -19873,6 +20341,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
   }
  },
  {
@@ -19922,6 +20399,15 @@
  },
  {
   "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
+  }
+ },
+ {
+  "session_date": "2024-05-03",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -19963,6 +20449,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
   }
  },
  {
@@ -20012,6 +20507,15 @@
  },
  {
   "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
+  }
+ },
+ {
+  "session_date": "2024-05-03",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -20053,6 +20557,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
   }
  },
  {
@@ -20102,6 +20615,15 @@
  },
  {
   "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
+  }
+ },
+ {
+  "session_date": "2024-05-03",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -20143,6 +20665,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
   }
  },
  {
@@ -20192,6 +20723,15 @@
  },
  {
   "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
+  }
+ },
+ {
+  "session_date": "2024-05-03",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -20233,6 +20773,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
   }
  },
  {
@@ -20282,6 +20831,15 @@
  },
  {
   "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
+  }
+ },
+ {
+  "session_date": "2024-05-03",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -20327,6 +20885,15 @@
  },
  {
   "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
+  }
+ },
+ {
+  "session_date": "2024-05-03",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -20368,6 +20935,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-05-03",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-09",
+   "lots": 17
   }
  },
  {
@@ -20729,6 +21305,15 @@
  },
  {
   "session_date": "2024-05-24",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-30",
+   "lots": 16
+  }
+ },
+ {
+  "session_date": "2024-05-24",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -20774,6 +21359,15 @@
  },
  {
   "session_date": "2024-05-24",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-30",
+   "lots": 16
+  }
+ },
+ {
+  "session_date": "2024-05-24",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -20815,6 +21409,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-05-24",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-05-30",
+   "lots": 16
   }
  },
  {
@@ -22333,6 +22936,15 @@
  },
  {
   "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-07-26",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -22374,6 +22986,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
   }
  },
  {
@@ -22423,6 +23044,15 @@
  },
  {
   "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-07-26",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -22464,6 +23094,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
   }
  },
  {
@@ -22513,6 +23152,15 @@
  },
  {
   "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-07-26",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -22554,6 +23202,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
   }
  },
  {
@@ -22603,6 +23260,15 @@
  },
  {
   "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-07-26",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -22644,6 +23310,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
   }
  },
  {
@@ -22693,6 +23368,15 @@
  },
  {
   "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-07-26",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -22734,6 +23418,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
   }
  },
  {
@@ -22783,6 +23476,15 @@
  },
  {
   "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-07-26",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -22824,6 +23526,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
   }
  },
  {
@@ -22873,6 +23584,15 @@
  },
  {
   "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-07-26",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -22914,6 +23634,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
   }
  },
  {
@@ -22963,6 +23692,15 @@
  },
  {
   "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-07-26",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -23004,6 +23742,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
   }
  },
  {
@@ -23053,6 +23800,15 @@
  },
  {
   "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-07-26",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -23094,6 +23850,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
   }
  },
  {
@@ -23143,6 +23908,15 @@
  },
  {
   "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-07-26",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -23188,6 +23962,15 @@
  },
  {
   "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-07-26",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -23229,6 +24012,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-07-26",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-08-01",
+   "lots": 15
   }
  },
  {
@@ -23841,6 +24633,15 @@
  },
  {
   "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-09-06",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -23886,6 +24687,15 @@
  },
  {
   "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-09-06",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -23927,6 +24737,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
   }
  },
  {
@@ -24012,6 +24831,15 @@
  },
  {
   "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-09-06",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -24053,6 +24881,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
   }
  },
  {
@@ -24102,6 +24939,15 @@
  },
  {
   "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-09-06",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -24143,6 +24989,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
   }
  },
  {
@@ -24192,6 +25047,15 @@
  },
  {
   "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-09-06",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -24233,6 +25097,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
   }
  },
  {
@@ -24282,6 +25155,15 @@
  },
  {
   "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-09-06",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -24323,6 +25205,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
   }
  },
  {
@@ -24372,6 +25263,15 @@
  },
  {
   "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-09-06",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -24417,6 +25317,15 @@
  },
  {
   "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-09-06",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -24458,6 +25367,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
   }
  },
  {
@@ -24519,6 +25437,15 @@
  },
  {
   "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2024-09-06",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -24560,6 +25487,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2024-09-06",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2024-09-12",
+   "lots": 15
   }
  },
  {
@@ -41880,6 +42816,15 @@
  },
  {
   "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2026-08-19",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -41921,6 +42866,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
   }
  },
  {
@@ -41970,6 +42924,15 @@
  },
  {
   "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2026-08-19",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -42011,6 +42974,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
   }
  },
  {
@@ -42060,6 +43032,15 @@
  },
  {
   "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2026-08-19",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -42101,6 +43082,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
   }
  },
  {
@@ -42150,6 +43140,15 @@
  },
  {
   "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2026-08-19",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -42191,6 +43190,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
   }
  },
  {
@@ -42240,6 +43248,15 @@
  },
  {
   "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2026-08-19",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -42281,6 +43298,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
   }
  },
  {
@@ -42330,6 +43356,15 @@
  },
  {
   "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2026-08-19",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -42371,6 +43406,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
   }
  },
  {
@@ -42420,6 +43464,15 @@
  },
  {
   "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2026-08-19",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -42461,6 +43514,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
   }
  },
  {
@@ -42510,6 +43572,15 @@
  },
  {
   "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2026-08-19",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -42551,6 +43622,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
   }
  },
  {
@@ -42600,6 +43680,15 @@
  },
  {
   "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2026-08-19",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -42641,6 +43730,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
   }
  },
  {
@@ -42690,6 +43788,15 @@
  },
  {
   "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2026-08-19",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -42735,6 +43842,15 @@
  },
  {
   "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2026-08-19",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -42776,6 +43892,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2026-08-19",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 16
   }
  },
  {
@@ -42825,6 +43950,15 @@
  },
  {
   "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
+  }
+ },
+ {
+  "session_date": "2026-08-20",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -42866,6 +44000,15 @@
     ]
    },
    "half_reason": "ST-10_low_iv_percentile"
+  }
+ },
+ {
+  "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
   }
  },
  {
@@ -42915,6 +44058,15 @@
  },
  {
   "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
+  }
+ },
+ {
+  "session_date": "2026-08-20",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -42956,6 +44108,15 @@
     ]
    },
    "half_reason": "ST-10_low_iv_percentile"
+  }
+ },
+ {
+  "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
   }
  },
  {
@@ -43005,6 +44166,15 @@
  },
  {
   "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
+  }
+ },
+ {
+  "session_date": "2026-08-20",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -43046,6 +44216,15 @@
     ]
    },
    "half_reason": "ST-10_low_iv_percentile"
+  }
+ },
+ {
+  "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
   }
  },
  {
@@ -43095,6 +44274,15 @@
  },
  {
   "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
+  }
+ },
+ {
+  "session_date": "2026-08-20",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -43136,6 +44324,15 @@
     ]
    },
    "half_reason": "ST-10_low_iv_percentile"
+  }
+ },
+ {
+  "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
   }
  },
  {
@@ -43185,6 +44382,15 @@
  },
  {
   "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
+  }
+ },
+ {
+  "session_date": "2026-08-20",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -43226,6 +44432,15 @@
     ]
    },
    "half_reason": "ST-10_low_iv_percentile"
+  }
+ },
+ {
+  "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
   }
  },
  {
@@ -43275,6 +44490,15 @@
  },
  {
   "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
+  }
+ },
+ {
+  "session_date": "2026-08-20",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -43316,6 +44540,15 @@
     ]
    },
    "half_reason": "ST-10_low_iv_percentile"
+  }
+ },
+ {
+  "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
   }
  },
  {
@@ -43365,6 +44598,15 @@
  },
  {
   "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
+  }
+ },
+ {
+  "session_date": "2026-08-20",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -43406,6 +44648,15 @@
     ]
    },
    "half_reason": "ST-10_low_iv_percentile"
+  }
+ },
+ {
+  "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
   }
  },
  {
@@ -43455,6 +44706,15 @@
  },
  {
   "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
+  }
+ },
+ {
+  "session_date": "2026-08-20",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -43496,6 +44756,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
   }
  },
  {
@@ -43545,6 +44814,15 @@
  },
  {
   "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
+  }
+ },
+ {
+  "session_date": "2026-08-20",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -43586,6 +44864,15 @@
     ]
    },
    "half_reason": null
+  }
+ },
+ {
+  "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 15
   }
  },
  {
@@ -43635,6 +44922,15 @@
  },
  {
   "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
+  }
+ },
+ {
+  "session_date": "2026-08-20",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -43680,6 +44976,15 @@
  },
  {
   "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
+  }
+ },
+ {
+  "session_date": "2026-08-20",
   "rule": "ST-5_entry",
   "outcome": "entered",
   "detail": {
@@ -43721,6 +45026,15 @@
     ]
    },
    "half_reason": "ST-10_low_iv_percentile"
+  }
+ },
+ {
+  "session_date": "2026-08-20",
+  "rule": "ST-39_entry_never_filled",
+  "outcome": "declined",
+  "detail": {
+   "expiry": "2026-08-25",
+   "lots": 7
   }
  },
  {

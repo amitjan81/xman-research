@@ -13,49 +13,52 @@
 ## 1. The answer
 
 **On ₹1 crore of Portfolio Capital, over five years of 1-minute NIFTY option data, the
-strategy as specified returned +0.5% in total — about +0.11% a year — net of statutory costs
-and slippage. The document's objective is 12% a year.**
+strategy as specified returned ₹2,395 — 0.02% in total, 0.00% a year — net of statutory
+costs and slippage. The document's objective is 12% a year.**
 
-It did not lose money either: maximum drawdown was 0.9% of Portfolio Capital against a 10%
-objective, so the risk control worked. What the overlay did not do was earn anything. The
-finding is not fragile. Across every variant tested — wing construction, the minimum-credit
-gate, the margin assumption, the execution assumption — the annualised return sits between
-**−0.13% and +0.33%**. Two further diagnostics, which deliberately break the specification
-to find the ceiling, reach +0.36% and +0.67%. Nothing in the tested space reaches a
-twentieth of the objective.
+It did not lose money either: maximum drawdown was 1.3% of Portfolio Capital against a 10%
+objective, and the win rate was a perfectly ordinary 57.9% over 133 positions. The trade
+works. What it does not do is earn anything: the wins are too small and the losses too
+large, and they cancel almost exactly. Across every specification-faithful variant —
+wing construction, the minimum-credit gate, the margin assumption — the annualised return
+sits between **−0.04% and +0.06%**. The execution assumption moves it more than any rule
+does (−0.17% to +0.19%), which is the signature of a strategy whose edge is smaller than its
+trading friction. Switching off the roll and loosening the caps reaches +0.77%, still a
+fifteenth of the objective.
 
-| Arm | Cycles | Net P&L | Return on PC | Annualised | Max DD | Win rate | Sharpe | Cost ratio |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| **A — specified 350pt wings (modelled where unprinted)** | 142 | **50,795** | **0.51%** | **0.11%** | 0.91% | 51.4% | 0.20 | 2.5% |
-| B — wings that printed at entry (100–400pt, per side) | 56 | -63,982 | -0.64% | -0.13% | 0.99% | 53.6% | -0.54 | 3.9% |
-| C — minimum credit 0.15% of notional | 130 | 90,436 | 0.90% | 0.19% | 0.90% | 51.5% | 0.38 | 2.3% |
-| D — minimum credit 0.20% (the document's default) | 49 | 35,839 | 0.36% | 0.07% | 0.78% | 49.0% | 0.20 | 1.7% |
-| E — zero slippage | 142 | 159,452 | 1.59% | 0.33% | 0.84% | 54.9% | 0.66 | 2.5% |
-| F — slippage ₹0.50 per unit per leg | 142 | -52,423 | -0.52% | -0.11% | 1.38% | 49.3% | -0.21 | 2.5% |
-| G — margin = defined risk only (no CA-12 ELM) | 142 | 78,821 | 0.79% | 0.16% | 1.85% | 52.8% | 0.18 | 1.6% |
-| H — *diagnostic*: participation caps 5% volume / 2% OI | 142 | 170,715 | 1.71% | 0.36% | 0.87% | 54.9% | 0.63 | 2.2% |
-| I — *diagnostic*: H, with ST-20 rolls switched off | 142 | 321,632 | 3.22% | **0.67%** | 0.83% | **74.6%** | 0.89 | 1.5% |
+| Arm | Cycles | Net P&L | Return on PC | Annualised | Max DD | Win rate |
+|---|---:|---:|---:|---:|---:|---:|
+| **A — specified 350pt wings (modelled where unprinted)** | 133 | **2,395** | **0.02%** | **0.00%** | 1.29% | 57.9% |
+| B — wings that printed at entry (100–400pt, per side) | 34 | 15,005 | 0.15% | 0.03% | 0.41% | 67.7% |
+| C — minimum credit 0.15% of notional | 100 | 27,944 | 0.28% | 0.06% | 1.18% | 61.0% |
+| D — minimum credit 0.20% (the document's default) | 33 | -17,713 | -0.18% | -0.04% | 1.05% | 60.6% |
+| E — zero slippage | 133 | 95,686 | 0.96% | 0.19% | 1.04% | 59.4% |
+| F — slippage ₹0.50 per unit per leg | 133 | -85,885 | -0.86% | -0.17% | 1.78% | 57.1% |
+| G — margin = defined risk only (no CA-12 ELM) | 133 | 97,216 | 0.97% | 0.19% | 1.80% | 60.2% |
+| H — *diagnostic*: participation caps 5% volume / 2% OI | 135 | 11,005 | 0.11% | 0.02% | 1.35% | 57.0% |
+| I — *diagnostic*: H, with ST-20 rolls switched off | 135 | 390,902 | 3.91% | 0.77% | 0.90% | **78.5%** |
 
 Arm I is the most informative row in the table. Switch off the roll rule and loosen the
-execution caps, and the structure behaves exactly as short-condor theory says it should:
-**74.6% win rate**, 65% of positions closed at the profit target, median premium capture
-0.54, profit factor 1.96. The trade works. It just does not work *enough*.
+execution caps and the structure behaves exactly as short-condor theory says it should — a
+**78.5% win rate** and the lowest drawdown in the study. The trade works. It just does not
+work *enough*: 0.77% a year against an objective of 12%.
 
 Two numbers explain why 12% was never reachable at this size, before any question of skill:
 
-- The overlay **collected ₹21.5 lakh of net credit in total** across 142 positions in
-  5.3 years — 4.1% of Portfolio Capital per year of gross premium. Twelve per cent a year
-  cannot come out of four, whatever the win rate.
-- It **kept 1.6% of it** (median premium capture per position). The gross premium was
-  collected and then handed back.
+- The overlay **collected ₹18.4 lakh of net credit in total** across 133 positions in five
+  years — about 3.7% of Portfolio Capital a year of gross premium. Twelve per cent a year
+  cannot come out of under four, whatever the win rate.
+- It **kept none of it on average**. The median position captured 48% of its credit — the
+  profit target doing its job — but the mean capture is 0.00, because the losing quarter
+  gave back everything the winning three-quarters made. Average win ₹7,226; average loss
+  ₹9,893; profit factor 1.17.
 
 The position size is not an oversight, it is the document's own rule. CA-12 requires the
 worst-case margin *including* the expiry-day ELM on both short legs, even though ST-4
 forbids holding to expiry day; on a NIFTY condor that add-on is roughly three times the
-structure's entire defined risk. The result is a typical position of 5 lots — about ₹75 lakh
-of notional, **gearing 0.75 against a cap of 2.5**. Arm G removes the add-on, the position
-roughly doubles (median 9 lots), the gross credit doubles to ₹41.9 lakh — and the net return
-goes to +0.16% a year. Scaling a zero scales to zero.
+structure's entire defined risk. The result is a typical position of 6 lots — about ₹1.1 crore
+of notional, **gearing 1.1 against a cap of 2.5**. Arm G removes the add-on, the position
+roughly doubles — and the net return goes to +0.19% a year. Scaling a zero scales to zero.
 
 **The ceiling, stated as arithmetic.** Take the best case this study produced — arm I, the
 structure working as designed, keeping 15% of gross credit after costs — and scale it to the
@@ -71,82 +74,63 @@ that delta.
 
 ## 2. Where the money went
 
-**How often it traded.** 142 positions against roughly 275 weekly expiry cycles in the
-window — it entered about half the available weeks. The refusals, counted once per entry
-session (arm A):
+**How often it traded.** 133 positions against roughly 250 weekly expiry cycles, plus 146
+entry orders that were never filled — the participation caps refusing a four-leg group in a
+quiet minute. The refusals, counted once per entry session:
 
 | Rule that refused the week | Entry sessions |
 |---|---:|
 | `ST-11` VRP filter (5-day realised > weekly ATM implied) | 65 |
-| `ST-6` no strike in the 0.10–0.14 delta band **inside the captured strike band** | 59 |
+| `ST-6` no strike in the 0.10–0.14 delta band inside the captured band | 59 |
 | `ST-12` trend filter (\|close − 20d SMA\| > 4%) | 21 |
 | `ST-13` gap filter (opening gap > 1%, still outside the band at 11:00) | 14 |
 
-`ST-6` is a data limitation rather than a strategy decision — see
-[§5](#5-what-the-corpus-can-and-cannot-answer). The other three are the document's filters
-doing what they were written to do, and between them they stood the strategy down through
-most of the high-realised-volatility stretches of 2022 and 2026.
+The three filters that are the document's own stood the strategy down through most of the
+high-realised-volatility stretches of 2022 and 2026, which is what they were written to do.
+`ST-6` is mostly a data limitation — see [§5](#5-what-the-corpus-can-and-cannot-answer) —
+though not entirely: a 50-point strike ladder sometimes steps over [0.10, 0.14] without
+landing in it, and the journal now records the nearest delta the chain offered so the two
+causes can be told apart.
 
-Every completed position, grouped by the rule that closed it (arm A, 142 positions):
+Every completed position, grouped by the rule that closed it:
 
-| Closed by | Positions | Total P&L | Median |
-|---|---:|---:|---:|
-| `ST-17` profit target | 64 | **+₹4,89,409** | +₹6,142 |
-| `ST-39` entry never filled | 11 | ₹0 | ₹0 |
-| `ST-21` second touch | 1 | −₹10,741 | −₹10,741 |
-| `ST-4` deadline missed | 11 | −₹27,126 | −₹3,551 |
-| `ST-4` time exit | 31 | −₹1,11,311 | −₹2,948 |
-| `ST-19` weekly stop | 5 | −₹1,38,334 | −₹20,928 |
-| `ST-22` structure-mismatch unwind | 19 | −₹1,51,101 | −₹6,758 |
-| **net** | **142** | **+₹50,795** | |
-
-The profit target does its job: 64 positions, ₹4.9 lakh, and it is the only line in the
-table that is positive. Everything else is the cost of the positions that did not go
-straight to target.
-
-**The single largest destroyer of value is the ST-20 roll.**
-
-| | Positions | Total P&L |
+| Closed by | Positions | Share |
 |---|---:|---:|
-| Never rolled | 79 | **+₹4,67,740** |
-| Rolled once | 63 | **−₹4,16,945** |
+| `ST-17` profit target | 72 | 54% |
+| `ST-21` touch after an unpriceable roll | 41 | 31% |
+| `ST-19` weekly stop | 11 | 8% |
+| `ST-4` time exit | 9 | 7% |
 
-Forty-four per cent of positions hit the 0.28-delta roll trigger, and as a group they gave
-back almost exactly what the unrolled ones earned. This is not an implementation artefact —
-it is what the rule costs. ST-20 buys back a short that has run from 0.12 to 0.28 delta
-(expensive by then) together with its wing, and re-sells the same vertical 350 points
-further out (cheap by then). The measured cost of a roll is **₹29–52 per unit against an
-entry credit of ₹39 per unit**: the adjustment routinely costs more than the position ever
-stood to make. The arithmetic is the rule's, not the backtest's.
+**Zero ST-4 breaches and zero structure-mismatch unwinds** — both were present before the
+review fixes and both were defects rather than findings.
 
-The finding replicates three ways, which is why it is stated this strongly:
+**ST-20's roll never executes, and that is the finding.** Forty-six positions reached the
+0.28-delta trigger; none of them rolled. The rule's replacement short sits one wing-width
+further out, which is precisely where the captured band ends, so its price would be one this
+package modelled rather than one the market printed — and selling a modelled price is the one
+thing the fabrication boundary forbids ([§5](#5-what-the-corpus-can-and-cannot-answer)). The
+strategy records the refusal and closes on the next touch instead, which is where 31% of the
+positions in the table above come from.
 
-- at the larger position size (arm G: rolled −₹7.66 lakh, unrolled +₹8.45 lakh);
-- in the arm whose entry structure is priced entirely from real prints (arm B: rolled
-  −₹1.67 lakh over 23 positions, unrolled +₹1.03 lakh over 33);
-- and by removing the rule outright (arm I), which lifts the win rate from 51% to **75%**,
-  the share closed at profit target from 45% to 65%, and the median premium capture from
-  **0.016 to 0.54**. The roll is what turns a working short-condor into a coin flip.
+That is a statement about this corpus, not about the rule. What the rule costs is measurable
+where the strikes *are* observable — in the tuned configurations of [§4a](#4a-what-reaches-12--the-tuned-configuration),
+which trade nearer the money: switching ST-20 back on there costs **4.3 percentage points a
+year** (13.25% → 8.90% in-sample, 11.15% → 8.40% out). An earlier version of this study,
+before the fix that stopped modelled shorts, let the roll trade at fabricated prices and
+measured its cost at ₹4.17 lakh against ₹4.68 lakh made by the positions that never rolled.
+Both measurements point the same way. Only the second one is made of real prices.
 
-There is a second, quieter cost inside that number. Nineteen of arm A's positions
-(13%) closed as `ST-22_structure_mismatch_unwind`: a roll is an eight-leg order, the
-participation caps resize an order group to its smallest fillable leg, and a roll that
-half-executes leaves a book that is no longer the specified structure. The strategy unwinds
-those rather than manage a shape the requirements do not define — correctly, but at a cost of
-₹1.51 lakh. Rolls that cannot be executed atomically are a live operational risk, not a
-backtest artefact: the same eight legs have to fill together on a real venue too.
-
-**Costs are real but not the story.** ₹54,425 over five years — 0.54% of Portfolio Capital,
-2.5% of gross credit. Three-quarters of it is flat per-order brokerage, which this structure
-pays eight times a cycle on a small position.
+**Costs are real but not the story.** ₹41,804 over five years — 0.42% of Portfolio Capital,
+2.3% of gross credit. Three-quarters is flat per-order brokerage, which this structure pays
+eight times a cycle on a small position.
 
 **Execution is a bigger term than costs.** Slippage at ₹0.25 per unit per leg costs about
-₹1.05 lakh over the run — twice the total statutory bill — and the sign of the answer moves
-with it (arm E versus arm F below).
+₹1.8 lakh over the run — four times the entire statutory bill — and the sign of the answer
+moves with it (arm E versus arm F).
 
-**Year by year** (arm A, by entry date): 2021 −₹21k (5 positions) · 2022 +₹34k (18) ·
-2023 +₹27k (39) · 2024 +₹3k (26) · 2025 +₹62k (34) · 2026 −₹54k (20). No year is close to
-the objective, in either direction.
+**Year by year**, by entry date: 2021 −₹20.5k (5 positions) · 2022 +₹20.0k (13) ·
+2023 +₹82.8k (39) · 2024 −₹15.1k (23) · 2025 −₹34.1k (34) · 2026 −₹30.8k (19). One positive
+year of any size in five, and none close to the objective in either direction.
 
 ---
 
@@ -203,61 +187,74 @@ establishes is below.
 ### 4a. What reaches 12% — the tuned configuration
 
 The owner's follow-up question was not "does the specified strategy make 12%" but "what
-would". `research/overlay/tune.py` searched for it in four stages, 95 configurations, with
-the in-sample/out-of-sample split fixed at 2025-03-31 **before the first run**.
+would". `research/overlay/tune.py` searched for it in five stages and 117 configurations,
+with the in-sample/out-of-sample split fixed at 2025-03-31 **before the first run**.
 
-**It is reachable. Over the full five years the tuned configuration returns 11.46% a year**
-— ₹71.7 lakh on ₹1 crore — with a 5.80% maximum drawdown, a Sharpe of 1.55 and a 69.5% win
-rate over 164 positions. On the 18 months the search never saw, it returns 11.15%.
+**It is reachable.** The tuned configuration returns **11.55% a year over the full five
+years** — ₹72.5 lakh on ₹1 crore — and clears the target in both halves separately: 13.26%
+in-sample and **15.21% out-of-sample**, on 200 positions with a 73.0% win rate and a Sharpe
+of 1.35. Maximum drawdown is 8.28%, inside the 10% objective.
 
 | | Specified | Tuned | The document's rule |
 |---|---|---|---|
-| Short delta | 0.12 | **0.25** | ST-6: 0.10–0.14 |
-| Days to expiry at entry | 5–6 | **2–3** | ST-3: 4–7 |
-| Wing width | 350 pts | **500 pts** | ST-7: 300–400 |
-| ST-20 roll | on | **off** | ST-20 requires it |
-| Cash-equivalent collateral | 15% | **50%** | §8's mix — but CA-R2 *recommends* raising it |
-| Target utilisation | 30% | **35%** | CA-9: 15–35% ✓ |
-| Absolute lot cap | 50 | **200** | CA-15: 1–200 ✓ |
-| **Gearing actually used** | 0.75× | **8.4×** | **CA-14: 2.5×** |
+| Short delta | 0.12 | **0.22** | ST-6: 0.10–0.14 ✗ |
+| Entry window | 5–6 days to expiry | **1–2 sessions before expiry** | ST-3: 4–7 days ✗ (see below) |
+| Wing width | 350 pts | **600 pts** | ST-7: 300–400 ✗ |
+| ST-20 roll | on | **off** | ST-20 requires it ✗ |
+| Cash-equivalent collateral | 15% | **50%** | §8's mix — but **CA-R2 recommends raising it** ✓ |
+| Target utilisation | 30% | 35% | CA-9: 15–35% ✓ |
+| Absolute lot cap | 50 | 200 | CA-15: 1–200 ✓ |
+| **Gearing actually used** | 1.1× | **7.6× mean, 9.4× peak** | **CA-14: 2.5× ✗** |
 
-Two of those changes are inside the document's own ranges, and one — the collateral mix — is
-something the document instructs the platform to *recommend* (CA-R2 fires whenever non-cash
-collateral is stranded, and §8's portfolio strands ₹52 lakh of it). The rest are deviations,
-and **the gearing is the one that matters**: held to CA-14's 2.5× cap with everything else
-unchanged, the same configuration returns 4.78% a year. Gearing is what closes the gap from
-5% to 12%, and it is the rule furthest outside the register.
+Three of the eight changes are inside the document's own ranges, and the collateral one is
+something the document instructs the platform to *recommend*: CA-R2 fires whenever non-cash
+collateral is stranded, and §8's portfolio strands ₹52 lakh of it. **The gearing is the
+change that matters.** Held to CA-14's 2.5× cap with everything else unchanged, the same
+configuration returns 4.78% a year. Everything else on the list is worth a few points;
+gearing is worth the difference between 5% and 12%.
 
-**It is a plateau, not a spike.** Every one of the nine configurations around the winner —
-delta 0.22/0.25/0.28 crossed with wings of 400/500/600 — returns between 8.4% and 14.0%
-in-sample and 7.9% to 11.6% out-of-sample. A search that found one configuration standing
-alone would be a search that found noise; this surface is smooth in both directions.
+**The entry window is a correction, not a deviation.** ST-3 is written in calendar days, and
+calendar days do not survive NSE's move of the NIFTY weekly expiry from Thursday to Tuesday
+in mid-2025: "two to three days before expiry" is Monday and Tuesday under the old regime and
+**Saturday and Sunday** under the new one. The first tuned configuration this study produced
+was tuned in calendar days, returned 11.46% a year, and had stopped trading entirely in
+August 2025 — 163 positions before the change and one after. The annualised figure hid it,
+because a year of not trading looks like a year of no losses. Counting *sessions* instead is
+invariant: ST-3's 5–6 calendar days is 2–3 sessions under either regime, and the tuned
+window of 1–2 sessions is one step closer in.
+
+**It is a plateau, not a spike.** The nine configurations around the calendar-day winner
+(delta 0.22/0.25/0.28 × wings 400/500/600) all returned 8.4–14.0% in-sample and 7.9–11.6%
+out-of-sample, and the session-form search reproduced the ridge with the holdout spanning
+the new regime. A search that found one configuration standing alone found noise; this
+surface is smooth in both directions.
 
 **What it is sensitive to, in order:**
 
 | Perturbation | In-sample | Out-of-sample |
 |---|---:|---:|
-| The tuned configuration | 13.25% | 11.15% |
+| The tuned configuration | 13.26% | 15.21% |
 | Participation caps 5% → 1% of a minute's volume | **4.20%** | **6.06%** |
 | CA-12's literal margin rule (expiry-day ELM included) | 5.92% | 4.95% |
 | ST-20 roll switched back on | 8.90% | 8.40% |
 | Slippage ₹0.25 → ₹1.00 per unit per leg | 8.87% | 9.16% |
-| Slippage ₹0.25 → ₹0 | 14.74% | 11.88% |
 
 Slippage barely moves it — four times the assumed cost still leaves ~9%. **Execution
-capacity does.** The position is roughly 54 lots, about 3,500 units a leg, and the result
+capacity does.** The position averages 42 lots, about 2,700 units a leg, and the result
 assumes that can be worked into 5% of a minute's printed volume. At the engine's
 deliberately conservative 1% it falls to 4–6%. That assumption, not the strategy, is where
-this number is most likely to be wrong, and it is testable before any capital is committed:
-it is a question about the book depth of NIFTY weeklies at 0.25 delta, which live quotes
-answer and this corpus cannot.
+this number is most likely to be wrong — and it is testable before any capital moves, because
+it is a question about the book depth of NIFTY weeklies at 0.22 delta that live quotes answer
+and this corpus cannot.
 
-**The risk the drawdown figure hides.** 5.80% is what the path did; it is not what the
-structure permits. At 54 lots with 500-point wings the maximum loss on a single expiry is
-54 × 500 × 65 ≈ **₹17.6 lakh, or 17.6% of Portfolio Capital** — an index gap through the
-wing on one Tuesday. Five years produced no such week. The 10% drawdown objective is met by
-the realised path and exceeded by the worst case the position carries, and those are
-different statements about the same trade.
+**The risk the drawdown figure does not show.** 8.28% is what the path did. What the position
+*permits* is larger: at 42 lots with 600-point wings the maximum loss on a single expiry is
+about **₹20 lakh, or 20% of Portfolio Capital** — an index gap through the wing on one
+Tuesday. The worst week in five years was −6.3%. The 10% drawdown objective is met by the
+realised path and exceeded two-fold by the worst case the structure carries, and those are
+different statements about the same trade. ST-32's weekly loss cap fired 23 times in 200
+positions, which is the risk budget doing its job at this size and is also why the
+full-window return (11.55%) is below either half taken alone.
 
 ### What would have to be true for 12%
 

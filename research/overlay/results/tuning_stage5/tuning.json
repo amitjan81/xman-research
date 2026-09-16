@@ -1,0 +1,1441 @@
+[
+  {
+    "label": "s_sb01_d0.16",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.16,
+      "delta_band": [
+        0.13,
+        0.19
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        0,
+        1
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb01_d0.16"
+    },
+    "in_sample": {
+      "completed_cycles": 162,
+      "cycles_traded": null,
+      "net_pnl_rupees": 3413765.0324915554,
+      "return_on_pc_total": 0.3413765032491555,
+      "return_on_pc_annualised": 0.08685278602946833,
+      "max_drawdown_pct_of_pc": 0.08707228372081383,
+      "win_rate": 0.7283950617283951,
+      "sharpe_annualised": 1.38584883407458,
+      "mean_premium_capture": 0.09293457807288553,
+      "allocated_gearing_mean": 8.54750930304662,
+      "allocated_gearing_max": 9.99208275,
+      "lots_mean": 46.00617283950617,
+      "gross_credit_rupees": 22218932.14274799,
+      "cost_ratio": 0.0056315996150590195,
+      "exit_rules": {
+        "ST-4_time_exit": 111,
+        "ST-17_profit_target": 33,
+        "ST-19_weekly_stop": 15,
+        "ST-32_weekly_cap": 3
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 67,
+      "cycles_traded": null,
+      "net_pnl_rupees": 3228550.5832209736,
+      "return_on_pc_total": 0.3228550583220974,
+      "return_on_pc_annualised": 0.21178473430814604,
+      "max_drawdown_pct_of_pc": 0.027327470438424217,
+      "win_rate": 0.7910447761194029,
+      "sharpe_annualised": 3.2255826786859436,
+      "mean_premium_capture": 0.16569378806771778,
+      "allocated_gearing_mean": 9.926879241353383,
+      "allocated_gearing_max": 9.997370825,
+      "lots_mean": 53.149253731343286,
+      "gross_credit_rupees": 12170070.253915885,
+      "cost_ratio": 0.0036767149333768933,
+      "exit_rules": {
+        "ST-4_time_exit": 42,
+        "ST-17_profit_target": 21,
+        "ST-19_weekly_stop": 3,
+        "ST-32_weekly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "s_sb01_d0.20",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.17,
+        0.23
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        0,
+        1
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb01_d0.20"
+    },
+    "in_sample": {
+      "completed_cycles": 160,
+      "cycles_traded": null,
+      "net_pnl_rupees": 4139853.287960898,
+      "return_on_pc_total": 0.4139853287960898,
+      "return_on_pc_annualised": 0.10322233134013592,
+      "max_drawdown_pct_of_pc": 0.0873063492425759,
+      "win_rate": 0.7375,
+      "sharpe_annualised": 1.3993028502092661,
+      "mean_premium_capture": 0.08083693855830117,
+      "allocated_gearing_mean": 8.677894584169701,
+      "allocated_gearing_max": 9.99208275,
+      "lots_mean": 45.73125,
+      "gross_credit_rupees": 27801166.82610972,
+      "cost_ratio": 0.005003823582607615,
+      "exit_rules": {
+        "ST-4_time_exit": 117,
+        "ST-32_weekly_cap": 7,
+        "ST-17_profit_target": 27,
+        "ST-19_weekly_stop": 8,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 68,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1836699.7611580398,
+      "return_on_pc_total": 0.183669976115804,
+      "return_on_pc_annualised": 0.12273492789324303,
+      "max_drawdown_pct_of_pc": 0.06765810729250742,
+      "win_rate": 0.6764705882352942,
+      "sharpe_annualised": 1.300906774921964,
+      "mean_premium_capture": 0.0646287162549441,
+      "allocated_gearing_mean": 9.922956963214286,
+      "allocated_gearing_max": 9.997370825,
+      "lots_mean": 52.955882352941174,
+      "gross_credit_rupees": 15792997.180658609,
+      "cost_ratio": 0.0035194642828121655,
+      "exit_rules": {
+        "ST-4_time_exit": 48,
+        "ST-19_weekly_stop": 4,
+        "ST-32_monthly_cap": 1,
+        "ST-17_profit_target": 12,
+        "ST-32_weekly_cap": 3
+      }
+    }
+  },
+  {
+    "label": "s_sb01_d0.25",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.25,
+      "delta_band": [
+        0.22,
+        0.28
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        0,
+        1
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb01_d0.25"
+    },
+    "in_sample": {
+      "completed_cycles": 159,
+      "cycles_traded": null,
+      "net_pnl_rupees": 4505907.5655484535,
+      "return_on_pc_total": 0.4505907565548454,
+      "return_on_pc_annualised": 0.11124744112100116,
+      "max_drawdown_pct_of_pc": 0.08162027431075237,
+      "win_rate": 0.6792452830188679,
+      "sharpe_annualised": 1.4516224714089754,
+      "mean_premium_capture": 0.046659895859309596,
+      "allocated_gearing_mean": 8.514147767006971,
+      "allocated_gearing_max": 9.99820835,
+      "lots_mean": 44.37735849056604,
+      "gross_credit_rupees": 35206876.34602202,
+      "cost_ratio": 0.004411892308802228,
+      "exit_rules": {
+        "ST-4_time_exit": 120,
+        "ST-32_weekly_cap": 14,
+        "ST-17_profit_target": 17,
+        "ST-19_weekly_stop": 8
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 67,
+      "cycles_traded": null,
+      "net_pnl_rupees": 870413.9241670333,
+      "return_on_pc_total": 0.08704139241670333,
+      "return_on_pc_annualised": 0.058973555595243754,
+      "max_drawdown_pct_of_pc": 0.09044693111111966,
+      "win_rate": 0.6865671641791045,
+      "sharpe_annualised": 0.6686502057182738,
+      "mean_premium_capture": 0.03057622481109727,
+      "allocated_gearing_mean": 9.92462186015625,
+      "allocated_gearing_max": 9.997370825,
+      "lots_mean": 43.02985074626866,
+      "gross_credit_rupees": 15811485.796209794,
+      "cost_ratio": 0.0034234415204419696,
+      "exit_rules": {
+        "ST-4_time_exit": 49,
+        "ST-19_weekly_stop": 3,
+        "ST-32_weekly_cap": 5,
+        "ST-32_monthly_cap": 1,
+        "ST-17_profit_target": 9
+      }
+    }
+  },
+  {
+    "label": "s_sb12_d0.16",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.16,
+      "delta_band": [
+        0.13,
+        0.19
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        1,
+        2
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb12_d0.16"
+    },
+    "in_sample": {
+      "completed_cycles": 146,
+      "cycles_traded": null,
+      "net_pnl_rupees": 4552025.197937816,
+      "return_on_pc_total": 0.4552025197937816,
+      "return_on_pc_annualised": 0.11224816269052718,
+      "max_drawdown_pct_of_pc": 0.04176316741776018,
+      "win_rate": 0.7602739726027398,
+      "sharpe_annualised": 1.742128385998558,
+      "mean_premium_capture": 0.17785919508934345,
+      "allocated_gearing_mean": 8.411731980755858,
+      "allocated_gearing_max": 9.9975824,
+      "lots_mean": 45.49315068493151,
+      "gross_credit_rupees": 22838917.798794236,
+      "cost_ratio": 0.004890570507977021,
+      "exit_rules": {
+        "ST-4_time_exit": 56,
+        "ST-17_profit_target": 69,
+        "ST-19_weekly_stop": 9,
+        "ST-32_weekly_cap": 12
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 55,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1415755.3812178914,
+      "return_on_pc_total": 0.14157553812178914,
+      "return_on_pc_annualised": 0.09516713857546044,
+      "max_drawdown_pct_of_pc": 0.09728191836873082,
+      "win_rate": 0.7272727272727273,
+      "sharpe_annualised": 0.8437500267778945,
+      "mean_premium_capture": 0.05763287002767248,
+      "allocated_gearing_mean": 9.91677949059406,
+      "allocated_gearing_max": 9.996243075,
+      "lots_mean": 51.763636363636365,
+      "gross_credit_rupees": 11111333.387162209,
+      "cost_ratio": 0.003845349991169763,
+      "exit_rules": {
+        "ST-4_time_exit": 19,
+        "ST-19_weekly_stop": 5,
+        "ST-17_profit_target": 26,
+        "ST-32_weekly_cap": 4,
+        "ST-32_monthly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "s_sb12_d0.20",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.17,
+        0.23
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        1,
+        2
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb12_d0.20"
+    },
+    "in_sample": {
+      "completed_cycles": 146,
+      "cycles_traded": null,
+      "net_pnl_rupees": 5149625.532150887,
+      "return_on_pc_total": 0.5149625532150887,
+      "return_on_pc_annualised": 0.12501477099027314,
+      "max_drawdown_pct_of_pc": 0.055806819712835014,
+      "win_rate": 0.7397260273972602,
+      "sharpe_annualised": 1.5810261939428272,
+      "mean_premium_capture": 0.14481262199743689,
+      "allocated_gearing_mean": 8.4351523793479,
+      "allocated_gearing_max": 9.9975824,
+      "lots_mean": 45.95890410958904,
+      "gross_credit_rupees": 29539523.311360583,
+      "cost_ratio": 0.004459311649132814,
+      "exit_rules": {
+        "ST-4_time_exit": 65,
+        "ST-17_profit_target": 58,
+        "ST-19_weekly_stop": 8,
+        "ST-32_weekly_cap": 14,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 56,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1059881.9652637187,
+      "return_on_pc_total": 0.10598819652637187,
+      "return_on_pc_annualised": 0.07161144772333228,
+      "max_drawdown_pct_of_pc": 0.08842679272154659,
+      "win_rate": 0.6785714285714286,
+      "sharpe_annualised": 0.5878342910662043,
+      "mean_premium_capture": 0.04023671811363596,
+      "allocated_gearing_mean": 9.922865691304347,
+      "allocated_gearing_max": 9.996243075,
+      "lots_mean": 46.607142857142854,
+      "gross_credit_rupees": 12993537.941403594,
+      "cost_ratio": 0.003385766386286386,
+      "exit_rules": {
+        "ST-4_time_exit": 17,
+        "ST-32_weekly_cap": 9,
+        "ST-17_profit_target": 26,
+        "ST-19_weekly_stop": 3,
+        "ST-32_monthly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "s_sb12_d0.25",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.25,
+      "delta_band": [
+        0.22,
+        0.28
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        1,
+        2
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb12_d0.25"
+    },
+    "in_sample": {
+      "completed_cycles": 144,
+      "cycles_traded": null,
+      "net_pnl_rupees": 5205715.197636355,
+      "return_on_pc_total": 0.5205715197636355,
+      "return_on_pc_annualised": 0.1261943808653665,
+      "max_drawdown_pct_of_pc": 0.05886927879594228,
+      "win_rate": 0.6805555555555556,
+      "sharpe_annualised": 1.4097613503973976,
+      "mean_premium_capture": 0.09577865513135903,
+      "allocated_gearing_mean": 8.45019255212653,
+      "allocated_gearing_max": 9.9975824,
+      "lots_mean": 44.5,
+      "gross_credit_rupees": 37032516.989078104,
+      "cost_ratio": 0.004116706947501191,
+      "exit_rules": {
+        "ST-4_time_exit": 75,
+        "ST-17_profit_target": 44,
+        "ST-19_weekly_stop": 5,
+        "ST-32_weekly_cap": 20
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 54,
+      "cycles_traded": null,
+      "net_pnl_rupees": 807219.7916640695,
+      "return_on_pc_total": 0.08072197916640696,
+      "return_on_pc_annualised": 0.05474306350509406,
+      "max_drawdown_pct_of_pc": 0.11222624355365035,
+      "win_rate": 0.6481481481481481,
+      "sharpe_annualised": 0.4557041530257198,
+      "mean_premium_capture": 0.01577914343060824,
+      "allocated_gearing_mean": 9.922797332971015,
+      "allocated_gearing_max": 9.996243075,
+      "lots_mean": 40.96296296296296,
+      "gross_credit_rupees": 14543430.627876544,
+      "cost_ratio": 0.003346524339998599,
+      "exit_rules": {
+        "ST-4_time_exit": 24,
+        "ST-32_weekly_cap": 8,
+        "ST-17_profit_target": 20,
+        "ST-19_weekly_stop": 2
+      }
+    }
+  },
+  {
+    "label": "s_sb23_d0.16",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.16,
+      "delta_band": [
+        0.13,
+        0.19
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb23_d0.16"
+    },
+    "in_sample": {
+      "completed_cycles": 129,
+      "cycles_traded": null,
+      "net_pnl_rupees": 4125619.5400499776,
+      "return_on_pc_total": 0.41256195400499773,
+      "return_on_pc_annualised": 0.10290728935439009,
+      "max_drawdown_pct_of_pc": 0.0557081135154834,
+      "win_rate": 0.7441860465116279,
+      "sharpe_annualised": 1.5480622052612174,
+      "mean_premium_capture": 0.1260425781185404,
+      "allocated_gearing_mean": 8.555554577313403,
+      "allocated_gearing_max": 9.9986315,
+      "lots_mean": 43.02325581395349,
+      "gross_credit_rupees": 20536041.818725865,
+      "cost_ratio": 0.0048535279086370795,
+      "exit_rules": {
+        "ST-4_time_exit": 23,
+        "ST-17_profit_target": 82,
+        "ST-19_weekly_stop": 14,
+        "ST-32_weekly_cap": 10
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 52,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1075531.0679427292,
+      "return_on_pc_total": 0.10755310679427292,
+      "return_on_pc_annualised": 0.07265222698267593,
+      "max_drawdown_pct_of_pc": 0.12791861252847933,
+      "win_rate": 0.6923076923076923,
+      "sharpe_annualised": 0.6316380812887803,
+      "mean_premium_capture": 0.1266440659311094,
+      "allocated_gearing_mean": 9.903495562871287,
+      "allocated_gearing_max": 9.9999744,
+      "lots_mean": 42.63461538461539,
+      "gross_credit_rupees": 9340033.693446528,
+      "cost_ratio": 0.003776157155723858,
+      "exit_rules": {
+        "ST-19_weekly_stop": 4,
+        "ST-32_weekly_cap": 6,
+        "ST-17_profit_target": 32,
+        "ST-4_time_exit": 9,
+        "ST-32_monthly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "s_sb23_d0.20",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.17,
+        0.23
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb23_d0.20"
+    },
+    "in_sample": {
+      "completed_cycles": 131,
+      "cycles_traded": null,
+      "net_pnl_rupees": 4792324.908716271,
+      "return_on_pc_total": 0.47923249087162706,
+      "return_on_pc_annualised": 0.11742606025587876,
+      "max_drawdown_pct_of_pc": 0.078457846165596,
+      "win_rate": 0.7480916030534351,
+      "sharpe_annualised": 1.431206035655659,
+      "mean_premium_capture": 0.11015393240884241,
+      "allocated_gearing_mean": 8.565187363539183,
+      "allocated_gearing_max": 9.9986315,
+      "lots_mean": 41.961832061068705,
+      "gross_credit_rupees": 26310351.61658014,
+      "cost_ratio": 0.004396040395809454,
+      "exit_rules": {
+        "ST-4_time_exit": 31,
+        "ST-17_profit_target": 75,
+        "ST-19_weekly_stop": 12,
+        "ST-32_weekly_cap": 13
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 48,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1915677.18215614,
+      "return_on_pc_total": 0.191567718215614,
+      "return_on_pc_annualised": 0.1278727030742346,
+      "max_drawdown_pct_of_pc": 0.08497853548020864,
+      "win_rate": 0.7083333333333334,
+      "sharpe_annualised": 0.9804668222859644,
+      "mean_premium_capture": 0.14037219520547908,
+      "allocated_gearing_mean": 9.910880711068701,
+      "allocated_gearing_max": 9.9999744,
+      "lots_mean": 46.791666666666664,
+      "gross_credit_rupees": 12470899.337835126,
+      "cost_ratio": 0.0032721842066302576,
+      "exit_rules": {
+        "ST-32_weekly_cap": 10,
+        "ST-4_time_exit": 9,
+        "ST-17_profit_target": 27,
+        "ST-32_monthly_cap": 1,
+        "ST-19_weekly_stop": 1
+      }
+    }
+  },
+  {
+    "label": "s_sb23_d0.25",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.25,
+      "delta_band": [
+        0.22,
+        0.28
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb23_d0.25"
+    },
+    "in_sample": {
+      "completed_cycles": 129,
+      "cycles_traded": null,
+      "net_pnl_rupees": 5569376.1787922345,
+      "return_on_pc_total": 0.5569376178792235,
+      "return_on_pc_annualised": 0.13376779099466662,
+      "max_drawdown_pct_of_pc": 0.09082870045758608,
+      "win_rate": 0.689922480620155,
+      "sharpe_annualised": 1.5166766637982174,
+      "mean_premium_capture": 0.10251611119633719,
+      "allocated_gearing_mean": 8.576044993829047,
+      "allocated_gearing_max": 9.9986315,
+      "lots_mean": 40.63565891472868,
+      "gross_credit_rupees": 32560014.804383095,
+      "cost_ratio": 0.004113536348104749,
+      "exit_rules": {
+        "ST-4_time_exit": 41,
+        "ST-17_profit_target": 60,
+        "ST-19_weekly_stop": 7,
+        "ST-32_weekly_cap": 19,
+        "ST-32_monthly_cap": 2
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 45,
+      "cycles_traded": null,
+      "net_pnl_rupees": 373055.74201804213,
+      "return_on_pc_total": 0.03730557420180421,
+      "return_on_pc_annualised": 0.02546517060164999,
+      "max_drawdown_pct_of_pc": 0.12147069512187961,
+      "win_rate": 0.6222222222222222,
+      "sharpe_annualised": 0.1730125629655122,
+      "mean_premium_capture": 0.028969681541074547,
+      "allocated_gearing_mean": 9.91648572,
+      "allocated_gearing_max": 9.999478125,
+      "lots_mean": 43.111111111111114,
+      "gross_credit_rupees": 14327715.731988791,
+      "cost_ratio": 0.003267219974978793,
+      "exit_rules": {
+        "ST-32_weekly_cap": 12,
+        "ST-32_monthly_cap": 3,
+        "ST-17_profit_target": 20,
+        "ST-4_time_exit": 8,
+        "ST-19_weekly_stop": 2
+      }
+    }
+  },
+  {
+    "label": "s_sb34_d0.16",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.16,
+      "delta_band": [
+        0.13,
+        0.19
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        3,
+        4
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb34_d0.16"
+    },
+    "in_sample": {
+      "completed_cycles": 75,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2772621.9185387343,
+      "return_on_pc_total": 0.2772621918538734,
+      "return_on_pc_annualised": 0.07186184761836656,
+      "max_drawdown_pct_of_pc": 0.03232029086942101,
+      "win_rate": 0.7466666666666667,
+      "sharpe_annualised": 1.356361039415712,
+      "mean_premium_capture": 0.11147030948573168,
+      "allocated_gearing_mean": 8.692546186553576,
+      "allocated_gearing_max": 9.9986315,
+      "lots_mean": 41.18666666666667,
+      "gross_credit_rupees": 11799111.931106994,
+      "cost_ratio": 0.004951539469066011,
+      "exit_rules": {
+        "ST-17_profit_target": 52,
+        "ST-19_weekly_stop": 11,
+        "ST-4_time_exit": 8,
+        "ST-32_weekly_cap": 4
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 31,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1208726.882670153,
+      "return_on_pc_total": 0.12087268826701529,
+      "return_on_pc_annualised": 0.0814921510773472,
+      "max_drawdown_pct_of_pc": 0.04418419791186867,
+      "win_rate": 0.7419354838709677,
+      "sharpe_annualised": 1.1130726419242263,
+      "mean_premium_capture": 0.2658097836517363,
+      "allocated_gearing_mean": 9.899768520909092,
+      "allocated_gearing_max": 9.9999744,
+      "lots_mean": 45.225806451612904,
+      "gross_credit_rupees": 5831286.718890973,
+      "cost_ratio": 0.003392389833995692,
+      "exit_rules": {
+        "ST-32_weekly_cap": 4,
+        "ST-4_time_exit": 6,
+        "ST-17_profit_target": 20,
+        "ST-32_monthly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "s_sb34_d0.20",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.2,
+      "delta_band": [
+        0.17,
+        0.23
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        3,
+        4
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb34_d0.20"
+    },
+    "in_sample": {
+      "completed_cycles": 72,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2804723.413377784,
+      "return_on_pc_total": 0.28047234133777843,
+      "return_on_pc_annualised": 0.07262509929591099,
+      "max_drawdown_pct_of_pc": 0.03899420090576458,
+      "win_rate": 0.7361111111111112,
+      "sharpe_annualised": 1.1218409805705976,
+      "mean_premium_capture": 0.07869896661864123,
+      "allocated_gearing_mean": 8.687048050186688,
+      "allocated_gearing_max": 9.9986315,
+      "lots_mean": 39.708333333333336,
+      "gross_credit_rupees": 14415324.856703762,
+      "cost_ratio": 0.0044867893315025656,
+      "exit_rules": {
+        "ST-17_profit_target": 45,
+        "ST-19_weekly_stop": 9,
+        "ST-4_time_exit": 11,
+        "ST-32_weekly_cap": 7
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 34,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2301459.2813669443,
+      "return_on_pc_total": 0.23014592813669443,
+      "return_on_pc_annualised": 0.15281771031061986,
+      "max_drawdown_pct_of_pc": 0.05437959927287759,
+      "win_rate": 0.7647058823529411,
+      "sharpe_annualised": 1.618078972146427,
+      "mean_premium_capture": 0.2829283567348014,
+      "allocated_gearing_mean": 9.907067675352113,
+      "allocated_gearing_max": 9.9999744,
+      "lots_mean": 47.970588235294116,
+      "gross_credit_rupees": 9151833.396861492,
+      "cost_ratio": 0.003186980587550151,
+      "exit_rules": {
+        "ST-32_weekly_cap": 6,
+        "ST-17_profit_target": 21,
+        "ST-4_time_exit": 7
+      }
+    }
+  },
+  {
+    "label": "s_sb34_d0.25",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.25,
+      "delta_band": [
+        0.22,
+        0.28
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        3,
+        4
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb34_d0.25"
+    },
+    "in_sample": {
+      "completed_cycles": 71,
+      "cycles_traded": null,
+      "net_pnl_rupees": 3920074.6402687654,
+      "return_on_pc_total": 0.39200746402687653,
+      "return_on_pc_annualised": 0.09833230788026714,
+      "max_drawdown_pct_of_pc": 0.04942941514608602,
+      "win_rate": 0.7183098591549296,
+      "sharpe_annualised": 1.371365480246093,
+      "mean_premium_capture": 0.10644608903954238,
+      "allocated_gearing_mean": 8.704470641219567,
+      "allocated_gearing_max": 9.9986315,
+      "lots_mean": 40.25352112676056,
+      "gross_credit_rupees": 18645916.58362101,
+      "cost_ratio": 0.004063392890972005,
+      "exit_rules": {
+        "ST-17_profit_target": 39,
+        "ST-19_weekly_stop": 6,
+        "ST-32_weekly_cap": 11,
+        "ST-4_time_exit": 15
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 35,
+      "cycles_traded": null,
+      "net_pnl_rupees": 1236020.7591714878,
+      "return_on_pc_total": 0.12360207591714878,
+      "return_on_pc_annualised": 0.08329951374727385,
+      "max_drawdown_pct_of_pc": 0.11217496637957981,
+      "win_rate": 0.6857142857142857,
+      "sharpe_annualised": 0.7069704112974439,
+      "mean_premium_capture": 0.13177030840094445,
+      "allocated_gearing_mean": 9.908477086805554,
+      "allocated_gearing_max": 9.9999744,
+      "lots_mean": 44.8,
+      "gross_credit_rupees": 11634349.237723783,
+      "cost_ratio": 0.0032201637941712213,
+      "exit_rules": {
+        "ST-32_weekly_cap": 8,
+        "ST-17_profit_target": 15,
+        "ST-4_time_exit": 10,
+        "ST-19_weekly_stop": 1,
+        "ST-32_monthly_cap": 1
+      }
+    }
+  },
+  {
+    "label": "s_sb12_d0.22_w500",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.22,
+      "delta_band": [
+        0.19,
+        0.25
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        1,
+        2
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb12_d0.22_w500"
+    },
+    "in_sample": {
+      "completed_cycles": 146,
+      "cycles_traded": null,
+      "net_pnl_rupees": 5859961.7998825535,
+      "return_on_pc_total": 0.5859961799882554,
+      "return_on_pc_annualised": 0.13972878841820435,
+      "max_drawdown_pct_of_pc": 0.05201229136145514,
+      "win_rate": 0.726027397260274,
+      "sharpe_annualised": 1.7248607471775774,
+      "mean_premium_capture": 0.14110097513411896,
+      "allocated_gearing_mean": 8.42881646543743,
+      "allocated_gearing_max": 9.9975824,
+      "lots_mean": 45.52054794520548,
+      "gross_credit_rupees": 32894224.84373678,
+      "cost_ratio": 0.004328368267425528,
+      "exit_rules": {
+        "ST-4_time_exit": 66,
+        "ST-17_profit_target": 56,
+        "ST-19_weekly_stop": 6,
+        "ST-32_weekly_cap": 18
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 56,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2004724.87342049,
+      "return_on_pc_total": 0.200472487342049,
+      "return_on_pc_annualised": 0.13365280280672143,
+      "max_drawdown_pct_of_pc": 0.08330913166027612,
+      "win_rate": 0.6607142857142857,
+      "sharpe_annualised": 1.012220369538118,
+      "mean_premium_capture": 0.044084275981073735,
+      "allocated_gearing_mean": 9.922811555892858,
+      "allocated_gearing_max": 9.996243075,
+      "lots_mean": 52.67857142857143,
+      "gross_credit_rupees": 16635682.472167362,
+      "cost_ratio": 0.0032219971203757956,
+      "exit_rules": {
+        "ST-4_time_exit": 21,
+        "ST-32_weekly_cap": 8,
+        "ST-17_profit_target": 23,
+        "ST-19_weekly_stop": 2,
+        "ST-32_monthly_cap": 2
+      }
+    }
+  },
+  {
+    "label": "s_sb23_d0.22_w500",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.22,
+      "delta_band": [
+        0.19,
+        0.25
+      ],
+      "wing_width": 500.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb23_d0.22_w500"
+    },
+    "in_sample": {
+      "completed_cycles": 127,
+      "cycles_traded": null,
+      "net_pnl_rupees": 5260531.639686583,
+      "return_on_pc_total": 0.5260531639686583,
+      "return_on_pc_annualised": 0.12734420568366756,
+      "max_drawdown_pct_of_pc": 0.09551256617967216,
+      "win_rate": 0.7401574803149606,
+      "sharpe_annualised": 1.5591667091094603,
+      "mean_premium_capture": 0.11552549901896034,
+      "allocated_gearing_mean": 8.558904977423149,
+      "allocated_gearing_max": 9.9986315,
+      "lots_mean": 41.14173228346457,
+      "gross_credit_rupees": 28094111.622580368,
+      "cost_ratio": 0.00424036778164093,
+      "exit_rules": {
+        "ST-4_time_exit": 33,
+        "ST-17_profit_target": 68,
+        "ST-19_weekly_stop": 7,
+        "ST-32_weekly_cap": 18,
+        "ST-32_monthly_cap": 1
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 49,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2375624.0027652625,
+      "return_on_pc_total": 0.23756240027652625,
+      "return_on_pc_annualised": 0.15758498865508952,
+      "max_drawdown_pct_of_pc": 0.09974512867689637,
+      "win_rate": 0.7142857142857143,
+      "sharpe_annualised": 1.100176272362628,
+      "mean_premium_capture": 0.1458358963673176,
+      "allocated_gearing_mean": 9.907897897522522,
+      "allocated_gearing_max": 9.9999744,
+      "lots_mean": 46.04081632653061,
+      "gross_credit_rupees": 13956574.092928713,
+      "cost_ratio": 0.0031379725403135467,
+      "exit_rules": {
+        "ST-32_weekly_cap": 9,
+        "ST-32_monthly_cap": 1,
+        "ST-17_profit_target": 26,
+        "ST-4_time_exit": 11,
+        "ST-19_weekly_stop": 2
+      }
+    }
+  },
+  {
+    "label": "s_sb12_d0.22_w600",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.22,
+      "delta_band": [
+        0.19,
+        0.25
+      ],
+      "wing_width": 600.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        1,
+        2
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb12_d0.22_w600"
+    },
+    "in_sample": {
+      "completed_cycles": 146,
+      "cycles_traded": null,
+      "net_pnl_rupees": 5512377.257972581,
+      "return_on_pc_total": 0.5512377257972582,
+      "return_on_pc_annualised": 0.1325891969271742,
+      "max_drawdown_pct_of_pc": 0.05077095412839096,
+      "win_rate": 0.7328767123287672,
+      "sharpe_annualised": 1.7180927134901889,
+      "mean_premium_capture": 0.14529351380412223,
+      "allocated_gearing_mean": 7.145716636118715,
+      "allocated_gearing_max": 9.376224,
+      "lots_mean": 40.917808219178085,
+      "gross_credit_rupees": 30558232.705129392,
+      "cost_ratio": 0.00433801144833108,
+      "exit_rules": {
+        "ST-4_time_exit": 66,
+        "ST-17_profit_target": 56,
+        "ST-19_weekly_stop": 6,
+        "ST-32_weekly_cap": 18
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 54,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2290948.25300416,
+      "return_on_pc_total": 0.22909482530041597,
+      "return_on_pc_annualised": 0.15214133774964833,
+      "max_drawdown_pct_of_pc": 0.07862348543940548,
+      "win_rate": 0.7222222222222222,
+      "sharpe_annualised": 1.1507430825754015,
+      "mean_premium_capture": 0.06585579008770126,
+      "allocated_gearing_mean": 8.731963794384058,
+      "allocated_gearing_max": 9.3665,
+      "lots_mean": 47.03703703703704,
+      "gross_credit_rupees": 14932658.376209568,
+      "cost_ratio": 0.0031366948359606247,
+      "exit_rules": {
+        "ST-4_time_exit": 20,
+        "ST-32_weekly_cap": 5,
+        "ST-17_profit_target": 24,
+        "ST-19_weekly_stop": 5
+      }
+    }
+  },
+  {
+    "label": "s_sb23_d0.22_w600",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.22,
+      "delta_band": [
+        0.19,
+        0.25
+      ],
+      "wing_width": 600.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 10.0,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_sb23_d0.22_w600"
+    },
+    "in_sample": {
+      "completed_cycles": 131,
+      "cycles_traded": null,
+      "net_pnl_rupees": 5194799.433415962,
+      "return_on_pc_total": 0.5194799433415962,
+      "return_on_pc_annualised": 0.12596505833655502,
+      "max_drawdown_pct_of_pc": 0.06839489129366788,
+      "win_rate": 0.7251908396946565,
+      "sharpe_annualised": 1.6174761020049089,
+      "mean_premium_capture": 0.1307265009769293,
+      "allocated_gearing_mean": 7.277718611178377,
+      "allocated_gearing_max": 9.376224,
+      "lots_mean": 36.900763358778626,
+      "gross_credit_rupees": 27036640.304232143,
+      "cost_ratio": 0.004197649859787229,
+      "exit_rules": {
+        "ST-4_time_exit": 33,
+        "ST-17_profit_target": 72,
+        "ST-19_weekly_stop": 9,
+        "ST-32_weekly_cap": 17
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 46,
+      "cycles_traded": null,
+      "net_pnl_rupees": 2123792.2807574384,
+      "return_on_pc_total": 0.21237922807574383,
+      "return_on_pc_annualised": 0.1413605359057457,
+      "max_drawdown_pct_of_pc": 0.10135593462399345,
+      "win_rate": 0.6956521739130435,
+      "sharpe_annualised": 1.0603300190652487,
+      "mean_premium_capture": 0.12490459932857871,
+      "allocated_gearing_mean": 8.799932972701148,
+      "allocated_gearing_max": 9.3665,
+      "lots_mean": 42.58695652173913,
+      "gross_credit_rupees": 12739180.4660197,
+      "cost_ratio": 0.0030340199267628763,
+      "exit_rules": {
+        "ST-32_weekly_cap": 8,
+        "ST-4_time_exit": 12,
+        "ST-17_profit_target": 24,
+        "ST-19_weekly_stop": 2
+      }
+    }
+  },
+  {
+    "label": "s_spec_window_spec_delta",
+    "params": {
+      "underlying": "NIFTY",
+      "start": "2021-09-20",
+      "end": "2025-03-31",
+      "wing_policy": "spec",
+      "min_credit_ratio": 0.001,
+      "slippage_rupees": 0.25,
+      "portfolio_capital": 10000000.0,
+      "margin_model": "defined risk (wing width x lot size) x 1; UNVERIFIED: no SPAN parameter file exists in this corpus",
+      "corpus_root": "/home/qa/runtime/data/backtest/datasets/dhan",
+      "trial_log": "/home/qa/runtime/data/research/trial_log.db",
+      "decision_interval_minutes": 15,
+      "short_delta_target": 0.12,
+      "delta_band": [
+        0.1,
+        0.14
+      ],
+      "wing_width": 350.0,
+      "entry_dte": [
+        5,
+        6
+      ],
+      "entry_sessions_before": [
+        2,
+        3
+      ],
+      "profit_take": 0.6,
+      "stop_multiple": 1.5,
+      "max_gearing": 2.5,
+      "target_utilisation": 0.35,
+      "max_lots_absolute": 200,
+      "cash_equivalent_fraction": 0.5,
+      "participation_volume_pct": 0.05,
+      "participation_oi_pct": 0.02,
+      "roll_trigger_delta": 0.99,
+      "label": "s_spec_window_spec_delta"
+    },
+    "in_sample": {
+      "completed_cycles": 120,
+      "cycles_traded": null,
+      "net_pnl_rupees": 749817.5317743402,
+      "return_on_pc_total": 0.07498175317743402,
+      "return_on_pc_annualised": 0.020715468758143007,
+      "max_drawdown_pct_of_pc": 0.022335517279241674,
+      "win_rate": 0.8083333333333333,
+      "sharpe_annualised": 1.1419138169667749,
+      "mean_premium_capture": 0.13745895620254905,
+      "allocated_gearing_mean": 2.436291501983085,
+      "allocated_gearing_max": 2.4993956,
+      "lots_mean": 15.383333333333333,
+      "gross_credit_rupees": 4390145.561363561,
+      "cost_ratio": 0.009637539177439989,
+      "exit_rules": {
+        "ST-4_time_exit": 18,
+        "ST-17_profit_target": 84,
+        "ST-19_weekly_stop": 18
+      }
+    },
+    "out_of_sample": {
+      "completed_cycles": 48,
+      "cycles_traded": null,
+      "net_pnl_rupees": 57064.599179416895,
+      "return_on_pc_total": 0.005706459917941689,
+      "return_on_pc_annualised": 0.003914332928175668,
+      "max_drawdown_pct_of_pc": 0.020513509871510547,
+      "win_rate": 0.7083333333333334,
+      "sharpe_annualised": 0.15969244440328798,
+      "mean_premium_capture": 0.03224154835194294,
+      "allocated_gearing_mean": 2.3846205463888888,
+      "allocated_gearing_max": 2.4999936,
+      "lots_mean": 12.083333333333334,
+      "gross_credit_rupees": 1610918.1801361234,
+      "cost_ratio": 0.008758405543100289,
+      "exit_rules": {
+        "ST-19_weekly_stop": 8,
+        "ST-4_time_exit": 9,
+        "ST-17_profit_target": 31
+      }
+    }
+  }
+]
