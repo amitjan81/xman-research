@@ -119,7 +119,7 @@ def _run(config: StrangleRunConfig) -> dict[str, Any]:
             "exit_pnl": metrics["exit_pnl"],
             "median_credit_pct_of_spot": metrics["median_credit_pct_of_spot"],
         }
-    except Exception as error:  # noqa: BLE001 — one configuration must not end the search
+    except Exception as error:
         return {"label": config.label, "error": f"{type(error).__name__}: {error}"[:200]}
 
 
