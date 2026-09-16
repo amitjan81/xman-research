@@ -190,10 +190,30 @@ The owner's follow-up question was not "does the specified strategy make 12%" bu
 would". `research/overlay/tune.py` searched for it in five stages and 117 configurations,
 with the in-sample/out-of-sample split fixed at 2025-03-31 **before the first run**.
 
-**It is reachable.** The tuned configuration returns **11.55% a year over the full five
-years** — ₹72.5 lakh on ₹1 crore — and clears the target in both halves separately: 13.26%
-in-sample and **15.21% out-of-sample**, on 200 positions with a 73.0% win rate and a Sharpe
-of 1.35. Maximum drawdown is 8.28%, inside the 10% objective.
+**It is reachable, and the honest version of that sentence has three parts.** The tuned
+configuration returns **12.26% a year over the full five years** — max drawdown 7.14%,
+Sharpe 1.43, 71.6% win rate over 208 positions — which meets both of the document's
+objectives on the realised path. Split at the date fixed before the search began, it returns
+**14.92% in-sample and 9.89% out-of-sample**, and the out-of-sample drawdown is **10.62%**,
+just past the 10% objective. The degradation is what a 117-configuration search should be
+expected to produce, and the out-of-sample number is the one to plan against.
+
+| Slice | Annualised | Max DD | Sharpe | Positions |
+|---|---:|---:|---:|---:|
+| Full window, 2021-09 → 2026-09 | **12.26%** | 7.14% | 1.43 | 208 |
+| In-sample, to 2025-03-31 | 14.92% | 6.25% | 1.89 | 152 |
+| **Out-of-sample, 2025-04 → 2026-09** | **9.89%** | **10.62%** | 0.79 | 56 |
+| Held to CA-14's 2.5× gearing cap | 5.73% | 3.79% | 1.38 | 214 |
+| At the engine's 1% participation caps | 2.74% | 7.40% | 0.57 | 210 |
+
+The last two rows are the two constraints that decide whether any of this is real, and they
+are worth more than every parameter in the search put together. **Gearing at the document's
+own cap halves the return** — 5.73% against 12.26% — and that variant is the one an operator
+could run without amending CA-14. **Execution at the engine's conservative participation
+limit cuts it to 2.74%**, which says the result lives or dies on whether ~2,700 units a leg
+can be worked into 5% of a minute's printed volume. Neither question is answerable from this
+corpus; the first is a decision and the second is a measurement a broker's live book would
+settle in a week.
 
 | | Specified | Tuned | The document's rule |
 |---|---|---|---|
