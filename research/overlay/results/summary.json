@@ -317,5 +317,68 @@
       "settled": 0
     },
     "stale_mark_sessions": 0
+  },
+  "F_slippage_050": {
+    "sessions": 1206,
+    "years_observed": 4.985626283367557,
+    "net_pnl_rupees": -85885.4064025078,
+    "return_on_pc_total": -0.00858854064025078,
+    "return_on_pc_annualised": -0.0017286047732332221,
+    "sharpe_annualised": -0.28226456301689695,
+    "sortino_annualised": -0.3181563541512038,
+    "max_drawdown_pct_of_pc": 0.01784194969780725,
+    "drawdown_peak": "2023-10-20",
+    "drawdown_trough": "2026-08-03",
+    "calmar": -0.09688429810143817,
+    "entries": 279,
+    "completed_cycles": 133,
+    "win_rate": 0.5714285714285714,
+    "average_win_rupees": 6690.465488542422,
+    "average_loss_rupees": -10427.382167224787,
+    "expectancy_rupees": -645.75493535781,
+    "median_premium_capture": 0.4225216946896768,
+    "profit_factor": 1.1678391674675215,
+    "gross_credit_rupees": 1843720.5790311007,
+    "total_costs_rupees": 41761.201787417885,
+    "cost_ratio": 0.0226505047795062,
+    "cost_breakdown": {
+      "brokerage": 30540.0,
+      "stt": 3206.68924224299,
+      "exchange_transaction_charge": 2065.733055770797,
+      "sebi_turnover_fee": 4.8878662729377735,
+      "stt_on_exercise": 0.0,
+      "stamp_duty": 73.97985716329428,
+      "gst": 5869.911765967869
+    },
+    "exit_rules": {
+      "ST-17_profit_target": 72,
+      "ST-21_touch_after_unpriceable_roll": 41,
+      "ST-19_weekly_stop": 11,
+      "ST-4_time_exit": 9
+    },
+    "declines": {
+      "ST-12_trend_filter": 434,
+      "ST-11_vrp_filter": 1159,
+      "ST-6_no_strike_in_delta_band": 806,
+      "ST-20_roll_unavailable": 46,
+      "ST-39_entry_never_filled": 146,
+      "ST-13_gap_filter": 193,
+      "ST-20_roll_not_filled": 5
+    },
+    "allocated_gearing_mean": 1.096875677187444,
+    "allocated_gearing_max": 1.1944712,
+    "lots_mean": 5.556390977443609,
+    "peak_margin_no_netting": 2861422.2,
+    "feasibility": {
+      "fillable": 1002,
+      "resized": 525,
+      "no_bar": 0,
+      "no_liquidity": 1,
+      "capped_to_zero": 169,
+      "group_incomplete": 262,
+      "unsettleable": 548,
+      "settled": 0
+    },
+    "stale_mark_sessions": 0
   }
 }

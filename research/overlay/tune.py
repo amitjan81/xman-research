@@ -380,6 +380,83 @@ def stage_four() -> list[OverlayRunConfig]:
     return unique
 
 
+def stage_five() -> list[OverlayRunConfig]:
+    """The same search, with the entry window counted in sessions rather than calendar days.
+
+    Stage four's winner turned out to be a creature of the Thursday-expiry regime: NSE moved
+    the NIFTY weekly to Tuesday in mid-2025, "two to three days before expiry" became the
+    weekend, and the configuration stopped trading — 163 positions to August 2025 and one
+    afterwards. A five-year annualised return hid a year of not trading, because a year of
+    no positions looks like a year of no losses.
+
+    Everything here is identical except that the entry window is expressed as sessions
+    before expiry, which is invariant to the change. ST-3's 5-6 calendar days is 2-3
+    sessions under either regime; stage four's 2-3 days is 1-2 sessions. The holdout matters
+    more than usual for this stage, because the holdout is where the new regime lives.
+    """
+    base = OverlayRunConfig(
+        start=WINDOW_START,
+        end=IN_SAMPLE_END,
+        wing_policy="spec",
+        min_credit_ratio=0.0010,
+        slippage_rupees=0.25,
+        roll_trigger_delta=0.99,
+        margin_model=MarginPerLotModel(include_expiry_day_elm=False),
+        participation_volume_pct=0.05,
+        participation_oi_pct=0.02,
+        max_gearing=10.0,
+        max_lots_absolute=200,
+        cash_equivalent_fraction=0.50,
+        target_utilisation=0.35,
+        wing_width=500.0,
+    )
+    specs: list[OverlayRunConfig] = []
+    for sessions in ((0, 1), (1, 2), (2, 3), (3, 4)):
+        for target in (0.16, 0.20, 0.25):
+            specs.append(
+                replace(
+                    base,
+                    entry_sessions_before=sessions,
+                    short_delta_target=target,
+                    delta_band=(target - 0.03, target + 0.03),
+                    label=f"s_sb{sessions[0]}{sessions[1]}_d{target:.2f}",
+                )
+            )
+    # The best structures again at the two wing widths that led stage four.
+    for width in (500.0, 600.0):
+        for sessions in ((1, 2), (2, 3)):
+            specs.append(
+                replace(
+                    base,
+                    entry_sessions_before=sessions,
+                    short_delta_target=0.22,
+                    delta_band=(0.19, 0.25),
+                    wing_width=width,
+                    label=f"s_sb{sessions[0]}{sessions[1]}_d0.22_w{int(width)}",
+                )
+            )
+    # And the document's own entry window, in session form, for comparison.
+    specs.append(
+        replace(
+            base,
+            entry_sessions_before=(2, 3),
+            short_delta_target=0.12,
+            delta_band=(0.10, 0.14),
+            wing_width=350.0,
+            max_gearing=2.5,
+            label="s_spec_window_spec_delta",
+        )
+    )
+    seen: set[str] = set()
+    unique: list[OverlayRunConfig] = []
+    for spec in specs:
+        if spec.label in seen:
+            continue
+        seen.add(spec.label)
+        unique.append(spec)
+    return unique
+
+
 def _run_one(config: OverlayRunConfig) -> dict[str, Any]:
     """One configuration, in-sample then out-of-sample, in a worker process."""
     scratch = Path(tempfile.mkdtemp(prefix="xman_tune_")) / "trials.db"
@@ -478,11 +555,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--only", default=None, help="comma-separated labels")
     parser.add_argument("--no-canonical-log", action="store_true")
-    parser.add_argument("--stage", type=int, default=1, choices=(1, 2, 3, 4))
+    parser.add_argument("--stage", type=int, default=1, choices=(1, 2, 3, 4, 5))
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
 
-    specs = {1: candidates, 2: stage_two, 3: stage_three, 4: stage_four}[args.stage]()
+    specs = {
+        1: candidates,
+        2: stage_two,
+        3: stage_three,
+        4: stage_four,
+        5: stage_five,
+    }[args.stage]()
     if args.only:
         wanted = set(args.only.split(","))
         specs = [spec for spec in specs if spec.label in wanted]

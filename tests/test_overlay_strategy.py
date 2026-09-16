@@ -486,3 +486,55 @@ def test_a_week_whose_entry_never_filled_is_not_spent(tmp_path: Path) -> None:
     # it as one put a zero-P&L "loss" into the win rate and the exit-rule table.
     assert strategy.completed_cycles == ()
     assert any(row["rule"] == "ST-39_entry_never_filled" for row in strategy.journal)
+
+
+def test_the_entry_window_can_be_counted_in_sessions_rather_than_calendar_days(
+    tmp_path: Path,
+) -> None:
+    """The regime bug, and the rule that survives it.
+
+    NSE moved the NIFTY weekly expiry from Thursday to Tuesday in mid-2025. "Two to three
+    days before expiry" is Monday and Tuesday under a Thursday expiry and *Saturday and
+    Sunday* under a Tuesday one — no sessions at all. A configuration tuned on the old
+    regime traded 163 times to August 2025 and once after, and the annualised return hid it.
+    Counting sessions is invariant to the change.
+    """
+    tuesday_expiry = dt.date(2026, 3, 17)
+    friday = dt.date(2026, 3, 13)
+    context = DailyContext(
+        pd.DataFrame(
+            {
+                "session_date": [dt.date(2026, 3, 12), friday, dt.date(2026, 3, 16)],
+                "open": [SPOT] * 3,
+                "close": [SPOT] * 3,
+                "atm_iv": [0.13] * 3,
+                "expiry": [tuesday_expiry] * 3,
+                "dte": [5, 4, 1],
+            }
+        )
+    )
+    chain_for_expiry = chain(session_date=friday, expiry=tuesday_expiry)
+
+    # The calendar-day rule finds nothing: Friday is four days out, not two or three.
+    calendar = build_strategy(
+        context=context, params=OverlayParameters(min_credit_ratio=0.0010, entry_dte=(2, 3))
+    )
+    view = session_view(tmp_path / "calendar", friday, chain_for_expiry)
+    assert (
+        calendar.decide(
+            session=view, minute=first_minute(view), book=BookView({}, 10_000_000.0)
+        )
+        == ()
+    )
+
+    # The session rule finds it: one session (Monday) sits between Friday and the expiry.
+    sessions = build_strategy(
+        context=context,
+        params=OverlayParameters(min_credit_ratio=0.0010, entry_sessions_before=(1, 2)),
+    )
+    view = session_view(tmp_path / "sessions", friday, chain_for_expiry)
+    intents = sessions.decide(
+        session=view, minute=first_minute(view), book=BookView({}, 10_000_000.0)
+    )
+
+    assert len(intents) == 4

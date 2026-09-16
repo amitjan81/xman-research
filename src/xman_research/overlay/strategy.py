@@ -78,6 +78,20 @@ class OverlayParameters:
     wing_width_band: tuple[float, float] = (300.0, 400.0)
     min_credit_ratio: float = 0.0010
     entry_dte: tuple[int, ...] = (5, 6)
+    """ST-3's entry window, in **calendar** days to expiry, as the requirement states it."""
+    entry_sessions_before: tuple[int, ...] | None = None
+    """The same window in **trading sessions** before expiry, and the regime-proof form of it.
+
+    NSE moved the NIFTY weekly expiry from Thursday to Tuesday in mid-2025. A calendar-day
+    window does not survive that: "2-3 days before expiry" is Monday and Tuesday under a
+    Thursday expiry and **Saturday and Sunday** under a Tuesday one, so a configuration tuned
+    on the old regime simply stops trading in the new one. The five-year tuning run found
+    exactly that — 163 positions to August 2025 and one afterwards — and the annualised
+    return hid it, because a year of not trading looks like a year of no losses.
+
+    Counting sessions instead is invariant: the session immediately before expiry is 0, the
+    one before that is 1, and ST-3's 5-6 calendar days is 2-3 sessions under either regime.
+    ``None`` keeps the calendar-day rule, so every earlier run reproduces exactly."""
     entry_window: tuple[dt.time, dt.time] = (dt.time(9, 20), dt.time(14, 30))
     gap_delay_until: dt.time = dt.time(11, 0)
     exit_time: dt.time = dt.time(15, 15)
@@ -249,6 +263,11 @@ class IndexOptionOverlay:
             "wing_policy": self.wing_policy,
             "min_credit_ratio": params.min_credit_ratio,
             "entry_dte": list(params.entry_dte),
+            "entry_sessions_before": (
+                None
+                if params.entry_sessions_before is None
+                else list(params.entry_sessions_before)
+            ),
             "profit_take": params.profit_take,
             "stop_multiple": params.stop_multiple,
             "roll_trigger_delta": params.roll_trigger_delta,
@@ -480,6 +499,15 @@ class IndexOptionOverlay:
             if rolled:
                 return rolled
         return ()
+
+    def _sessions_before(self, session_date: dt.date, expiry: dt.date) -> int:
+        """How many trading sessions sit between this one and the expiry, exclusive.
+
+        Zero means this is the last session before expiry. See
+        :attr:`OverlayParameters.entry_sessions_before` for why the entry window is better
+        expressed this way than in calendar days.
+        """
+        return sum(1 for value in self._session_dates if session_date < value < expiry)
 
     def _is_last_session_before(self, session_date: dt.date, expiry: dt.date) -> bool:
         """Is this the final trading session the run has before ``expiry``?
@@ -767,7 +795,11 @@ class IndexOptionOverlay:
         if expiry is None:
             return ()
         days_to_expiry = (expiry - session_date).days
-        if days_to_expiry not in params.entry_dte or expiry in self._traded:
+        if params.entry_sessions_before is not None:
+            eligible = self._sessions_before(session_date, expiry) in params.entry_sessions_before
+        else:
+            eligible = days_to_expiry in params.entry_dte
+        if not eligible or expiry in self._traded:
             return ()
         if session_date in self._credit_locked:
             # ST-8 is explicit that a credit failure ends the *day* ("no entry that day;

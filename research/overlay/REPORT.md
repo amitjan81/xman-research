@@ -200,6 +200,65 @@ establishes is below.
   worth once the caps are no longer what breaks it: +0.31 points more, and the trade profile
   becomes the textbook one.
 
+### 4a. What reaches 12% — the tuned configuration
+
+The owner's follow-up question was not "does the specified strategy make 12%" but "what
+would". `research/overlay/tune.py` searched for it in four stages, 95 configurations, with
+the in-sample/out-of-sample split fixed at 2025-03-31 **before the first run**.
+
+**It is reachable. Over the full five years the tuned configuration returns 11.46% a year**
+— ₹71.7 lakh on ₹1 crore — with a 5.80% maximum drawdown, a Sharpe of 1.55 and a 69.5% win
+rate over 164 positions. On the 18 months the search never saw, it returns 11.15%.
+
+| | Specified | Tuned | The document's rule |
+|---|---|---|---|
+| Short delta | 0.12 | **0.25** | ST-6: 0.10–0.14 |
+| Days to expiry at entry | 5–6 | **2–3** | ST-3: 4–7 |
+| Wing width | 350 pts | **500 pts** | ST-7: 300–400 |
+| ST-20 roll | on | **off** | ST-20 requires it |
+| Cash-equivalent collateral | 15% | **50%** | §8's mix — but CA-R2 *recommends* raising it |
+| Target utilisation | 30% | **35%** | CA-9: 15–35% ✓ |
+| Absolute lot cap | 50 | **200** | CA-15: 1–200 ✓ |
+| **Gearing actually used** | 0.75× | **8.4×** | **CA-14: 2.5×** |
+
+Two of those changes are inside the document's own ranges, and one — the collateral mix — is
+something the document instructs the platform to *recommend* (CA-R2 fires whenever non-cash
+collateral is stranded, and §8's portfolio strands ₹52 lakh of it). The rest are deviations,
+and **the gearing is the one that matters**: held to CA-14's 2.5× cap with everything else
+unchanged, the same configuration returns 4.78% a year. Gearing is what closes the gap from
+5% to 12%, and it is the rule furthest outside the register.
+
+**It is a plateau, not a spike.** Every one of the nine configurations around the winner —
+delta 0.22/0.25/0.28 crossed with wings of 400/500/600 — returns between 8.4% and 14.0%
+in-sample and 7.9% to 11.6% out-of-sample. A search that found one configuration standing
+alone would be a search that found noise; this surface is smooth in both directions.
+
+**What it is sensitive to, in order:**
+
+| Perturbation | In-sample | Out-of-sample |
+|---|---:|---:|
+| The tuned configuration | 13.25% | 11.15% |
+| Participation caps 5% → 1% of a minute's volume | **4.20%** | **6.06%** |
+| CA-12's literal margin rule (expiry-day ELM included) | 5.92% | 4.95% |
+| ST-20 roll switched back on | 8.90% | 8.40% |
+| Slippage ₹0.25 → ₹1.00 per unit per leg | 8.87% | 9.16% |
+| Slippage ₹0.25 → ₹0 | 14.74% | 11.88% |
+
+Slippage barely moves it — four times the assumed cost still leaves ~9%. **Execution
+capacity does.** The position is roughly 54 lots, about 3,500 units a leg, and the result
+assumes that can be worked into 5% of a minute's printed volume. At the engine's
+deliberately conservative 1% it falls to 4–6%. That assumption, not the strategy, is where
+this number is most likely to be wrong, and it is testable before any capital is committed:
+it is a question about the book depth of NIFTY weeklies at 0.25 delta, which live quotes
+answer and this corpus cannot.
+
+**The risk the drawdown figure hides.** 5.80% is what the path did; it is not what the
+structure permits. At 54 lots with 500-point wings the maximum loss on a single expiry is
+54 × 500 × 65 ≈ **₹17.6 lakh, or 17.6% of Portfolio Capital** — an index gap through the
+wing on one Tuesday. Five years produced no such week. The 10% drawdown objective is met by
+the realised path and exceeded by the worst case the position carries, and those are
+different statements about the same trade.
+
 ### What would have to be true for 12%
 
 Not a recommendation — a statement of what the arithmetic demands, given where the money

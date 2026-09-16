@@ -102,6 +102,7 @@ class OverlayRunConfig:
     delta_band: tuple[float, float] = (0.10, 0.14)
     wing_width: float = 350.0
     entry_dte: tuple[int, ...] = (5, 6)
+    entry_sessions_before: tuple[int, ...] | None = None
     profit_take: float = 0.60
     stop_multiple: float = 1.5
     max_gearing: float = 2.5
@@ -162,6 +163,11 @@ class OverlayRun:
             "delta_band": list(self.config.delta_band),
             "wing_width": self.config.wing_width,
             "entry_dte": list(self.config.entry_dte),
+            "entry_sessions_before": (
+                None
+                if self.config.entry_sessions_before is None
+                else list(self.config.entry_sessions_before)
+            ),
             "profit_take": self.config.profit_take,
             "stop_multiple": self.config.stop_multiple,
             "max_gearing": self.config.max_gearing,
@@ -198,6 +204,7 @@ def run_overlay(config: OverlayRunConfig) -> OverlayRun:
             delta_band=config.delta_band,
             wing_width=config.wing_width,
             entry_dte=config.entry_dte,
+            entry_sessions_before=config.entry_sessions_before,
             profit_take=config.profit_take,
             stop_multiple=config.stop_multiple,
         ),
