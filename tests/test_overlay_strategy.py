@@ -12,6 +12,7 @@ import datetime as dt
 from pathlib import Path
 
 import pandas as pd
+import pytest
 from tests.conftest import SyntheticContract, write_synthetic_session
 
 from xman_research.backtest.costs import Side
@@ -75,6 +76,7 @@ def empty_context() -> DailyContext:
 def build_strategy(**kwargs) -> IndexOptionOverlay:
     defaults = {
         "context": empty_context(),
+        "hedge_cash_reserve": 0.0,
         "params": OverlayParameters(min_credit_ratio=0.0010),
         "collateral": CollateralAssumption(portfolio_capital=10_000_000.0),
         "margin_model": MarginPerLotModel(include_expiry_day_elm=False),
@@ -260,7 +262,7 @@ def test_a_roll_does_not_move_the_basis_the_stop_is_measured_against(tmp_path: P
     The first version of this code folded the roll's cash flow into the entry credit. A
     roll that costs more than the credit then made ``1.5 x credit`` negative, and the stop
     fired on the next evaluation of a position that had just been adjusted *to keep it
-    open*. The basis is now fixed at entry and the adjustment is carried separately.
+    open*. The basis is fixed at entry and the adjustment is carried separately.
     """
     strategy = build_strategy()
     _, positions = _open_cycle(tmp_path, strategy)
@@ -268,12 +270,135 @@ def test_a_roll_does_not_move_the_basis_the_stop_is_measured_against(tmp_path: P
     assert cycle is not None
     credit_at_entry = cycle.entry_credit_per_unit
 
-    # Spot runs 400 points at the call side. The short call's delta goes past the 0.28 roll
-    # trigger while the position's loss stays inside the 1.5x stop, so ST-20 fires and
-    # ST-19 does not — the only state in which this invariant can be observed at all. Note
-    # the chain is priced at the *entry* session's time to expiry while the strategy
-    # measures delta at the later session's: that is the real asymmetry of a held position
-    # and it is what decides whether the trigger is reached.
+    view, intents = _touch_the_call_side(tmp_path, strategy, positions)
+
+    assert intents, "the fixture did not trigger ST-20"
+    assert {intent.tag for intent in intents} == {"ST-20_roll"}
+    assert cycle.pending_roll is not None
+    assert cycle.entry_credit_per_unit == credit_at_entry
+    assert cycle.credit_rupees > 0
+
+    # The book now shows the rolled structure, so the next decision minute commits it.
+    rolled_positions = _book_from(view, intents, positions)
+    strategy.decide(
+        session=view, minute=first_minute(view), book=BookView(rolled_positions, 10_000_000.0)
+    )
+
+    assert cycle.rolled
+    assert cycle.pending_roll is None
+    assert cycle.entry_credit_per_unit == credit_at_entry
+    assert cycle.adjustment_cost_per_unit != 0.0
+
+
+def test_a_roll_the_market_refused_is_not_recorded_as_a_roll(tmp_path: Path) -> None:
+    """ST-20 with the engine declining the group — the state must not move.
+
+    The roll used to rewrite the cycle's legs at the moment the *intents were emitted*.
+    The engine decides afterwards, so a roll that did not fill left the cycle describing
+    legs the book had never held, and the next minute unwound an intact, never-rolled
+    condor while recording it as rolled. Nothing here is committed until the book says so.
+    """
+    strategy = build_strategy()
+    _, positions = _open_cycle(tmp_path, strategy)
+    cycle = strategy._cycle
+    assert cycle is not None
+    original_legs = dict(cycle.legs)
+
+    view, intents = _touch_the_call_side(tmp_path, strategy, positions)
+    assert intents and cycle.pending_roll is not None
+
+    # The group did not fill: the book still holds exactly what it held before.
+    follow_up = strategy.decide(
+        session=view, minute=first_minute(view), book=BookView(positions, 10_000_000.0)
+    )
+
+    assert not cycle.rolled
+    assert cycle.legs == original_legs
+    assert cycle.adjustment_cost_per_unit == 0.0
+    assert any(row["rule"] == "ST-20_roll_not_filled" for row in strategy.journal)
+    # The position is not unwound as a structure mismatch — it is intact, still tested, and
+    # the rule is simply re-ordered at this minute.
+    assert {intent.tag for intent in follow_up} <= {"ST-20_roll"}
+
+
+def test_a_roll_that_would_sell_a_modelled_strike_is_refused(tmp_path: Path) -> None:
+    """The guard that keeps a fabricated price off the short side of the book.
+
+    The roll's new short sits one wing-width further out, which is where the modelled band
+    begins. A bar with no implied volatility is a modelled bar; selling it would put a
+    price this package invented on the leg that earns the premium.
+    """
+    strategy = build_strategy()
+    _, positions = _open_cycle(tmp_path, strategy)
+    cycle = strategy._cycle
+    assert cycle is not None
+
+    later_date = dt.date(2025, 6, 23)
+    tested_spot = 24_400.0
+    chain_without_far_iv = [
+        SyntheticContract(
+            strike=contract.strike,
+            option_type=contract.option_type,
+            expiry=contract.expiry,
+            close=contract.close,
+            iv=contract.iv if abs(contract.strike - tested_spot) <= 500 else float("nan"),
+        )
+        for contract in chain(session_date=ENTRY_DATE, spot=tested_spot)
+    ]
+    view = session_view(tmp_path / "corpus2", later_date, chain_without_far_iv, spot=tested_spot)
+    intents = strategy.decide(
+        session=view, minute=first_minute(view), book=BookView(positions, 10_000_000.0)
+    )
+
+    assert intents == ()
+    assert cycle.pending_roll is None
+    assert cycle.roll_unpriceable
+    refusals = [row for row in strategy.journal if row["rule"] == "ST-20_roll_unavailable"]
+    assert refusals and refusals[-1]["detail"]["reason"] == "modelled_short"
+
+
+def test_the_deadline_is_the_last_session_before_expiry_not_the_day_before(
+    tmp_path: Path,
+) -> None:
+    """ST-4 on the trading calendar rather than on calendar arithmetic.
+
+    Expiry Thursday 2025-06-26 with the corpus holding no session on the Wednesday: the
+    last session before expiry is Tuesday the 24th, three calendar days out. Keyed on
+    ``days_left == 1`` no exit is ever attempted and the position reaches expiry morning —
+    which is what nine cycles of the first five-year run did.
+    """
+    context = DailyContext(
+        pd.DataFrame(
+            {
+                "session_date": [dt.date(2025, 6, 20), dt.date(2025, 6, 23), dt.date(2025, 6, 24)],
+                "open": [SPOT] * 3,
+                "close": [SPOT] * 3,
+                "atm_iv": [0.13] * 3,
+                "expiry": [EXPIRY] * 3,
+                "dte": [6, 3, 2],
+            }
+        )
+    )
+    strategy = build_strategy(context=context)
+    _, positions = _open_cycle(tmp_path, strategy)
+
+    last_session = dt.date(2025, 6, 24)
+    view = session_view(tmp_path / "corpus2", last_session, chain(session_date=ENTRY_DATE))
+    minute = view.minute_at_or_after(dt.time(14, 30))
+    assert minute is not None
+
+    intents = strategy.decide(session=view, minute=minute, book=BookView(positions, 10_000_000.0))
+
+    assert {intent.tag for intent in intents} == {"ST-4_time_exit"}
+
+
+def _touch_the_call_side(tmp_path: Path, strategy: IndexOptionOverlay, positions):
+    """Move spot 400 points at the short call, which takes it past the 0.28 roll trigger.
+
+    The chain is priced at the *entry* session's time to expiry while the strategy measures
+    delta at the later session's: that asymmetry is what a held position actually faces and
+    it is what decides whether the trigger is reached.
+    """
     later_date = dt.date(2025, 6, 23)
     tested_spot = 24_400.0
     view = session_view(
@@ -285,10 +410,77 @@ def test_a_roll_does_not_move_the_basis_the_stop_is_measured_against(tmp_path: P
     intents = strategy.decide(
         session=view, minute=first_minute(view), book=BookView(positions, 10_000_000.0)
     )
+    return view, intents
 
-    assert cycle.rolled, "the fixture did not actually trigger ST-20"
-    assert {intent.tag for intent in intents} == {"ST-20_roll_close", "ST-20_roll_open"}
-    assert cycle.entry_credit_per_unit == credit_at_entry
-    assert cycle.credit_rupees > 0
-    # The roll cost something, and that something is carried where it belongs.
-    assert cycle.adjustment_cost_per_unit != 0.0
+
+def _book_from(view: SessionView, intents, previous):
+    """Apply a set of intents to a book, as the engine would if every leg filled."""
+    positions = dict(previous)
+    for intent in intents:
+        contract = view.universe.by_symbol(intent.trading_symbol)
+        assert contract is not None
+        units = intent.lots * contract.lot_size
+        signed = -units if intent.side is Side.SELL else units
+        existing = positions.get(intent.trading_symbol)
+        total = signed + (existing.units if existing else 0)
+        bar = view.bar(intent.trading_symbol, first_minute(view))
+        assert bar is not None
+        if total == 0:
+            positions.pop(intent.trading_symbol, None)
+        else:
+            positions[intent.trading_symbol] = Position(
+                contract=contract, units=total, last_mark=bar.close
+            )
+    return positions
+
+
+def test_the_position_size_is_taken_from_the_book_not_from_the_order(tmp_path: Path) -> None:
+    """M2: the participation caps resize a group, and everything in rupees follows the fill.
+
+    18% of entry legs in the first five-year run were resized, so a credit computed on the
+    lots *ordered* overstated the gross premium by 27% and fed the report's capture and
+    cost-ratio figures on units the book never held.
+    """
+    strategy = build_strategy()
+    view, positions = _open_cycle(tmp_path, strategy)
+    cycle = strategy._cycle
+    assert cycle is not None
+    ordered_lots = cycle.lots
+    assert ordered_lots > 1
+    credit_at_order = cycle.credit_rupees
+
+    # The engine granted one lot on every leg instead of the size requested.
+    capped = {
+        symbol: Position(
+            contract=position.contract,
+            units=(-1 if position.units < 0 else 1) * position.contract.lot_size,
+            last_mark=position.last_mark,
+        )
+        for symbol, position in positions.items()
+    }
+    strategy.decide(
+        session=view, minute=first_minute(view), book=BookView(capped, 10_000_000.0)
+    )
+
+    assert cycle.lots == 1
+    assert cycle.credit_rupees == pytest.approx(credit_at_order / ordered_lots)
+
+
+def test_a_week_whose_entry_never_filled_is_not_spent(tmp_path: Path) -> None:
+    """M6: the expiry is marked traded when the book holds the position, not when asked for."""
+    strategy = build_strategy()
+    view = session_view(tmp_path / "corpus", ENTRY_DATE, chain(session_date=ENTRY_DATE))
+    minute = first_minute(view)
+
+    first = strategy.decide(session=view, minute=minute, book=BookView({}, 10_000_000.0))
+    assert first, "fixture failed to order an entry"
+
+    # Nothing filled: the book is still empty at the next decision minute.
+    later = view.minute_at_or_after(dt.time(9, 35))
+    assert later is not None
+    strategy.decide(session=view, minute=later, book=BookView({}, 10_000_000.0))
+    retry = strategy.decide(session=view, minute=later, book=BookView({}, 10_000_000.0))
+
+    assert retry, "the week was spent on an entry that never traded"
+    closed = strategy.completed_cycles
+    assert closed and closed[0]["exit_rule"] == "ST-39_entry_never_filled"

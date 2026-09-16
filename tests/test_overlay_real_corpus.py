@@ -67,7 +67,7 @@ def test_the_strategy_evaluates_every_entry_window_and_records_the_outcome(run) 
     """ST-9/AC-3: a filter that declined is as much a recorded decision as one that fired."""
     assert run.journal, "no decision was recorded at all"
     outcomes = {row["outcome"] for row in run.journal}
-    assert outcomes <= {"entered", "declined", "exit_requested", "rolled"}
+    assert outcomes <= {"entered", "declined", "exit_requested", "ordered", "rolled"}
     for row in run.journal:
         assert row["rule"].startswith(("ST-", "CA-")), row["rule"]
 

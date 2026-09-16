@@ -21,9 +21,7 @@ from xman_research.session_store import DEFAULT_CORPUS_ROOT
 
 def _build(args: tuple[str, dt.date, dt.date, Path, Path]) -> tuple[int, int]:
     underlying, start, end, corpus_root, cache_root = args
-    store = SyntheticWingStore(
-        root=corpus_root, minutes=decision_times(), cache_root=cache_root
-    )
+    store = SyntheticWingStore(root=corpus_root, minutes=decision_times(), cache_root=cache_root)
     resolution = store.resolve(underlying, start, end)
     refs = (
         resolution.sessions()

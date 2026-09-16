@@ -4,13 +4,25 @@ ST-10 asks for India VIX and a 252-day implied-volatility percentile; ST-11 for 
 realised volatility against the weekly at-the-money implied; ST-12 for a 20-day simple
 moving average; ST-13 for the opening gap. **The corpus carries no India VIX series**, so
 the VIX floor is unimplementable as written. What it does carry is the vendor's implied
-volatility on every captured option of every session, which is a *better* input for this
-purpose than VIX would be: it is the volatility of the contracts the strategy actually
-sells, on the underlying it actually sells them on, at the tenor it actually holds.
+volatility on every captured option of every session — the contracts the strategy actually
+sells, on the underlying it sells them on.
 
 So ST-10 is implemented as its second limb only — the IV-percentile test — with the VIX
 limb recorded as inapplicable rather than silently passed. The substitution is stamped on
-every run through :data:`VIX_SUBSTITUTION`.
+every run through :data:`VIX_SUBSTITUTION`. It is a substitution, not an improvement: VIX is
+a constant-maturity 30-day index and this is a weekly at-the-money print, and the two would
+not rank a given week identically.
+
+**The percentile is same-tenor, and the first version of it was not.** Each captured session
+carries whichever weekly expiry is nearest, so one session's at-the-money implied volatility
+is a 6-day number and another's is a 0-day number. Ranking today's value against a trailing
+year of *that* series measures the tenor, not the volatility: a weekly option on its expiry
+afternoon prints a median at-the-money IV of 0.053 against 0.11-0.15 mid-week, and an entry
+session is always preceded by an expiry session under both the Thursday and the Tuesday
+regime — so the comparison read "today is unusually high" almost every week, and ST-10 halved
+92 of the first five-year run's 142 positions. The percentile is now taken over prior sessions
+**at the same days to expiry as the entry**, and what is ranked is the volatility the strategy
+measures at the entry minute rather than the previous session's closing print.
 
 Everything here is derived from captured bars by a pure function of the file set, cached
 beside the corpus, and rebuilt whenever the cache is older than the newest session file.
@@ -31,14 +43,22 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
-__all__ = ["VIX_SUBSTITUTION", "DailyContext", "build_daily_frame", "load_context"]
+__all__ = [
+    "MINIMUM_PERCENTILE_SAMPLE",
+    "VIX_SUBSTITUTION",
+    "DailyContext",
+    "build_daily_frame",
+    "load_context",
+]
 
 #: Stamped on every run so no reader has to reconstruct why no VIX number appears.
 VIX_SUBSTITUTION = (
     "ST-10 volatility filter: the corpus carries no India VIX series, so the VIX-floor limb "
-    "is inapplicable and only the IV-percentile limb is evaluated. The percentile is taken "
-    "over the trailing 252 captured sessions of this corpus's own weekly at-the-money "
-    "implied volatility, which is the tenor and underlying the strategy trades."
+    "is inapplicable and only the IV-percentile limb is evaluated. The percentile ranks the "
+    "at-the-money implied volatility measured at the entry minute against the trailing 252 "
+    "sessions' observations AT THE SAME DAYS TO EXPIRY, because each captured session carries "
+    "a different tenor and a mixed-tenor percentile measures the tenor rather than the "
+    "volatility."
 )
 
 #: Where the derived series is cached. Beside the corpus, never inside the repository:
@@ -46,6 +66,10 @@ VIX_SUBSTITUTION = (
 DEFAULT_CACHE_ROOT = Path("/home/qa/runtime/data/research/overlay")
 
 _TRADING_DAYS = 252
+
+#: Fewer comparable observations than this and the percentile is not computed. A year of
+#: entry-window sessions is about 55 of them, so this is roughly one quarter's worth.
+MINIMUM_PERCENTILE_SAMPLE = 12
 
 
 def _ist(minute_ts: int) -> dt.datetime:
@@ -126,7 +150,6 @@ class FilterInputs:
     previous_close: float | None
     sma_20: float | None
     realised_vol_5d: float | None
-    iv_percentile: float | None
     session_open: float | None
     gap_pct: float | None
 
@@ -150,10 +173,31 @@ class DailyContext:
     def sessions(self) -> tuple[dt.date, ...]:
         return tuple(self._frame.session_date)
 
+    def iv_percentile(
+        self, session_date: dt.date, current_iv: float, *, dte_bucket: tuple[int, ...] = (5, 6)
+    ) -> float | None:
+        """Where ``current_iv`` sits in the trailing year of **same-tenor** observations.
+
+        ``dte_bucket`` is the set of days-to-expiry the comparison is restricted to, and it
+        defaults to the entry window's own 5-6. Only sessions strictly before
+        ``session_date`` are considered. ``None`` when fewer than
+        :data:`MINIMUM_PERCENTILE_SAMPLE` comparable observations exist, because a percentile
+        over a handful of points is a number without a meaning — and an unevaluable filter
+        is recorded as unevaluable rather than passed.
+        """
+        position = self._index.get(session_date)
+        if position is None or current_iv <= 0:
+            return None
+        history = self._frame.iloc[max(0, position - _TRADING_DAYS) : position]
+        comparable = history[history.dte.isin(dte_bucket)].atm_iv.dropna()
+        if len(comparable) < MINIMUM_PERCENTILE_SAMPLE:
+            return None
+        return float((comparable < current_iv).mean() * 100.0)
+
     def inputs_for(self, session_date: dt.date) -> FilterInputs:
         position = self._index.get(session_date)
         if position is None:
-            return FilterInputs(None, None, None, None, None, None)
+            return FilterInputs(None, None, None, None, None)
         history = self._frame.iloc[:position]
         today = self._frame.iloc[position]
         previous_close = float(history.close.iloc[-1]) if len(history) else None
@@ -163,11 +207,6 @@ class DailyContext:
             closes = history.close.iloc[-6:].to_numpy(dtype=float)
             log_returns = np.diff(np.log(closes))
             realised = float(np.std(log_returns, ddof=1) * np.sqrt(_TRADING_DAYS))
-        percentile = None
-        window = history.atm_iv.iloc[-_TRADING_DAYS:].dropna()
-        current_iv = history.atm_iv.iloc[-1] if len(history) else np.nan
-        if len(window) >= 60 and pd.notna(current_iv):
-            percentile = float((window < current_iv).mean() * 100.0)
         session_open = float(today.open) if pd.notna(today.open) else None
         gap = None
         if previous_close and session_open:
@@ -176,7 +215,6 @@ class DailyContext:
             previous_close=previous_close,
             sma_20=sma_20,
             realised_vol_5d=realised,
-            iv_percentile=percentile,
             session_open=session_open,
             gap_pct=gap,
         )

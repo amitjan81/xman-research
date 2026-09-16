@@ -33,6 +33,9 @@ HEDGE_COVERAGE = 0.55
 BUY_DTE = 45
 ROLL_DTE = 15
 
+#: The lot size the corpus's refdata declares for NIFTY across the captured window.
+LOT_SIZE = 65
+
 #: The volatility of a 9%-out-of-the-money monthly NIFTY put is not in this corpus. The
 #: range spans a plausible skew: at-the-money monthly implied sits near 13-14% over the
 #: captured period, and a 9% downside strike trades at a premium to it.
@@ -81,8 +84,9 @@ def drag(*, corpus_root: Path, underlying: str, portfolio_capital: float) -> dic
             buy_date = dates[index]
             spot_at_buy = by_date[buy_date]
             strike = round(spot_at_buy * (1.0 - HEDGE_OTM) / 50.0) * 50.0
-            notional_per_unit = spot_at_buy
-            units = math.ceil(HEDGE_COVERAGE * portfolio_capital / notional_per_unit)
+            # ST-24 rounds *lots* up, not units: the hedge is a whole number of contracts.
+            lots = math.ceil(HEDGE_COVERAGE * portfolio_capital / (spot_at_buy * LOT_SIZE))
+            units = lots * LOT_SIZE
             premium_paid = bs_price(
                 option_type="PE",
                 spot=spot_at_buy,

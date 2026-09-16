@@ -233,7 +233,10 @@ def overlay_metrics(
     returns = evidence.returns
     sessions = len(returns.net)
     net_pnl = result.net_pnl
-    years = sessions / 252.0 if sessions else 0.0
+    # Calendar years of the window, not sessions/252. The two differ by 4% over five years
+    # (1,229 sessions is 4.88 "session years" against 4.99 calendar years), and mixing them
+    # put two different annualised figures in one report.
+    years = (result.end - result.start).days / 365.25
     facts = drawdown(returns) if sessions else None
 
     cycles = strategy.completed_cycles
@@ -266,14 +269,18 @@ def overlay_metrics(
         "years_observed": years,
         "net_pnl_rupees": net_pnl,
         "return_on_pc_total": net_pnl / capital if capital else None,
-        "return_on_pc_annualised": (net_pnl / capital / years) if years > 0 else None,
+        # Section 6.3 asks for geometric compounding. At these magnitudes it differs from
+        # the arithmetic form in the fourth decimal, but the definition is the definition.
+        "return_on_pc_annualised": (
+            ((1.0 + net_pnl / capital) ** (1.0 / years) - 1.0) if years > 0 and capital else None
+        ),
         "sharpe_annualised": _safe_sharpe(returns) if sessions > 60 else None,
         "sortino_annualised": _sortino(returns.net) if sessions > 60 else None,
         "max_drawdown_pct_of_pc": facts.max_drawdown if facts else None,
         "drawdown_peak": facts.peak_date.isoformat() if facts else None,
         "drawdown_trough": facts.trough_date.isoformat() if facts else None,
         "calmar": (
-            (net_pnl / capital / years) / facts.max_drawdown
+            ((1.0 + net_pnl / capital) ** (1.0 / years) - 1.0) / facts.max_drawdown
             if facts and facts.max_drawdown > 0 and years > 0
             else None
         ),
@@ -347,6 +354,15 @@ def _expiry_of(trading_symbol: str) -> str | None:
         return dt.datetime.strptime(parts[1], "%d%b%Y").date().isoformat()
     except ValueError:
         return None
+
+
+def _captures(cycles: tuple[dict[str, Any], ...] | list[dict[str, Any]]) -> list[float]:
+    """Premium capture per position that actually traded."""
+    return [
+        cycle["realised_pnl"] / cycle["credit_rupees"]
+        for cycle in cycles
+        if cycle["credit_rupees"] > 0 and cycle["exit_rule"] != "ST-39_entry_never_filled"
+    ]
 
 
 def _median(values: list[float]) -> float | None:

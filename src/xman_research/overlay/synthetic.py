@@ -105,7 +105,8 @@ class SyntheticWingStore(SessionStore):
         self._cache_root = (
             None
             if cache_root is None
-            else Path(cache_root) / f"ext{int(extend_points)}_m{len(self._minutes)}"
+            else Path(cache_root)
+            / f"ext{int(extend_points)}_m{len(self._minutes)}_h{liquidity_haircut:g}"
         )
         self.synthetic_rows = 0
         self.sessions_extended = 0
@@ -186,7 +187,13 @@ class SyntheticWingStore(SessionStore):
 
     def load_session(self, ref: SessionRef, *, verify: bool = False) -> pd.DataFrame:
         cache = self._cache_path(ref)
-        if cache is not None and cache.is_file():
+        if (
+            cache is not None
+            and cache.is_file()
+            and cache.stat().st_mtime >= ref.parquet_path.stat().st_mtime
+        ):
+            # Older than the session it extends means the corpus was re-captured underneath
+            # it; rebuild rather than serve a frame derived from bars that no longer exist.
             self.sessions_from_cache += 1
             return pd.read_parquet(cache)
         frame = super().load_session(ref, verify=verify)

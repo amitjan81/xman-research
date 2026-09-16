@@ -131,6 +131,19 @@ class CycleState:
     half_reason: str | None
     adjustment_cost_per_unit: float = 0.0
     rolled: bool = False
+    filled: bool = False
+    """Set once the book has been observed holding this cycle's legs."""
+    pending_roll: dict[str, Any] | None = None
+    """A roll that has been ordered and not yet confirmed by the book.
+
+    The first version of this code rewrote ``legs``, ``strikes``, ``adjustment_cost_per_unit``
+    and ``rolled`` at the moment the roll intents were *emitted*. The engine decides whether
+    a leg group fills after :meth:`decide` returns, so a roll that did not fill would have
+    left the cycle describing legs the book had never held — and the next decision minute
+    would have unwound an intact, never-rolled condor while recording it as rolled. The
+    mutation now waits for the book to confirm it."""
+    roll_unpriceable: bool = False
+    """A roll was wanted and could not be built from printed quotes; see :meth:`_roll`."""
     exit_requested: bool = False
     exit_rule: str | None = None
     exit_estimate: float | None = None
@@ -180,12 +193,24 @@ class IndexOptionOverlay:
     cash settlement. What "observed" can honestly mean for a five-session hold is that
     every price the *decision* rested on was printed."""
     event_calendar: Mapping[dt.date, str] = field(default_factory=dict)
+    hedge_cash_reserve: float = 180_000.0
+    """CA-11's reserve, subtracted from the sizing budget before lots are computed.
+
+    The Tail Hedge itself cannot be priced from this corpus (see the module docstring), but
+    CA-11 is a *sizing* rule and applies regardless: the cash that would buy the next two
+    monthly hedges is not available to margin the condor. The default is the requirements'
+    own section 8 figure for a Rs 1 crore portfolio. Leaving it at zero — the first version
+    of this code — sized every position about 10% larger than the document allows."""
+
     min_wing_width: float = 100.0
     """Below this the structure stops being the document's condor; the week is skipped and
     counted. Only consulted under ``wing_policy="observed"``."""
 
     _cycle: CycleState | None = field(default=None, init=False, repr=False)
     _traded: set[dt.date] = field(default_factory=set, init=False, repr=False)
+    _credit_locked: set[dt.date] = field(default_factory=set, init=False, repr=False)
+    _session_dates: frozenset[dt.date] = field(default_factory=frozenset, init=False, repr=False)
+    _pending_selection_detail: dict[str, Any] | None = field(default=None, init=False, repr=False)
     _closed: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
     _journal: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
     _halved_until: dt.date | None = field(default=None, init=False, repr=False)
@@ -194,6 +219,11 @@ class IndexOptionOverlay:
     _halted: bool = field(default=False, init=False, repr=False)
 
     # ------------------------------------------------------------------ engine surface
+
+    def __post_init__(self) -> None:
+        # The exchange's session calendar, as the corpus records it. Used by ST-4 to find
+        # the last session before an expiry; see :meth:`_is_last_session_before`.
+        self._session_dates = frozenset(self.context.sessions())
 
     @property
     def name(self) -> str:
@@ -263,6 +293,7 @@ class IndexOptionOverlay:
         if cycle is None:
             return
         if book.positions():
+            self._confirm(cycle, book)
             return
         if not cycle.exit_requested:
             # The book never held this cycle at all: the entry group was unfillable. It is
@@ -304,6 +335,57 @@ class IndexOptionOverlay:
         )
         self._cycle = None
 
+    def _confirm(self, cycle: CycleState, book: BookView) -> None:
+        """Reconcile the cycle against what the book actually holds.
+
+        Three jobs, all of which exist because the engine answers after the fact:
+
+        **The size.** ``lots`` is what was *asked for*; the participation caps resize a leg
+        group to its smallest fillable leg, and 18% of entry legs in the first five-year run
+        were resized. Everything denominated in rupees — the credit, ST-32's caps, the
+        report's gross credit and premium capture — has to be on units the book held, so the
+        size is taken from the book the first time it carries the position.
+
+        **The roll.** A pending roll is committed only when the book shows the new legs, and
+        abandoned when it still shows the old ones. A book showing some of each is a
+        half-executed roll, which :meth:`_manage` unwinds.
+
+        **The week.** The expiry is marked traded only once something was actually held, so
+        an entry group that never filled does not silently spend the week.
+        """
+        held = {position.contract.trading_symbol for position in book.positions()}
+        if not cycle.filled:
+            cycle.filled = True
+            self._traded.add(cycle.expiry)
+            filled_lots = min(
+                abs(position.units) // position.contract.lot_size for position in book.positions()
+            )
+            if 0 < filled_lots < cycle.lots:
+                cycle.lots = filled_lots
+        pending = cycle.pending_roll
+        if pending is None:
+            return
+        if held == set(pending["legs"].values()):
+            cycle.legs = dict(pending["legs"])
+            cycle.strikes = dict(pending["strikes"])
+            cycle.adjustment_cost_per_unit += pending["cost_per_unit"]
+            cycle.rolled = True
+            cycle.pending_roll = None
+            self._log(
+                cycle.entry_date,
+                rule="ST-20_roll_confirmed",
+                outcome="rolled",
+                detail={"expiry": cycle.expiry.isoformat(), "strikes": cycle.strikes},
+            )
+        elif held == set(cycle.legs.values()):
+            cycle.pending_roll = None
+            self._log(
+                cycle.entry_date,
+                rule="ST-20_roll_not_filled",
+                outcome="declined",
+                detail={"expiry": cycle.expiry.isoformat()},
+            )
+
     # ------------------------------------------------------------------ management
 
     def _manage(
@@ -312,29 +394,39 @@ class IndexOptionOverlay:
         cycle = self._cycle
         assert cycle is not None
         params = self.params
-        days_left = (cycle.expiry - session.session_date).days
+        session_date = session.session_date
+        days_left = (cycle.expiry - session_date).days
 
-        # ST-22, enforced against reality rather than intent: if the book is not the four
-        # legs this cycle describes — a half-filled roll is how that happens — the position
-        # is no longer the structure the requirements define, and the only rule that can
-        # honestly be applied to it is "close it".
-        held = {position.contract.trading_symbol for position in book.positions()}
-        if held and held != set(cycle.legs.values()):
-            return self._close(cycle, "ST-22_structure_mismatch_unwind", None, book, minute=minute)
         marks = self._marks(session, minute, cycle)
         pnl = None if marks is None else self._unrealised(cycle, marks)
 
-        # ST-4 is fixed and outranks every other rule: a Core Position may not be carried
-        # into expiry day. The comparison is >= so that a session whose 15:15 print is
-        # missing still exits at the next decision minute that has one.
-        if days_left <= 0 or (days_left == 1 and minute.time() >= params.exit_attempt_from):
-            rule = "ST-4_time_exit"
-            if days_left <= 0:
-                # The deadline has already passed: the close was attempted on the prior
-                # session and did not complete. Recorded as a breach of a fixed rule
-                # rather than absorbed, because that is what it is.
-                rule = "ST-4_deadline_missed"
-            return self._close(cycle, rule, pnl, book, minute=minute, split_groups=days_left <= 0)
+        # ST-22, enforced against reality rather than intent: if the book is not the legs
+        # this cycle describes — a half-executed roll is how that happens — the position is
+        # no longer the structure the requirements define, and the only rule that can
+        # honestly be applied to it is "close it". A roll still awaiting confirmation is not
+        # a mismatch: :meth:`_confirm` has already decided whether it happened.
+        held = {position.contract.trading_symbol for position in book.positions()}
+        if held and held != set(cycle.legs.values()) and cycle.pending_roll is None:
+            return self._close(cycle, "ST-22_structure_mismatch_unwind", pnl, book, minute=minute)
+
+        # **ST-4 is fixed, outranks every other rule, and is keyed on the trading calendar
+        # rather than on calendar days.** "The Trading Day before its expiry" is not
+        # "expiry minus one day": a Monday expiry's prior session is the Friday, and a
+        # holiday before expiry moves it earlier still. Keying on ``days_left == 1`` meant
+        # that in nine cycles of the first five-year run no exit was ever attempted — the
+        # session that satisfied the condition did not exist — and the position was closed
+        # on expiry morning instead. The calendar comes from the corpus's own session list,
+        # which is a published exchange fact known in advance, not a market observation.
+        if self._is_last_session_before(session_date, cycle.expiry):
+            if minute.time() >= params.exit_attempt_from:
+                return self._close(cycle, "ST-4_time_exit", pnl, book, minute=minute)
+        elif days_left <= 0:
+            # The deadline has passed with the position still open: every attempt on the
+            # last session before expiry failed to fill. A breach of a fixed rule, recorded
+            # as one rather than absorbed into the P&L.
+            return self._close(
+                cycle, "ST-4_deadline_missed", pnl, book, minute=minute, split_groups=True
+            )
 
         if pnl is not None:
             if pnl <= -params.stop_multiple * cycle.credit_rupees:
@@ -349,17 +441,38 @@ class IndexOptionOverlay:
         # rolls, a second closes. The roll is emitted as one group with the untested side's
         # move, so the book never sits half-rolled.
         touched = self._tested_side(session, minute, cycle)
-        if touched is not None:
+        if touched is not None and cycle.pending_roll is None:
             if cycle.rolled:
                 return self._close(cycle, "ST-21_second_touch", pnl, book, minute=minute)
+            if cycle.roll_unpriceable:
+                # The defence ST-20 prescribes was unavailable at the first touch; this is
+                # the second, and ST-21's answer to a second touch is to close.
+                return self._close(
+                    cycle, "ST-21_touch_after_unpriceable_roll", pnl, book, minute=minute
+                )
             rolled = self._roll(session, minute, cycle, touched, book)
             if rolled:
                 return rolled
         return ()
 
+    def _is_last_session_before(self, session_date: dt.date, expiry: dt.date) -> bool:
+        """Is this the final trading session the run has before ``expiry``?
+
+        Answered from the corpus's own session list rather than from arithmetic on dates.
+        A session that is not in the list (the strategy is being driven over a corpus the
+        context was not built from) falls back to the calendar-day test, so the rule still
+        fires rather than silently never firing.
+        """
+        sessions = self._session_dates
+        if session_date not in sessions:
+            return (expiry - session_date).days == 1
+        later = [value for value in sessions if session_date < value < expiry]
+        return not later
+
     def _marks(
         self, session: SessionView, minute: dt.datetime, cycle: CycleState
     ) -> dict[str, float] | None:
+        """This minute's price for every leg the cycle holds, or ``None`` if any is absent."""
         marks: dict[str, float] = {}
         for role, symbol in cycle.legs.items():
             bar = session.bar(symbol, minute)
@@ -483,9 +596,24 @@ class IndexOptionOverlay:
     ) -> Sequence[TradeIntent]:
         """ST-20: move the tested vertical out, the untested one in, in one atomic group.
 
-        The replacement legs must both print at this minute; if either does not, nothing is
-        rolled and the rule is re-evaluated at the next decision minute. That is the honest
-        behaviour for a corpus with no quotes: a roll that cannot be priced did not happen.
+        **Every replacement leg must print at this minute, and the two new SHORT legs must
+        print with an implied volatility** — that is, they must be strikes the capture
+        carries rather than strikes this package modelled. The roll's new short sits one
+        wing-width further out, which is exactly where the modelled band begins, so without
+        this guard the strategy sells a leg whose price it invented: 22% of the roll shorts
+        in the first five-year run were such strikes. Selling a modelled price is the one
+        thing :mod:`xman_research.overlay.synthetic` promises never happens, and the promise
+        was true only of entries.
+
+        A roll that cannot be built from prints is recorded and *not* performed; the cycle is
+        marked :attr:`CycleState.roll_unpriceable` so the next touch on either side is
+        treated as ST-21's second touch and closes the position. Defending a tested side with
+        a price nobody quoted is not a defence, and holding a tested position with no defence
+        available is not what ST-20 describes either — closing is the honest third option, and
+        it is the conservative one.
+
+        Nothing about the cycle is mutated here. The intents go out; the book confirms or
+        refuses them; :meth:`_confirm` does the bookkeeping on the next decision minute.
         """
         is_call = tested == "short_call"
         step = cycle.wing_width
@@ -521,41 +649,46 @@ class IndexOptionOverlay:
         symbols: dict[str, str] = {}
         for role, (strike, option_type, _side) in legs.items():
             contract = session.universe.get(cycle.expiry, strike, option_type)
-            if contract is None:
-                return ()
-            bar = session.bar(contract.trading_symbol, minute)
-            if bar is None:
-                return ()
+            bar = None if contract is None else session.bar(contract.trading_symbol, minute)
+            if contract is None or bar is None or bar.close <= 0:
+                return self._refuse_roll(cycle, tested, "no_bar")
+            if role.startswith("short") and not bar.iv:
+                # A modelled bar carries no implied volatility. See the docstring: this is
+                # the guard that keeps a fabricated price off the short side of the book.
+                return self._refuse_roll(cycle, tested, "modelled_short")
             symbols[role] = contract.trading_symbol
 
+        # The closing and opening legs are netted per symbol before any order is written.
+        # The tested side's new short lands on the strike the old long wing occupied, so the
+        # unnetted form sold the same contract twice in one group — two orders' brokerage,
+        # and the participation cap applied twice to one leg.
         group = f"roll:{cycle.expiry.isoformat()}"
-        intents: list[TradeIntent] = []
+        wanted: dict[str, int] = {}
         for symbol in cycle.legs.values():
             position = book.position(symbol)
             if position is None:
-                return ()
-            side = Side.BUY if position.units < 0 else Side.SELL
-            intents.append(
-                TradeIntent(
-                    trading_symbol=symbol,
-                    side=side,
-                    lots=abs(position.units) // cycle.lot_size,
-                    tag="ST-20_roll_close",
-                    leg_group=group,
-                )
-            )
+                return self._refuse_roll(cycle, tested, "leg_not_held")
+            lots = abs(position.units) // cycle.lot_size
+            wanted[symbol] = wanted.get(symbol, 0) + (lots if position.units < 0 else -lots)
         for role in _LEG_ROLES:
             if role not in legs:
                 continue
-            intents.append(
-                TradeIntent(
-                    trading_symbol=symbols[role],
-                    side=legs[role][2],
-                    lots=cycle.lots,
-                    tag="ST-20_roll_open",
-                    leg_group=group,
-                )
+            symbol = symbols[role]
+            signed = -cycle.lots if legs[role][2] is Side.SELL else cycle.lots
+            wanted[symbol] = wanted.get(symbol, 0) + signed
+        intents: list[TradeIntent] = [
+            TradeIntent(
+                trading_symbol=symbol,
+                side=Side.BUY if net > 0 else Side.SELL,
+                lots=abs(net),
+                tag="ST-20_roll",
+                leg_group=group,
             )
+            for symbol, net in wanted.items()
+            if net != 0
+        ]
+        if not intents:
+            return self._refuse_roll(cycle, tested, "no_net_change")
 
         # What the roll costs is booked against the cycle, not against the basis ST-17 and
         # ST-19 are stated in. Closing the old structure costs the net premium it is worth
@@ -570,17 +703,34 @@ class IndexOptionOverlay:
             * (1 if role.startswith("short") else -1)
             for role in legs
         )
-        cycle.adjustment_cost_per_unit += closing_cost - opening_credit
-        cycle.legs = symbols
-        cycle.strikes = {role: legs[role][0] for role in legs}
-        cycle.rolled = True
+        cycle.pending_roll = {
+            "legs": symbols,
+            "strikes": {role: legs[role][0] for role in legs},
+            "cost_per_unit": closing_cost - opening_credit,
+        }
         self._log(
             session.session_date,
             rule="ST-20_tested_side_roll",
-            outcome="rolled",
-            detail={"expiry": cycle.expiry.isoformat(), "tested": tested, "strikes": cycle.strikes},
+            outcome="ordered",
+            detail={
+                "expiry": cycle.expiry.isoformat(),
+                "tested": tested,
+                "strikes": cycle.pending_roll["strikes"],
+                "cost_per_unit": cycle.pending_roll["cost_per_unit"],
+            },
         )
         return tuple(intents)
+
+    def _refuse_roll(self, cycle: CycleState, tested: str, reason: str) -> tuple[TradeIntent, ...]:
+        """Record a roll that could not be built, and arm ST-21 for the next touch."""
+        cycle.roll_unpriceable = True
+        self._log(
+            cycle.entry_date,
+            rule="ST-20_roll_unavailable",
+            outcome="declined",
+            detail={"expiry": cycle.expiry.isoformat(), "tested": tested, "reason": reason},
+        )
+        return ()
 
     # ------------------------------------------------------------------ entry
 
@@ -592,6 +742,14 @@ class IndexOptionOverlay:
             return ()
         days_to_expiry = (expiry - session_date).days
         if days_to_expiry not in params.entry_dte or expiry in self._traded:
+            return ()
+        if session_date in self._credit_locked:
+            # ST-8 is explicit that a credit failure ends the *day* ("no entry that day;
+            # retry next entry-window day"). Every other filter is re-evaluated each
+            # decision minute, which ST-10's preamble requires ("at the moment of intended
+            # entry"); this one is not, and the difference is the requirement's, not a
+            # convenience. Without the lock the strategy took the first minute of the day
+            # at which a momentary premium spike cleared the bar.
             return ()
         window_start, window_end = params.entry_window
         if not (window_start <= minute.time() <= window_end):
@@ -631,17 +789,22 @@ class IndexOptionOverlay:
                     session_date, expiry, "ST-12_trend_filter", {"deviation": deviation}
                 )
 
-        # ST-10 volatility filter (IV-percentile limb only — see context module).
-        if inputs.iv_percentile is not None and inputs.iv_percentile < params.ivp_floor:
-            lot_fraction *= 0.5
-            half_reason = half_reason or "ST-10_low_iv_percentile"
-
         atm_iv = self._atm_iv(session, minute, expiry, spot)
         # ST-11 variance-risk-premium filter: five-day realised must not exceed the implied
         # being sold. Without an ATM implied for this minute the test cannot be evaluated,
         # and an unevaluable filter is a decline, not a pass.
         if atm_iv is None:
             return self._decline(session_date, expiry, "ST-11_no_atm_iv", {})
+
+        # ST-10 volatility filter (IV-percentile limb only — see the context module). The
+        # value ranked is this minute's at-the-money implied volatility, against prior
+        # sessions at the same days to expiry.
+        percentile = self.context.iv_percentile(
+            session_date, atm_iv, dte_bucket=tuple(params.entry_dte)
+        )
+        if percentile is not None and percentile < params.ivp_floor:
+            lot_fraction *= 0.5
+            half_reason = half_reason or "ST-10_low_iv_percentile"
         if inputs.realised_vol_5d is not None and inputs.realised_vol_5d > atm_iv:
             return self._decline(
                 session_date,
@@ -663,12 +826,15 @@ class IndexOptionOverlay:
 
         structure = self._select_structure(session, minute, expiry, spot, days_to_expiry)
         if isinstance(structure, str):
-            return self._decline(session_date, expiry, structure, {})
+            detail = self._pending_selection_detail or {}
+            self._pending_selection_detail = None
+            return self._decline(session_date, expiry, structure, dict(detail))
 
         credit_per_unit = structure["credit_per_unit"]
         lot_size = structure["lot_size"]
         notional_per_unit = spot
         if credit_per_unit <= 0 or credit_per_unit < params.min_credit_ratio * notional_per_unit:
+            self._credit_locked.add(session_date)
             return self._decline(
                 session_date,
                 expiry,
@@ -687,6 +853,7 @@ class IndexOptionOverlay:
                 collateral=self.collateral,
                 margin_model=self.margin_model,
                 max_lots_absolute=params.max_lots_absolute,
+                hedge_cash_reserve=self.hedge_cash_reserve,
             )
         )
         lots = int(record.allocated_lots * lot_fraction)
@@ -719,7 +886,6 @@ class IndexOptionOverlay:
             wing_width=structure["wing_width"],
             half_reason=half_reason,
         )
-        self._traded.add(expiry)
         self._log(
             session_date,
             rule="ST-5_entry",
@@ -784,6 +950,7 @@ class IndexOptionOverlay:
         lot_size = 0
         for role, option_type in (("short_call", OptionType.CALL), ("short_put", OptionType.PUT)):
             best: tuple[float, float, str, float] | None = None
+            nearest: tuple[float, float] | None = None
             for strike in strikes:
                 contract = session.universe.get(expiry, strike, option_type)
                 if contract is None:
@@ -800,6 +967,10 @@ class IndexOptionOverlay:
                         iv=bar.iv,
                     )
                 )
+                if nearest is None or abs(delta - params.short_delta_target) < abs(
+                    nearest[0] - params.short_delta_target
+                ):
+                    nearest = (delta, strike)
                 if not (low <= delta <= high):
                     continue
                 distance = abs(delta - params.short_delta_target)
@@ -807,6 +978,13 @@ class IndexOptionOverlay:
                     best = (distance, strike, contract.trading_symbol, delta)
                     lot_size = contract.lot_size
             if best is None:
+                # Record the closest thing the chain offered, so a reader can tell the two
+                # causes apart: a capture band that stops short of the 0.12-delta strike,
+                # and a 50-point ladder that steps over [0.10, 0.14] without landing in it.
+                chosen.setdefault("nearest_deltas", {})[role] = (
+                    None if nearest is None else {"strike": nearest[1], "delta": nearest[0]}
+                )
+                self._pending_selection_detail = dict(chosen.get("nearest_deltas", {}))
                 return "ST-6_no_strike_in_delta_band"
             _distance, strike, symbol, delta = best
             chosen["symbols"][role] = symbol

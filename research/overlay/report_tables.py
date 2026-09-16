@@ -1,6 +1,6 @@
 """Render the report's tables from the arm JSONs, so no number in it is typed by hand.
 
-    uv run python research/overlay/report_tables.py --results research/overlay/results
+uv run python research/overlay/report_tables.py --results research/overlay/results
 """
 
 from __future__ import annotations
