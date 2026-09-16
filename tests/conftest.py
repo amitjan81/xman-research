@@ -103,6 +103,12 @@ class SyntheticContract:
     close: float
     volume: float = 1_300_000.0
     open_interest: float = 6_500_000.0
+    iv: float = 0.13
+    """The implied volatility written on every bar of this contract.
+
+    Defaulted so every fixture written before delta-selected strategies existed keeps its
+    previous flat-0.13 chain, and settable so a chain can carry a skew for the tests that
+    select a strike *by* delta."""
 
 
 def _minute_stamps(session_date: date) -> list[int]:
@@ -163,7 +169,7 @@ def write_synthetic_session(
                     "high": contract.close,
                     "low": contract.close,
                     "close": contract.close,
-                    "iv": 0.13,
+                    "iv": contract.iv,
                     "oi": contract.open_interest,
                     "volume": contract.volume,
                     "spot": value,

@@ -1,0 +1,44 @@
+{
+  "underlying": "SENSEX",
+  "sessions": 32,
+  "first_session": "2026-07-13",
+  "last_session": "2026-08-27",
+  "missing_sessions": [
+    "2026-07-16",
+    "2026-07-30"
+  ],
+  "entry_windows": 6,
+  "both_shorts_in_delta_band": 0,
+  "wing_room": {
+    "call": null,
+    "put": null,
+    "both_sides_at_least_100": 0,
+    "both_sides_at_least_300": 0,
+    "either_side_zero": 0
+  },
+  "min_abs_delta_available": {
+    "call": {
+      "min": 0.15307925846147769,
+      "p25": 0.15857417793660739,
+      "median": 0.19051068130598758,
+      "p75": 0.23227068944040474,
+      "max": 0.24690871778893264
+    },
+    "put": {
+      "min": 0.1644854603476018,
+      "p25": 0.19031622969673367,
+      "median": 0.24194089349237957,
+      "p75": 0.2578956137155055,
+      "max": 0.27296229336179945
+    }
+  },
+  "sessions_detail_note": "per-session detail omitted from the committed copy; regenerate with `uv run python research/overlay/coverage.py --underlying SENSEX --out <path>`",
+  "entry_window_sessions": [
+    "2026-07-17",
+    "2026-07-24",
+    "2026-07-31",
+    "2026-08-07",
+    "2026-08-14",
+    "2026-08-21"
+  ]
+}
