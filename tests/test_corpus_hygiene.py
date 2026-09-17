@@ -22,6 +22,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from xman_research.backtest.market import SessionView
+from xman_research.backtest.settlement import LATEST_WITNESS_MINUTE
 from xman_research.corpus_hygiene import (
     MAX_PLAUSIBLE_IV,
     SESSION_CLOSE,
@@ -88,9 +89,11 @@ def test_the_evening_padding_is_not_part_of_the_session_but_the_auction_is() -> 
 
     kept = session_rows(frame, SESSION_DATE)
 
-    assert [t for t in kept.spot] == [24_471.7, 24_472.0]
+    assert list(kept.spot) == [24_471.7, 24_472.0]
     assert dt.time(9, 15) == SESSION_OPEN
-    assert dt.time(16, 0) == SESSION_CLOSE
+    # The relationship, not the literal: the boundary exists BECAUSE settlement reads up to
+    # it, and pinning 16:00 in two files lets them drift apart in silence.
+    assert SESSION_CLOSE == LATEST_WITNESS_MINUTE
 
 
 def test_a_row_stamped_with_another_date_is_not_this_session() -> None:
@@ -215,6 +218,31 @@ def test_the_session_a_backtest_sees_carries_none_of_it() -> None:
     assert wild_iv.open_interest_units == 0.0
 
 
+def test_a_session_with_no_index_rows_yields_nothing_rather_than_guessing() -> None:
+    """No fallback to the option rows' own snapshots.
+
+    An earlier version fell back to "whichever row of the minute sorted last" when the
+    underlying had not printed, which is exactly the order-dependent derivation this module
+    exists to remove — reintroduced in the one place nobody would look for it. Every captured
+    session has in-hours index rows, so returning empty costs nothing and cannot be wrong.
+    """
+    frame = pd.DataFrame(
+        [
+            _row(dt.time(11, 0), "NIFTY-11Aug2026-24500-CE", 12.0, spot=24_480.0),
+            _row(dt.time(11, 0), "NIFTY-11Aug2026-24400-PE", 8.0, spot=24_515.6),
+        ]
+    )
+
+    assert underlying_spot(frame, "NIFTY", SESSION_DATE).empty
+
+
+def test_the_spot_read_is_the_bar_close_the_engine_trades_on() -> None:
+    """Not the `spot` column of the same row — literally the number `spot_at` returns."""
+    frame = pd.DataFrame([_row(dt.time(11, 0), "NIFTY", 24_500.0, spot=24_333.3)])
+
+    assert underlying_spot(frame, "NIFTY", SESSION_DATE).spot.iloc[0] == 24_500.0
+
+
 # ------------------------------------------------- the defects are in the real files
 
 
@@ -224,9 +252,9 @@ def test_the_session_a_backtest_sees_carries_none_of_it() -> None:
 def test_the_real_corpus_still_contains_what_this_module_defends_against() -> None:
     """Without this, every fixture above could be guarding a hazard that no longer exists.
 
-    2022-01-07 is the worst out-of-hours session found in the audit: 637 underlying rows
-    from 07:06 to 23:00, zero volume, the price repeating. If a re-capture ever cleans it,
-    this test fails and the module's premise gets re-examined rather than assumed.
+    2022-01-07 is the worst padded session the audit found: 607 rows outside the exchange
+    day, from 07:06 to 23:00, zero volume, the price repeating. If a re-capture ever cleans
+    it, this test fails and the module's premise gets re-examined rather than assumed.
     """
     path = CORPUS_ROOT / "NIFTY" / "2022-01-07.parquet"
     if not path.is_file():

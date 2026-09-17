@@ -8,7 +8,7 @@ that a future defect has an obvious home rather than four.
 **What is wrong with the raw files** (measured over 1,252 NIFTY sessions,
 ``research/intraday/data_audit.py``):
 
-1. *The index feed pads outside market hours.* On 208 sessions (16.6%) the file carries
+1. *The index feed pads outside market hours.* On 185 sessions (14.8%) the file carries
    underlying rows stamped as early as 05:38 and as late as 23:00 — zero volume, no open
    interest, and the same price repeated for hundreds of minutes. No option rows accompany
    them (the Closing Auction Session, which runs past 15:30, is market and is kept).
@@ -59,6 +59,10 @@ IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 #: it — so the boundary that separates market from padding is the auction's end, not the
 #: continuous close. Anything outside this is feed padding: zero volume, no open interest,
 #: one price repeated for hours.
+#:
+#: **The two constants are the same instant and must stay so.** They cannot be imported from
+#: one another without a cycle — settlement imports the market, which imports this — so
+#: ``tests/test_corpus_hygiene.py`` asserts the equality instead of pinning the literal.
 SESSION_OPEN = dt.time(9, 15)
 SESSION_CLOSE = dt.time(16, 0)
 
@@ -97,24 +101,32 @@ def underlying_spot(
 ) -> pd.DataFrame:
     """The index's own price path: one row per minute, ``minute_ts`` and ``spot``, ascending.
 
-    **The index's own bar is the only authority for spot** (defect 2). The ``spot`` column on
-    an option row is that row's snapshot and is not consistent across a minute, so it is used
-    only where the underlying did not print — which, across the captured corpus, is never.
+    **The index's own bar is the only authority for spot** (defect 2), and there is no
+    fallback to the option rows. An earlier version fell back to "whichever row of the minute
+    sorted last" when the underlying had not printed — which is precisely the order-dependent
+    derivation this module exists to remove, reintroduced in the one place nobody would look
+    for it. Every one of the 1,252 captured sessions carries in-hours index rows, so the
+    branch was dead as well as wrong; a session that genuinely lacks them returns empty and
+    the caller skips it, which is the honest answer.
+
+    The value read is the bar's ``close``, not the ``spot`` column on the same row, so this is
+    literally the number :meth:`SessionView.spot_at` hands the strategy rather than one that
+    merely agrees with it.
     """
     inside = session_rows(frame, session_date)
+    columns = [column for column in ("minute_ts", "spot") if column in inside.columns]
     if inside.empty:
-        return inside.loc[:, [c for c in ("minute_ts", "spot") if c in inside.columns]]
+        return inside.loc[:, columns]
     own = inside[inside.symbol == underlying]
-    source = own if not own.empty else inside
-    spots = source.dropna(subset=["spot"])
+    if own.empty:
+        return own.loc[:, columns]
+    source = "close" if "close" in own.columns else "spot"
+    spots = own.dropna(subset=[source])
     if spots.empty:
-        return spots.loc[:, ["minute_ts", "spot"]]
-    return (
-        spots.groupby("minute_ts", as_index=False)
-        .spot.last()
-        .sort_values("minute_ts")
-        .reset_index(drop=True)
-    )
+        return spots.loc[:, columns].assign(spot=[])[["minute_ts", "spot"]]
+    out = spots.groupby("minute_ts", as_index=False)[source].last()
+    out = out.rename(columns={source: "spot"})
+    return out.sort_values("minute_ts").reset_index(drop=True)
 
 
 def clean_iv(value: float | None) -> float | None:

@@ -179,24 +179,36 @@ expiries on a different weekday, or a margin regime that blocks less capital.
 
 ## 5. The corpus was wrong, and what that moved
 
-Every number above was re-measured after four defects were found in the captured files and
-fixed at the reader (`xman_research.corpus_hygiene`, commit `59b35ee`). The defects, measured
-over all 1,252 NIFTY sessions by `research/intraday/data_audit.py`:
+Four defects were found in the captured files and fixed at the reader
+(`xman_research.corpus_hygiene`, commit `59b35ee`). Their extent, measured over all 1,252
+NIFTY sessions by `research/intraday/data_audit.py`:
 
 | defect | reach | what it did |
 |---|---|---|
-| index feed padded outside market hours — zero volume, one price repeated for hours | 208 sessions (16.6%) | a band or an "open" drawn from a 07:06 print |
+| index feed padded outside the exchange day — zero volume, one price repeated for hours | 185 sessions (14.8%) | a band or an "open" drawn from a 07:06 print |
 | `spot` disagreeing with itself inside one minute (each option row carries its own snapshot) | 436 sessions (34.8%), median 4.2 pts, max 35.6 | four derivations of spot, none of them the one the engine traded on |
 | implied volatility at or below zero, or above 300% | 8.9% of option rows; 224 sessions | a zero entering an average that gates whether to trade |
 | negative traded volume | 8 sessions | meaningless, and read as a quantity |
 
-**The headline answer did not move.** The tuned static strangle is byte-identical before and
-after — 174 in-sample trades, ₹235,415, profit factor 1.46 — because it enters at a fixed
-clock time, stops on a move from its own entry print, and reads spot through `spot_at`, which
-was always the index's own bar. Nothing it touches was defective.
+**Two things the first version of this audit got wrong, and they are worth recording.** It
+drew its session boundary at 15:30 where the reader draws it at 16:00, so it counted 23
+sessions of pure Closing Auction Session — market, and kept — as padding: the real figure is
+185, not the 208 first reported. And it ran its stalled-feed and spot-jump checks on the
+unfiltered frame, so both were re-detecting the padding: 165 sessions of "spot unchanged for
+30+ minutes" and 6 of ">2% minute-to-minute jump" become **zero of each** once the exchange
+day is the thing being measured. An audit whose boundaries differ from the reader's measures
+a different corpus than the one being fixed.
 
-**What did move is every rule that reads a session extremum.** The opening-range arms draw
-their band from the session's first minutes, and on a padded session that minute is 07:06:
+**The headline answer did not move.** The tuned configuration's in-sample control comes back
+byte-identical — 174 trades, ₹235,415, profit factor 1.4565657799701943, matching the stage-3
+figure to sixteen digits — because it enters at a fixed clock time, stops on a move from its
+own entry print, and reads spot through `spot_at`, which was always the index's own bar.
+**The other 65 configurations of §2's sweep were not re-run**; the claim here is about the
+winner, not about every cell of every table above.
+
+**What did move is every rule that reads a session extremum, and the arms that read implied
+volatility.** The opening-range arms draw their band from the session's first minutes, and on
+a padded session that minute is 07:06:
 
 | arm (in-sample) | before | after |
 |---|---:|---:|
@@ -204,14 +216,25 @@ their band from the session's first minutes, and on a padded session that minute
 | open-range 10:30 | +56,585 | **+34,333** |
 | open-range 11:00 | +103,328 | **+68,198** |
 | %-from-open 0.3 | −148,278 | **−194,623** |
+| %-from-open 0.6 | +30,498 | **+100,554** |
+| %-from-open 0.8 | +60,541 | **+107,329** |
+| IV-move 0.75 | +59,239 (27 trades) | **+28,027 (18 trades)** |
+| IV-move 1.0 | +10,494 | **−10,681** |
 
-On 2022-01-07 the opening-range band was 149.1 points wide instead of 67.9 — the padded print
-sat 82 points below the real morning low. Out-of-sample the same arms are unchanged to the
-rupee, because the padding is concentrated in 2021 and 2022.
+Not all of them worsened, and the last two do not read an extremum at all — they read
+implied volatility, which `clean_iv` changed. On 2022-01-07 the opening-range band was 149.1
+points wide instead of 67.9: the padded print sat 82 points below the real morning low.
 
-The ATR and Bollinger bands were largely spared: `window_stats` filters to 10:00-15:00 by
+Out-of-sample the same arms are unchanged **in net P&L and trade count**. Their profit
+factors are not comparable against the old file, because that file predates the per-leg
+attribution fix in `f5facfc` — `OOS_dyn_openrange_1000` shows 1.53 against 1.18 on an
+identical net of ₹51,574, which is the attribution change and not the corpus one.
+
+The ATR and Bollinger arms were largely spared: `window_stats` filters to 10:00-15:00 by
 clock time, so the padding fell outside it, and only the within-minute spot disagreement
-reached them — 5.4% of sessions, a median change of 0.0000 percentage points in the ATR.
+reached them — 5.4% of sessions, a median ATR change of 0.0000 percentage points. The
+exception is the thinly-traded all-tenor Bollinger arms, where a handful of trades is enough
+to move a total: `OOS_boll2_all` goes from ₹3,294 to ₹304 on 36 trades.
 
 **One thing the audit found that cannot be fixed here.** The 2026-08-25 session was never
 captured, which leaves the continuously-captured tail 16 sessions long where the store's own
@@ -225,6 +248,7 @@ uv run python research/intraday/search.py --out research/intraday/results --stag
 uv run python research/intraday/search.py --out research/intraday/results --stage 2  # crossed
 uv run python research/intraday/search.py --out research/intraday/results --stage 3  # expiry day, split
 uv run python research/intraday/data_audit.py --out research/intraday/results/data_audit_NIFTY.json
+uv run python research/intraday/corpus_delta.py   # every before/after number in §5
 ```
 
 Each configuration files a trial in the canonical research log. Sixty-six configurations is

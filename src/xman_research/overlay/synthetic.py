@@ -37,7 +37,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from xman_research.corpus_hygiene import underlying_spot
+from xman_research.corpus_hygiene import clean_iv, underlying_spot
 from xman_research.overlay.greeks import ObservedQuote, extrapolated_wing_price, year_fraction
 from xman_research.session_store import SessionRef, SessionStore
 
@@ -45,8 +45,10 @@ __all__ = ["DEFAULT_CACHE_ROOT", "SYNTHETIC_WING_STAMP", "SyntheticWingStore"]
 
 #: Bumped when the extension's inputs change, so a cached frame built by an older
 #: derivation is not served. v2: spot comes from the index's own bar rather than the
-#: snapshot on an arbitrary option row (see :mod:`xman_research.corpus_hygiene`).
-DERIVATION = "v2"
+#: snapshot on an arbitrary option row. v3: the edge quote's implied volatility goes
+#: through :func:`~xman_research.corpus_hygiene.clean_iv`, so a solver artefact cannot
+#: price a wing (see :mod:`xman_research.corpus_hygiene`).
+DERIVATION = "v3"
 
 #: Where extended session frames are kept between runs. Beside the corpus, never inside the
 #: repository: it is regenerable output, and it is large.
@@ -237,7 +239,11 @@ class SyntheticWingStore(SessionStore):
                 quotes = [
                     ObservedQuote(
                         strike=row.strike,
-                        iv=float(row.iv) if pd.notna(row.iv) else 0.0,
+                        # Through the corpus boundary, not raw: an edge strike carrying a
+                        # 422% solver artefact would otherwise drive the Black-Scholes price
+                        # of every wing extrapolated from it. `extrapolated_wing_price`
+                        # filters `iv > 0`, which admits it.
+                        iv=clean_iv(row.iv) or 0.0,
                         close=float(row.close),
                         volume_units=float(row.volume) if pd.notna(row.volume) else 0.0,
                         open_interest_units=float(row.oi) if pd.notna(row.oi) else 0.0,

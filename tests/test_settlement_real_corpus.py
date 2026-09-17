@@ -49,6 +49,7 @@ from xman_research.backtest import (
     run_backtest,
     settlement_value,
 )
+from xman_research.backtest.market import Bar
 from xman_research.backtest.strategies import ShortAtmStraddle
 from xman_research.corpus_hygiene import ist_stamps
 from xman_research.session_store import DEFAULT_CORPUS_ROOT, SessionStore
@@ -283,9 +284,10 @@ def test_the_out_of_hours_print_is_not_taken_for_a_close(store: SessionStore) ->
     ref = _refs(store, (dt.date(2026, 8, 19), dt.date(2026, 8, 19)))[0]
     raw = store.load_session(ref)
     stamps = ist_stamps(raw)
-    strays = raw[stamps.dt.time > dt.time(16, 0)]
+    strays = raw[(stamps.dt.time > dt.time(16, 0)) & (raw.symbol == UNDERLYING)]
     assert not strays.empty, "the 18:40 row is gone from the corpus; drop this test"
-    stray_minute = ist_stamps(strays).max()
+    strays = strays.assign(_ist=ist_stamps(strays)).sort_values("_ist")
+    stray_minute = strays._ist.iloc[-1].to_pydatetime()
 
     session = SessionView.from_frame(ref.session_date, UNDERLYING, raw, store.load_refdata(ref))
 
@@ -293,12 +295,31 @@ def test_the_out_of_hours_print_is_not_taken_for_a_close(store: SessionStore) ->
     assert session.underlying_bars()[-1].minute < stray_minute
     assert session.minutes()[-1] < stray_minute
 
-    # Guard two: the settlement window would not have used it regardless. The stray row
-    # happens to repeat the 15:29 close, so comparing *values* would pass whether it was
-    # filtered or not. What discriminates is which minute was used — and the reason to hold
-    # this at all is that the next out-of-hours row need not be a repeat. 2026-08-04's feed
-    # moved 151 points in its last printed minute.
-    settled = settlement_value(session)
+    # Guard two: the settlement window would refuse it even if the corpus boundary had not
+    # removed it. This has to be settled on a view that CONTAINS the row — settling the
+    # filtered session would pass whether the window guard existed or not, which is what an
+    # earlier version of this test did while claiming to assert both.
+    bars = dict(session.all_bars())
+    stray_row = strays.iloc[[-1]]
+    bars[(UNDERLYING, stray_minute)] = Bar(
+        symbol=UNDERLYING,
+        minute=stray_minute,
+        open=float(stray_row.open.iloc[0]),
+        high=float(stray_row.high.iloc[0]),
+        low=float(stray_row.low.iloc[0]),
+        close=float(stray_row.close.iloc[0]),
+        volume_units=0.0,
+        open_interest_units=0.0,
+        iv=None,
+        spot=float(stray_row.close.iloc[0]),
+    )
+    unfiltered = SessionView(ref.session_date, UNDERLYING, bars, session.universe)
+    assert unfiltered.underlying_bars()[-1].minute == stray_minute
+
+    settled = settlement_value(unfiltered)
+
+    # The stray row happens to repeat the 15:29 close, so comparing *values* would pass
+    # whether the window filtered it or not. What discriminates is which minute was used.
     assert settled.window_start != stray_minute
     assert settled.window_start.time() < dt.time(15, 45)
 

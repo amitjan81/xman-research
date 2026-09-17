@@ -200,17 +200,24 @@ expected to produce, and the out-of-sample number is the one to plan against.
 
 > **Corrected for four corpus defects, 2026-09-17.** The figures in this section were
 > computed before `xman_research.corpus_hygiene` existed, and two of the defects it fixes
-> reach the overlay's entry filters directly: the session `open` ST-13's gap filter reads was
-> the feed's out-of-hours padding on 13.2% of sessions (a median of 80.6 index points wrong,
-> up to 407), and the at-the-money implied volatility ST-10's percentile floor gates on was
-> admitting solver zeros on 13.8% (a median of 4.2 vol points wrong). Re-running stage five
-> on corrected data moves **every** in-sample return down and **no** out-of-sample return at
-> all — the padding lives in 2021-22, which is the in-sample half. For the published
-> parameter set (`s_sb12_d0.22_w600`): in-sample **13.26% → 12.24% a year** on 146 → 143
-> positions; out-of-sample **15.21% → 15.21%** on 54 positions, identical to two decimals.
-> Across all fourteen configurations the in-sample fall is 0.3 to 1.8 percentage points a
-> year, and every one of them opened two to four fewer positions — trades the corrupted
-> filters had been letting through, which happened to be winners.
+> reach the overlay's entry filters directly. The session `open` that ST-13's gap filter
+> reads was the feed's out-of-hours padding on **13.2%** of sessions — a median of **80.6**
+> index points wrong, up to 407 — and the at-the-money implied volatility ST-10's percentile
+> floor gates on was admitting solver zeros on **13.8%**, a median of **0.042** (4.2 vol
+> points) wrong. Both are reproducible with `research/intraday/corpus_delta.py`.
+>
+> Re-running stage five on corrected data: **16 of its 17 configurations return less
+> in-sample**, by 0.09 to 1.80 percentage points a year; one (`s_sb12_d0.25`) returns 0.02
+> points more. Fifteen opened one to four fewer positions. **Every out-of-sample annualised
+> return is unchanged to two decimals** — though not bit-identical: net P&L moves in all 17
+> by between −₹114 and +₹108, on totals of ₹0.4m to ₹3.2m. For the published parameter set
+> (`s_sb12_d0.22_w600`): in-sample **13.26% → 12.24% a year** on 146 → 143 positions;
+> out-of-sample **15.21% → 15.21%** on 54.
+>
+> The asymmetry is mostly, but not only, that the padding lives in 2021-22 — the in-sample
+> half. Seventeen out-of-sample sessions do carry an evening print, and `clean_iv` reaches
+> `atm_iv` in both halves; the out-of-sample effect is small because those evening prints
+> repeat the 15:29 close rather than because nothing changed there.
 >
 > **The table below is therefore overstated in its in-sample row and sound in its
 > out-of-sample one.** It is not re-derived here because the `FINAL_split` run that produced

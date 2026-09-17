@@ -87,8 +87,10 @@ def _ist(minute_ts: int) -> dt.datetime:
 
 
 #: Bumped when the derivation changes, so a cache built by the old one is not silently
-#: reused. v2: spot from the index's own bar in session hours, and IV that cannot be a
-#: volatility no longer enters ``atm_iv``.
+#: reused. v3: spot from the index's own bar in session hours, stopping at the
+#: continuous close, and IV that cannot be a volatility no longer enters ``atm_iv``.
+#: (v2 was an intermediate that took the whole exchange day for the close; it was
+#: never committed, and a cache written by it is left behind by the version bump.)
 DERIVATION = "v3"
 
 

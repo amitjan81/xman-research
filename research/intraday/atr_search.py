@@ -178,9 +178,7 @@ def main(argv: list[str] | None = None) -> int:
         else [("FULL", (WINDOW_START, WINDOW_END))]
     )
     jobs = [
-        (f"{tag}_{label}", config)
-        for tag, window in windows
-        for label, config in specs(window)
+        (f"{tag}_{label}", config) for tag, window in windows for label, config in specs(window)
     ]
 
     results: list[dict[str, Any]] = []

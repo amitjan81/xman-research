@@ -1,9 +1,15 @@
 """Audit the captured corpus for defects that would change a backtest's answer.
 
-Written after one defect was found by accident — 16% of sessions carry minute timestamps
-outside NSE trading hours — on the principle that a defect found by accident is evidence of
-a class nobody has looked for. Each check below is something that, if true, silently moves a
-result rather than raising an error.
+Written after one defect was found by accident — 15% of sessions carry minute timestamps
+outside the NSE exchange day — on the principle that a defect found by accident is evidence
+of a class nobody has looked for. Each check below is something that, if true, silently moves
+a result rather than raising an error.
+
+**Its boundaries are the reader's boundaries**, imported from
+:mod:`xman_research.corpus_hygiene` rather than restated here. An audit that draws the line
+somewhere the reader does not measures a different thing than the one being fixed, which is
+how the first version of this file reported 208 padded sessions where there are 185: the
+other 23 were the Closing Auction Session, which is market and which the reader keeps.
 
 Every check reports counts and examples, never a verdict. What to do about a finding is a
 decision; what the data says is a measurement.
@@ -19,15 +25,20 @@ import glob
 import json
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import pyarrow.parquet as pq
 
+from xman_research.corpus_hygiene import (
+    CONTINUOUS_CLOSE,
+    SESSION_CLOSE,
+    SESSION_OPEN,
+)
+
 IST = "Asia/Kolkata"
-SESSION_OPEN = dt.time(9, 15)
-SESSION_CLOSE = dt.time(15, 30)
 
 #: A minute-to-minute index move larger than this is a print to look at, not a market move.
 SPOT_JUMP_PCT = 2.0
@@ -48,8 +59,17 @@ def audit_session(path_str: str) -> dict[str, Any]:
     dates = stamps.dt.date
 
     # 1. Timestamps outside the exchange session.
-    outside = ((times < SESSION_OPEN) | (times > SESSION_CLOSE)).sum()
-    out["rows_outside_session_hours"] = int(outside)
+    #
+    # **The boundary is the auction's end, not the continuous close**, and the two are
+    # reported separately because they are different facts. A row at 15:39 is the Closing
+    # Auction Session — market, and what settlement settles against. A row at 07:06 or 18:40
+    # is the feed talking to itself. An earlier version of this audit drew the line at 15:30
+    # and so counted 23 sessions of pure CAS as padded, overstating the defect by 12%.
+    in_session = (times >= SESSION_OPEN) & (times <= SESSION_CLOSE)
+    out["rows_outside_session_hours"] = int((~in_session).sum())
+    out["rows_in_closing_auction"] = int(
+        ((times > CONTINUOUS_CLOSE) & (times <= SESSION_CLOSE)).sum()
+    )
     out["first_minute"] = stamps.min().strftime("%H:%M")
     out["last_minute"] = stamps.max().strftime("%H:%M")
     out["distinct_minutes"] = int(frame.minute_ts.nunique())
@@ -62,6 +82,16 @@ def audit_session(path_str: str) -> dict[str, Any]:
     out["duplicate_symbol_minutes"] = int(duplicates)
 
     # 4. The underlying disagreeing with itself inside one minute.
+    #
+    # Everything below this point measures the market, so it measures the rows the backtester
+    # will actually see. Run on the unfiltered frame, the stalled-feed check simply
+    # re-detected defect 1 — 163 of its 165 hits were the padded sessions — and a 07:06
+    # print beside the 09:15 open registered as a 2% minute-to-minute jump.
+    frame = frame[in_session]
+    if frame.empty:
+        out["no_in_session_rows"] = True
+        return out
+    times = times[in_session]
     spots = frame.dropna(subset=["spot"])
     if not spots.empty:
         spread = spots.groupby("minute_ts").spot.agg(lambda s: s.max() - s.min())
@@ -111,8 +141,11 @@ def audit_session(path_str: str) -> dict[str, Any]:
     unique_strikes = sorted(strikes.unique())
     out["distinct_strikes"] = len(unique_strikes)
     if len(unique_strikes) > 2:
-        steps = [round(b - a, 2) for a, b in zip(unique_strikes, unique_strikes[1:], strict=False)]
-        base = min(steps)
+        steps = [round(b - a, 2) for a, b in pairwise(unique_strikes)]
+        # The MODE, not the minimum. NIFTY lists a 50-point ladder near the money and a
+        # 100-point one in the wings, so `min` made the ordinary wing spacing look like a
+        # hole in every session that had both.
+        base = Counter(steps).most_common(1)[0][0]
         out["strike_ladder_holes"] = int(sum(1 for step in steps if step > base + 0.01))
     # 9. A side missing its pair — a strike listed as a call but not a put.
     calls = set(strikes[parts[3] == "CE"])
@@ -153,9 +186,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  FOUND {label}: {len(hits)} sessions ({share:.1f}%) — worst {worst}")
 
     print("TIMESTAMPS")
-    report("rows_outside_session_hours", "rows outside 09:15-15:30")
+    report("rows_outside_session_hours", "rows outside 09:15-16:00 (feed padding)")
+    report("rows_in_closing_auction", "rows in the closing auction, 15:30-16:00 (market, kept)")
     report("rows_on_another_date", "rows stamped with a different date")
-    report("distinct_minutes", "more than 380 distinct minutes", threshold=380)
+    report("distinct_minutes", "more than 406 distinct minutes", threshold=406)
     print("\nINTEGRITY")
     report("duplicate_symbol_minutes", "same instrument twice in one minute")
     report("minutes_with_inconsistent_spot", "spot disagreeing with itself in a minute")

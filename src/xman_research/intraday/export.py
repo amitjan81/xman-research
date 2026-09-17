@@ -54,11 +54,19 @@ def export_run(
     underlying: str,
     window_stats: WindowStats,
     out_dir: Path = DEFAULT_EXPORT_DIR,
-    lookback: int = 14,
-    atr_multiple: float = 0.75,
-    bollinger_sigma: float = 1.5,
+    lookback: int | None = None,
+    atr_multiple: float | None = None,
+    bollinger_sigma: float | None = None,
 ) -> Path:
-    """Write one run's trades, with their sessions' spot paths and bands, as JSON."""
+    """Write one run's trades, with their sessions' spot paths and bands, as JSON.
+
+    **The band widths come from the run's own parameters unless overridden.** Hardcoding
+    0.75x drew the 0.75 band under an arm that traded the 1.0 band — a chart showing a rule
+    the run did not follow, which is worse than no chart, because it looks like evidence.
+    """
+    lookback = _param(run, "lookback_sessions", lookback, 14)
+    atr_multiple = _param(run, "atr_multiple", atr_multiple, 0.75)
+    bollinger_sigma = _param(run, "bollinger_sigma", bollinger_sigma, 1.5)
     trades = [dict(cycle) for cycle in run.cycles]
     realised = _realised_by_key(run)
     sessions = sorted({trade["session_date"] for trade in trades})
@@ -105,6 +113,14 @@ def export_run(
     return destination
 
 
+def _param(run: Any, name: str, override: Any, default: Any) -> Any:
+    """An explicit override, else the run's own parameter, else the study's default."""
+    if override is not None:
+        return override
+    value = getattr(run.config.params, name, None)
+    return default if value is None else value
+
+
 def _spot_path(corpus_root: Path, underlying: str, session_date: str) -> dict[str, Any] | None:
     """The session's index path, as a start time, an interval and a list of prices."""
     path = corpus_root / underlying / f"{session_date}.parquet"
@@ -117,6 +133,13 @@ def _spot_path(corpus_root: Path, underlying: str, session_date: str) -> dict[st
     if spots.empty:
         return None
     times = ist_stamps(spots)
+    # The compact form is a start, an interval and a list — it has no way to say "this
+    # minute did not print". A gap would shift every later value and mis-anchor 10:00, so a
+    # non-contiguous session is refused rather than drawn wrong. No captured session has
+    # one; this is the check that keeps that true.
+    minutes = times.dt.hour * 60 + times.dt.minute
+    if len(minutes) > 1 and not (minutes.diff().iloc[1:] == 1).all():
+        return None
     return {
         "start": times.iloc[0].strftime("%H:%M"),
         "interval_seconds": 60,
