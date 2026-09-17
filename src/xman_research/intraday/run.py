@@ -27,6 +27,7 @@ from xman_research.backtest import (
 from xman_research.backtest.costs import Side
 from xman_research.intraday.dynamic import DynamicParameters, DynamicStrangle
 from xman_research.intraday.strangle import IntradayStrangle, SpotStop, StrangleParameters
+from xman_research.intraday.window_stats import load_window_stats
 from xman_research.overlay.fills import AbsoluteSlippageFillModel
 from xman_research.session_store import DEFAULT_CORPUS_ROOT, SessionStore
 from xman_research.validation.series import RunEvidence
@@ -214,7 +215,12 @@ def run_dynamic(config: DynamicRunConfig) -> StrangleRun:
         first=dt.time(9, 20), last=dt.time(15, 25), minutes=config.decision_minutes
     )
     store = SessionStore(root=config.corpus_root)
-    strategy = DynamicStrangle(params=config.params)
+    strategy = DynamicStrangle(
+        params=config.params,
+        window_stats=load_window_stats(
+            corpus_root=config.corpus_root, underlying=config.underlying
+        ),
+    )
     resolution = store.resolve(config.underlying, config.start, config.end)
     gap_reason = None
     if not resolution.is_complete:
@@ -275,10 +281,22 @@ def strangle_metrics(
     years = (result.end - result.start).days / 365.25
     facts = drawdown(returns) if sessions else None
 
-    realised = _pnl_by_session(result)
+    # **Attribution is per leg where the strategy trades legs, per session where it trades
+    # positions.** The static strangle opens one position a session, so session-level
+    # attribution is exact. The dynamic variant can sell a call and a put on the same session
+    # at different times and close them separately — giving both legs the session's whole P&L
+    # double-counted every win and every loss, and made the win rate and profit factor
+    # meaningless while leaving net P&L correct. Legs carry a `symbol`; positions do not.
     cycles = [dict(cycle) for cycle in strategy.completed_cycles]
+    by_leg = _pnl_by_leg(result)
+    by_session = _pnl_by_session(result)
     for cycle in cycles:
-        cycle["realised_pnl"] = realised.get(cycle["session_date"], 0.0)
+        if "symbol" in cycle:
+            cycle["realised_pnl"] = by_leg.get(
+                (cycle["session_date"], cycle["symbol"]), 0.0
+            )
+        else:
+            cycle["realised_pnl"] = by_session.get(cycle["session_date"], 0.0)
     wins = [c["realised_pnl"] for c in cycles if c["realised_pnl"] > 0]
     losses = [c["realised_pnl"] for c in cycles if c["realised_pnl"] <= 0]
 
@@ -330,6 +348,21 @@ def strangle_metrics(
         "declines": _declines(strategy),
         "median_credit_pct_of_spot": _median_credit(strategy),
     }
+
+
+def _pnl_by_leg(result: BacktestResult) -> dict[tuple[str, str], float]:
+    """Net rupees per (session, instrument) — the unit a leg-trading strategy works in."""
+    totals: dict[tuple[str, str], float] = {}
+    for fill in result.fills:
+        if not fill.filled:
+            continue
+        key = (fill.session_date.isoformat(), fill.trading_symbol)
+        direction = 1.0 if fill.side is Side.SELL else -1.0
+        totals[key] = totals.get(key, 0.0) + direction * fill.gross_value - fill.costs.total
+    for settlement in result.settlements:
+        key = (settlement.session_date.isoformat(), settlement.trading_symbol)
+        totals[key] = totals.get(key, 0.0) + settlement.cash_flow - settlement.costs.total
+    return totals
 
 
 def _pnl_by_session(result: BacktestResult) -> dict[str, float]:

@@ -47,6 +47,7 @@ from typing import Any
 from xman_research.backtest.costs import Side
 from xman_research.backtest.engine import BookView, TradeIntent
 from xman_research.backtest.market import OptionType, SessionView
+from xman_research.intraday.window_stats import WindowStats
 from xman_research.overlay.greeks import bs_delta, year_fraction
 
 __all__ = ["DynamicParameters", "DynamicStrangle", "RangeMethod"]
@@ -56,6 +57,17 @@ class RangeMethod(StrEnum):
     OPENING_RANGE = "opening_range"
     PERCENT_FROM_OPEN = "percent_from_open"
     IV_MOVE = "iv_move"
+    ATR_WINDOW = "atr_window"
+    """The mean 10:00-15:00 range of the last N sessions, applied to today's 10:00 print.
+
+    Measured on the *window*, not the session: a whole-day ATR includes the opening gap and
+    the closing half hour, and this strategy is exposed to neither."""
+    BOLLINGER = "bollinger"
+    """Standard deviations of the last N sessions' in-window close-to-open move.
+
+    The Bollinger idea adapted to the scenario: the centre is today's 10:00 print rather than
+    a moving average, because the position is opened from there and it is distance from *that*
+    price which decides whether a leg is sold."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +81,12 @@ class DynamicParameters:
     """For PERCENT_FROM_OPEN: half-width as a fraction of the opening print."""
     iv_move_multiple: float = 1.0
     """For IV_MOVE: how many expected moves from the open the bound sits at."""
+    lookback_sessions: int = 14
+    """For ATR_WINDOW and BOLLINGER: how many prior sessions the statistic is taken over."""
+    atr_multiple: float = 1.0
+    """For ATR_WINDOW: bounds at this multiple of the average in-window range."""
+    bollinger_sigma: float = 1.5
+    """For BOLLINGER: bounds at this many standard deviations of the in-window move."""
 
     short_delta_target: float = 0.15
     delta_band: tuple[float, float] = (0.11, 0.19)
@@ -119,6 +137,8 @@ class DynamicStrangle:
     """Sell the call at the top of the range, the put at the bottom, each on its own."""
 
     params: DynamicParameters = field(default_factory=DynamicParameters)
+    window_stats: WindowStats | None = None
+    """Required by ATR_WINDOW and BOLLINGER; unused by the other three methods."""
 
     _session: dt.date | None = field(default=None, init=False, repr=False)
     _bounds: tuple[float, float] | None = field(default=None, init=False, repr=False)
@@ -211,6 +231,42 @@ class DynamicStrangle:
                 opening * (1.0 - params.range_width_pct),
                 opening * (1.0 + params.range_width_pct),
             )
+        elif params.range_method in (RangeMethod.ATR_WINDOW, RangeMethod.BOLLINGER):
+            if self.window_stats is None:
+                return None
+            bands = self.window_stats.bands_for(
+                session.session_date, lookback=params.lookback_sessions
+            )
+            # **The anchor is the 10:00 print, not the session open.** The position is opened
+            # from where the index is when the window starts, so it is distance from there
+            # that decides whether a bound is touched.
+            if params.range_method is RangeMethod.ATR_WINDOW:
+                width = None if bands.atr_pct is None else bands.atr_pct * params.atr_multiple
+            else:
+                width = (
+                    None
+                    if bands.sigma_pct is None
+                    else bands.sigma_pct * params.bollinger_sigma
+                )
+            if width is None or width <= 0:
+                return None
+            self._bounds = (spot * (1.0 - width), spot * (1.0 + width))
+            self._log(
+                session.session_date,
+                rule="range_set",
+                outcome="armed",
+                detail={
+                    "minute": minute.isoformat(),
+                    "lower": self._bounds[0],
+                    "upper": self._bounds[1],
+                    "width_pct": 2 * width,
+                    "anchor": spot,
+                    "lookback_observations": bands.observations,
+                    "atr_pct": bands.atr_pct,
+                    "sigma_pct": bands.sigma_pct,
+                },
+            )
+            return self._bounds
         else:  # IV_MOVE
             opening = session.spot_at(session.minutes()[0]) or spot
             implied = self._atm_iv(session, minute)

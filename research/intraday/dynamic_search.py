@@ -126,7 +126,7 @@ def _run(job: tuple[str, Any]) -> dict[str, Any]:
             "exit_rules": metrics["exit_rules"],
             "exit_pnl": metrics["exit_pnl"],
         }
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         return {"label": label, "error": f"{type(error).__name__}: {error}"[:160]}
 
 
@@ -154,7 +154,10 @@ def main(argv: list[str] | None = None) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
 
     windows = (
-        [("IS", (WINDOW_START, IN_SAMPLE_END)), ("OOS", (IN_SAMPLE_END + dt.timedelta(days=1), WINDOW_END))]
+        [
+            ("IS", (WINDOW_START, IN_SAMPLE_END)),
+            ("OOS", (IN_SAMPLE_END + dt.timedelta(days=1), WINDOW_END)),
+        ]
         if args.split
         else [("FULL", (WINDOW_START, WINDOW_END))]
     )

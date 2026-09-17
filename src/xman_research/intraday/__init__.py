@@ -17,6 +17,7 @@ from xman_research.intraday.run import (
     strangle_metrics,
 )
 from xman_research.intraday.strangle import IntradayStrangle, SpotStop, StrangleParameters
+from xman_research.intraday.window_stats import WindowStats, load_window_stats
 
 __all__ = [
     "DynamicParameters",
@@ -28,7 +29,9 @@ __all__ = [
     "StrangleParameters",
     "StrangleRun",
     "StrangleRunConfig",
+    "WindowStats",
     "decision_grid",
+    "load_window_stats",
     "run_dynamic",
     "run_strangle",
     "strangle_metrics",
