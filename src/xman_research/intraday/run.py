@@ -25,13 +25,21 @@ from xman_research.backtest import (
     run_backtest,
 )
 from xman_research.backtest.costs import Side
+from xman_research.intraday.dynamic import DynamicParameters, DynamicStrangle
 from xman_research.intraday.strangle import IntradayStrangle, SpotStop, StrangleParameters
 from xman_research.overlay.fills import AbsoluteSlippageFillModel
 from xman_research.session_store import DEFAULT_CORPUS_ROOT, SessionStore
 from xman_research.validation.series import RunEvidence
 from xman_research.validation.statistics import annualised_sharpe_ratio, drawdown
 
-__all__ = ["StrangleRun", "StrangleRunConfig", "decision_grid", "run_strangle"]
+__all__ = [
+    "DynamicRunConfig",
+    "StrangleRun",
+    "StrangleRunConfig",
+    "decision_grid",
+    "run_dynamic",
+    "run_strangle",
+]
 
 DEFAULT_TRIAL_LOG = Path("/home/qa/runtime/data/research/trial_log.db")
 
@@ -48,6 +56,23 @@ HYPOTHESIS = HypothesisRecord(
     ),
     thresholds={"reward_to_risk": 1.0, "max_drawdown_pct_of_capital": 0.10},
     predictors=["short_delta", "spot_move", "time_of_day", "days_to_expiry"],
+)
+
+
+DYNAMIC_HYPOTHESIS = HypothesisRecord(
+    name="Dynamic intraday strangle: sell each leg when NIFTY reaches its bound",
+    mechanism=(
+        "Selling the call only after the index has rallied to the top of a range, and the "
+        "put only after it has fallen to the bottom, sells each leg richer and leaves a "
+        "trending session short one side rather than both."
+    ),
+    null_hypothesis=(
+        "Selling on touch is no better than selling both legs at a fixed time, because the "
+        "bound is where a breakout begins and the premium gained is paid back in the days "
+        "the range fails."
+    ),
+    thresholds={"reward_to_risk": 1.0, "max_drawdown_pct_of_capital": 0.10},
+    predictors=["range_width", "spot_at_touch", "time_of_touch"],
 )
 
 
@@ -152,6 +177,78 @@ def run_strangle(config: StrangleRunConfig) -> StrangleRun:
         session.close()
     return StrangleRun(
         config=config,
+        result=result,
+        metrics=metrics,
+        cycles=strategy.completed_cycles,
+        journal=strategy.journal,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class DynamicRunConfig:
+    """One run of the dynamic (sell-on-touch) variant.
+
+    Separate from :class:`StrangleRunConfig` because the parameters are different, and
+    deliberately sharing everything else — window, capital, slippage, participation caps,
+    metrics — so a comparison against the static strangle is a comparison of the rule and
+    not of the harness.
+    """
+
+    underlying: str = "NIFTY"
+    start: dt.date = dt.date(2021, 9, 20)
+    end: dt.date = dt.date(2026, 9, 15)
+    params: DynamicParameters = field(default_factory=DynamicParameters)
+    capital: float = 10_000_000.0
+    slippage_rupees: float = 0.25
+    participation_volume_pct: float = 0.05
+    participation_oi_pct: float = 0.02
+    decision_minutes: int = 5
+    corpus_root: Path = DEFAULT_CORPUS_ROOT
+    trial_log: Path = DEFAULT_TRIAL_LOG
+    label: str = "dynamic"
+
+
+def run_dynamic(config: DynamicRunConfig) -> StrangleRun:
+    """The dynamic variant, through the same engine and the same metrics."""
+    times = decision_grid(
+        first=dt.time(9, 20), last=dt.time(15, 25), minutes=config.decision_minutes
+    )
+    store = SessionStore(root=config.corpus_root)
+    strategy = DynamicStrangle(params=config.params)
+    resolution = store.resolve(config.underlying, config.start, config.end)
+    gap_reason = None
+    if not resolution.is_complete:
+        gap_reason = (
+            "Dynamic strangle study: the captured range has known holes and the arm measures "
+            f"what was captured. {resolution.summary()}"
+        )
+    backtest_config = BacktestConfig(
+        underlying=config.underlying,
+        starting_cash=config.capital,
+        decision_times=times,
+        fill_model=AbsoluteSlippageFillModel(rupees_per_unit=config.slippage_rupees),
+        limits=ParticipationLimits(
+            max_pct_of_bar_volume=config.participation_volume_pct,
+            max_pct_of_open_interest=config.participation_oi_pct,
+        ),
+        gap_reason=gap_reason,
+    )
+    session = open_session(config.trial_log)
+    try:
+        with session.trial(
+            DYNAMIC_HYPOTHESIS,
+            data_window=DataWindow(config.start, config.end),
+            params={"arm": config.label, **dict(strategy.parameters())},
+        ) as trial:
+            result = run_backtest(trial, store=store, strategy=strategy, config=backtest_config)
+            metrics = strangle_metrics(
+                result=result, strategy=strategy, capital=config.capital
+            )
+            trial.record_metrics({k: v for k, v in metrics.items() if not isinstance(v, dict)})
+    finally:
+        session.close()
+    return StrangleRun(
+        config=config,  # type: ignore[arg-type]
         result=result,
         metrics=metrics,
         cycles=strategy.completed_cycles,

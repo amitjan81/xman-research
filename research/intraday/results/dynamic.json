@@ -1,0 +1,324 @@
+[
+  {
+    "label": "FULL_CONTROL_static_1200",
+    "trades": 239,
+    "net": 409128.9025093876,
+    "on_margin": 0.14454151816871677,
+    "maxdd": 0.01258215804897606,
+    "win_rate": 0.7698744769874477,
+    "profit_factor": 1.5692643725529547,
+    "worst_trade_pct": -0.004348363177745,
+    "exit_rules": {
+      "exit_time": 137,
+      "stop_move_from_entry": 26,
+      "profit_take": 75,
+      "unknown": 1
+    },
+    "exit_pnl": {
+      "exit_time": 285563.66473622737,
+      "stop_move_from_entry": -377727.9051279761,
+      "profit_take": 501282.72948134044,
+      "unknown": 0.0
+    }
+  },
+  {
+    "label": "FULL_dyn_openrange_1000",
+    "trades": 279,
+    "net": 11152.815205447376,
+    "on_margin": 0.003978136941830767,
+    "maxdd": 0.014994592593427038,
+    "win_rate": 0.7885304659498208,
+    "profit_factor": 1.293518045224002,
+    "worst_trade_pct": -0.004035750082092,
+    "exit_rules": {
+      "exit_time": 69,
+      "profit_take": 176,
+      "stop_spot_move": 33,
+      "filled_away": 1
+    },
+    "exit_pnl": {
+      "exit_time": -22859.527855341512,
+      "profit_take": 934684.4314667146,
+      "stop_spot_move": -655890.290549116,
+      "filled_away": 0.0
+    }
+  },
+  {
+    "label": "FULL_dyn_openrange_1030",
+    "trades": 279,
+    "net": 11152.815205447376,
+    "on_margin": 0.003978136941830767,
+    "maxdd": 0.014994592593427038,
+    "win_rate": 0.7885304659498208,
+    "profit_factor": 1.293518045224002,
+    "worst_trade_pct": -0.004035750082092,
+    "exit_rules": {
+      "exit_time": 69,
+      "profit_take": 176,
+      "stop_spot_move": 33,
+      "filled_away": 1
+    },
+    "exit_pnl": {
+      "exit_time": -22859.527855341512,
+      "profit_take": 934684.4314667146,
+      "stop_spot_move": -655890.290549116,
+      "filled_away": 0.0
+    }
+  },
+  {
+    "label": "FULL_dyn_openrange_1100",
+    "trades": 279,
+    "net": 11152.815205447376,
+    "on_margin": 0.003978136941830767,
+    "maxdd": 0.014994592593427038,
+    "win_rate": 0.7885304659498208,
+    "profit_factor": 1.293518045224002,
+    "worst_trade_pct": -0.004035750082092,
+    "exit_rules": {
+      "exit_time": 69,
+      "profit_take": 176,
+      "stop_spot_move": 33,
+      "filled_away": 1
+    },
+    "exit_pnl": {
+      "exit_time": -22859.527855341512,
+      "profit_take": 934684.4314667146,
+      "stop_spot_move": -655890.290549116,
+      "filled_away": 0.0
+    }
+  },
+  {
+    "label": "FULL_dyn_pct0.3",
+    "trades": 216,
+    "net": -32708.50618398562,
+    "on_margin": -0.011739031724312742,
+    "maxdd": 0.02075395204388867,
+    "win_rate": 0.7916666666666666,
+    "profit_factor": 1.1780636540117477,
+    "worst_trade_pct": -0.00399423707518,
+    "exit_rules": {
+      "exit_time": 50,
+      "profit_take": 128,
+      "stop_spot_move": 37,
+      "filled_away": 1
+    },
+    "exit_pnl": {
+      "exit_time": 20302.253597196024,
+      "profit_take": 750585.49973577,
+      "stop_spot_move": -637244.8992922559,
+      "filled_away": 0.0
+    }
+  },
+  {
+    "label": "FULL_dyn_pct0.4",
+    "trades": 177,
+    "net": 97223.26480949298,
+    "on_margin": 0.0348932777155898,
+    "maxdd": 0.010594921875023033,
+    "win_rate": 0.8135593220338984,
+    "profit_factor": 1.390111461842639,
+    "worst_trade_pct": -0.003965400693216,
+    "exit_rules": {
+      "exit_time": 42,
+      "profit_take": 107,
+      "stop_spot_move": 28
+    },
+    "exit_pnl": {
+      "exit_time": 35965.458609345005,
+      "profit_take": 600026.0339764839,
+      "stop_spot_move": -437665.6703990569
+    }
+  },
+  {
+    "label": "FULL_dyn_pct0.6",
+    "trades": 110,
+    "net": 60791.55547904037,
+    "on_margin": 0.022537015936187735,
+    "maxdd": 0.005730653018188836,
+    "win_rate": 0.7909090909090909,
+    "profit_factor": 1.3102421842825804,
+    "worst_trade_pct": -0.0037889704138399996,
+    "exit_rules": {
+      "exit_time": 37,
+      "profit_take": 57,
+      "stop_spot_move": 15,
+      "filled_away": 1
+    },
+    "exit_pnl": {
+      "exit_time": -23084.369536493996,
+      "profit_take": 311821.226386658,
+      "stop_spot_move": -195346.14240568603,
+      "filled_away": 0.0
+    }
+  },
+  {
+    "label": "FULL_dyn_pct0.8",
+    "trades": 74,
+    "net": 93829.45368018746,
+    "on_margin": 0.06731144684927755,
+    "maxdd": 0.004613085381198681,
+    "win_rate": 0.8243243243243243,
+    "profit_factor": 1.7874727060435305,
+    "worst_trade_pct": -0.002435665137504,
+    "exit_rules": {
+      "exit_time": 27,
+      "profit_take": 37,
+      "stop_spot_move": 9,
+      "filled_away": 1
+    },
+    "exit_pnl": {
+      "exit_time": -10545.193111046998,
+      "profit_take": 203058.752470106,
+      "stop_spot_move": -76273.032338034,
+      "filled_away": 0.0
+    }
+  },
+  {
+    "label": "FULL_dyn_ivmove0.75",
+    "trades": 45,
+    "net": 114329.18232940882,
+    "on_margin": 0.08145871488080166,
+    "maxdd": 0.0018296444236138778,
+    "win_rate": 0.8444444444444444,
+    "profit_factor": 3.414702094684199,
+    "worst_trade_pct": -0.0014957154118345,
+    "exit_rules": {
+      "exit_time": 17,
+      "profit_take": 25,
+      "stop_spot_move": 3
+    },
+    "exit_pnl": {
+      "exit_time": 1230.542544555004,
+      "profit_take": 126801.16277291802,
+      "stop_spot_move": -13702.522988067001
+    }
+  },
+  {
+    "label": "FULL_dyn_ivmove1",
+    "trades": 13,
+    "net": 18702.069489337504,
+    "on_margin": 0.01367276514858999,
+    "maxdd": 0.001970788481329792,
+    "win_rate": 0.8461538461538461,
+    "profit_factor": 1.7337023952911683,
+    "worst_trade_pct": -0.0016421197286335,
+    "exit_rules": {
+      "exit_time": 4,
+      "stop_spot_move": 3,
+      "profit_take": 6
+    },
+    "exit_pnl": {
+      "exit_time": 4917.8778632349995,
+      "stop_spot_move": -22162.554936902998,
+      "profit_take": 35946.746563005
+    }
+  },
+  {
+    "label": "FULL_dyn_ivmove1.5",
+    "trades": 1,
+    "net": 433.99138164520264,
+    "on_margin": 0.00033344422621228893,
+    "maxdd": 0.0,
+    "win_rate": 1.0,
+    "profit_factor": null,
+    "worst_trade_pct": 4.339913816450002e-05,
+    "exit_rules": {
+      "exit_time": 1
+    },
+    "exit_pnl": {
+      "exit_time": 433.99138164500016
+    }
+  },
+  {
+    "label": "FULL_dyn_stop0.50",
+    "trades": 279,
+    "net": 125698.13102285564,
+    "on_margin": 0.04483570913080933,
+    "maxdd": 0.0076768380476184075,
+    "win_rate": 0.7383512544802867,
+    "profit_factor": 1.5113905164072137,
+    "worst_trade_pct": -0.0031722659154885,
+    "exit_rules": {
+      "stop_spot_move": 64,
+      "profit_take": 172,
+      "exit_time": 42,
+      "filled_away": 1
+    },
+    "exit_pnl": {
+      "stop_spot_move": -584381.5482639561,
+      "profit_take": 870285.6160731636,
+      "exit_time": 62492.05876073752,
+      "filled_away": 0.0
+    }
+  },
+  {
+    "label": "FULL_dyn_stop0.75",
+    "trades": 279,
+    "net": 11152.815205447376,
+    "on_margin": 0.003978136941830767,
+    "maxdd": 0.014994592593427038,
+    "win_rate": 0.7885304659498208,
+    "profit_factor": 1.293518045224002,
+    "worst_trade_pct": -0.004035750082092,
+    "exit_rules": {
+      "exit_time": 69,
+      "profit_take": 176,
+      "stop_spot_move": 33,
+      "filled_away": 1
+    },
+    "exit_pnl": {
+      "exit_time": -22859.527855341512,
+      "profit_take": 934684.4314667146,
+      "stop_spot_move": -655890.290549116,
+      "filled_away": 0.0
+    }
+  },
+  {
+    "label": "FULL_dyn_stop1.00",
+    "trades": 279,
+    "net": 202375.16555808298,
+    "on_margin": 0.07218591067684002,
+    "maxdd": 0.008072972169761012,
+    "win_rate": 0.8100358422939068,
+    "profit_factor": 1.5777295449939612,
+    "worst_trade_pct": -0.005549890051668,
+    "exit_rules": {
+      "exit_time": 86,
+      "profit_take": 179,
+      "stop_spot_move": 13,
+      "filled_away": 1
+    },
+    "exit_pnl": {
+      "exit_time": -197684.76565389158,
+      "profit_take": 944908.4334810406,
+      "stop_spot_move": -323828.262539295,
+      "filled_away": 0.0
+    }
+  },
+  {
+    "label": "FULL_dyn_stop1.50",
+    "trades": 279,
+    "net": 257374.60983400047,
+    "on_margin": 0.09180385619317241,
+    "maxdd": 0.008504739340804077,
+    "win_rate": 0.8243727598566308,
+    "profit_factor": 1.73293738048891,
+    "worst_trade_pct": -0.007552156519012,
+    "exit_rules": {
+      "exit_time": 96,
+      "profit_take": 179,
+      "stop_spot_move": 3,
+      "filled_away": 1
+    },
+    "exit_pnl": {
+      "exit_time": -267738.9651999916,
+      "profit_take": 949161.3231950747,
+      "stop_spot_move": -175676.35531628403,
+      "filled_away": 0.0
+    }
+  },
+  {
+    "label": "FULL_dyn_all_tenors",
+    "error": "SettlementWindowError: NIFTY 2023-02-02: the settlement window 15:00:00..15:30:00 holds 29 underlying bars, fewer than the 30 the rule requires. Averaging what "
+  }
+]
