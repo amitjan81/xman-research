@@ -67,8 +67,10 @@ EXPORTS: list[dict] = [
         "title": "Static strangle — expiry day, 12:00",
         "description": (
             "Sell the 0.15-delta call and put together at 12:00 on expiry day, stop on a "
-            "0.75% NIFTY move, hold to settlement. The tuned baseline every other arm is "
-            "measured against."
+            "0.75% NIFTY move, take profit at 90% of the credit, and close out between "
+            "14:45 and 15:00. The control every dynamic arm in this study is measured "
+            "against \u2014 note it closes before settlement, unlike FINDINGS' headline "
+            "configuration, so that the comparison is like for like."
         ),
         "kind": "static",
         "params": STATIC,

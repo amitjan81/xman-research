@@ -198,6 +198,27 @@ objectives on the realised path. Split at the date fixed before the search began
 just past the 10% objective. The degradation is what a 117-configuration search should be
 expected to produce, and the out-of-sample number is the one to plan against.
 
+> **Corrected for four corpus defects, 2026-09-17.** The figures in this section were
+> computed before `xman_research.corpus_hygiene` existed, and two of the defects it fixes
+> reach the overlay's entry filters directly: the session `open` ST-13's gap filter reads was
+> the feed's out-of-hours padding on 13.2% of sessions (a median of 80.6 index points wrong,
+> up to 407), and the at-the-money implied volatility ST-10's percentile floor gates on was
+> admitting solver zeros on 13.8% (a median of 4.2 vol points wrong). Re-running stage five
+> on corrected data moves **every** in-sample return down and **no** out-of-sample return at
+> all — the padding lives in 2021-22, which is the in-sample half. For the published
+> parameter set (`s_sb12_d0.22_w600`): in-sample **13.26% → 12.24% a year** on 146 → 143
+> positions; out-of-sample **15.21% → 15.21%** on 54 positions, identical to two decimals.
+> Across all fourteen configurations the in-sample fall is 0.3 to 1.8 percentage points a
+> year, and every one of them opened two to four fewer positions — trades the corrupted
+> filters had been letting through, which happened to be winners.
+>
+> **The table below is therefore overstated in its in-sample row and sound in its
+> out-of-sample one.** It is not re-derived here because the `FINAL_split` run that produced
+> it used a bespoke script that no longer exists in the tree; reconstructing it is follow-up
+> work, and until then the stage-five delta above is the honest correction to apply. The
+> out-of-sample number — which this report already says is the one to plan against — does
+> not move.
+
 | Slice | Annualised | Max DD | Sharpe | Positions |
 |---|---:|---:|---:|---:|
 | Full window, 2021-09 → 2026-09 | **12.26%** | 7.14% | 1.43 | 208 |
