@@ -264,9 +264,7 @@ class IndexOptionOverlay:
             "min_credit_ratio": params.min_credit_ratio,
             "entry_dte": list(params.entry_dte),
             "entry_sessions_before": (
-                None
-                if params.entry_sessions_before is None
-                else list(params.entry_sessions_before)
+                None if params.entry_sessions_before is None else list(params.entry_sessions_before)
             ),
             "profit_take": params.profit_take,
             "stop_multiple": params.stop_multiple,

@@ -247,9 +247,7 @@ def run_dynamic(config: DynamicRunConfig) -> StrangleRun:
             params={"arm": config.label, **dict(strategy.parameters())},
         ) as trial:
             result = run_backtest(trial, store=store, strategy=strategy, config=backtest_config)
-            metrics = strangle_metrics(
-                result=result, strategy=strategy, capital=config.capital
-            )
+            metrics = strangle_metrics(result=result, strategy=strategy, capital=config.capital)
             trial.record_metrics({k: v for k, v in metrics.items() if not isinstance(v, dict)})
     finally:
         session.close()
@@ -292,9 +290,7 @@ def strangle_metrics(
     by_session = _pnl_by_session(result)
     for cycle in cycles:
         if "symbol" in cycle:
-            cycle["realised_pnl"] = by_leg.get(
-                (cycle["session_date"], cycle["symbol"]), 0.0
-            )
+            cycle["realised_pnl"] = by_leg.get((cycle["session_date"], cycle["symbol"]), 0.0)
         else:
             cycle["realised_pnl"] = by_session.get(cycle["session_date"], 0.0)
     wins = [c["realised_pnl"] for c in cycles if c["realised_pnl"] > 0]

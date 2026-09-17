@@ -50,6 +50,7 @@ from xman_research.backtest import (
     settlement_value,
 )
 from xman_research.backtest.strategies import ShortAtmStraddle
+from xman_research.corpus_hygiene import ist_stamps
 from xman_research.session_store import DEFAULT_CORPUS_ROOT, SessionStore
 from xman_research.session_store.trading_calendar import TradingCalendar
 
@@ -272,19 +273,33 @@ def test_the_out_of_hours_print_is_not_taken_for_a_close(store: SessionStore) ->
     The fixture version of this lives in ``test_settlement_cas.py``; this one asserts that
     the corpus really does contain such a row, so the fixture is reproducing a hazard
     rather than inventing one.
+
+    **Two guards stand between that row and a settled value, and this asserts both.** The
+    corpus boundary (:mod:`xman_research.corpus_hygiene`) drops it when the session is built,
+    so it never reaches a strategy at all; the settlement window would refuse it even if it
+    did. Keeping both is the point — the first is new, and a test that only exercised it
+    would stop noticing if the second were ever removed.
     """
-    session = _sessions(store, (dt.date(2026, 8, 19), dt.date(2026, 8, 19)))[0]
+    ref = _refs(store, (dt.date(2026, 8, 19), dt.date(2026, 8, 19)))[0]
+    raw = store.load_session(ref)
+    stamps = ist_stamps(raw)
+    strays = raw[stamps.dt.time > dt.time(16, 0)]
+    assert not strays.empty, "the 18:40 row is gone from the corpus; drop this test"
+    stray_minute = ist_stamps(strays).max()
 
-    stray = session.underlying_bars()[-1]
-    assert stray.minute.time() > dt.time(16, 0), "the 18:40 row is gone; drop this test"
+    session = SessionView.from_frame(ref.session_date, UNDERLYING, raw, store.load_refdata(ref))
 
+    # Guard one: the row is not in the session the backtester sees.
+    assert session.underlying_bars()[-1].minute < stray_minute
+    assert session.minutes()[-1] < stray_minute
+
+    # Guard two: the settlement window would not have used it regardless. The stray row
+    # happens to repeat the 15:29 close, so comparing *values* would pass whether it was
+    # filtered or not. What discriminates is which minute was used — and the reason to hold
+    # this at all is that the next out-of-hours row need not be a repeat. 2026-08-04's feed
+    # moved 151 points in its last printed minute.
     settled = settlement_value(session)
-
-    # The stray row happens to repeat the 15:29 close, so comparing *values* would pass
-    # whether the window filtered it or not. What discriminates is which minute was used —
-    # and the reason to hold this at all is that the next out-of-hours row need not be a
-    # repeat. 2026-08-04's feed moved 151 points in its last printed minute.
-    assert settled.window_start != stray.minute
+    assert settled.window_start != stray_minute
     assert settled.window_start.time() < dt.time(15, 45)
 
 

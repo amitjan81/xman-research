@@ -458,9 +458,7 @@ def test_the_position_size_is_taken_from_the_book_not_from_the_order(tmp_path: P
         )
         for symbol, position in positions.items()
     }
-    strategy.decide(
-        session=view, minute=first_minute(view), book=BookView(capped, 10_000_000.0)
-    )
+    strategy.decide(session=view, minute=first_minute(view), book=BookView(capped, 10_000_000.0))
 
     assert cycle.lots == 1
     assert cycle.credit_rupees == pytest.approx(credit_at_order / ordered_lots)
@@ -521,9 +519,7 @@ def test_the_entry_window_can_be_counted_in_sessions_rather_than_calendar_days(
     )
     view = session_view(tmp_path / "calendar", friday, chain_for_expiry)
     assert (
-        calendar.decide(
-            session=view, minute=first_minute(view), book=BookView({}, 10_000_000.0)
-        )
+        calendar.decide(session=view, minute=first_minute(view), book=BookView({}, 10_000_000.0))
         == ()
     )
 

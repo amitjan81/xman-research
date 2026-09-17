@@ -43,6 +43,14 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
+from xman_research.corpus_hygiene import (
+    CONTINUOUS_CLOSE,
+    clean_iv,
+    ist_stamps,
+    session_rows,
+    underlying_spot,
+)
+
 __all__ = [
     "MINIMUM_PERCENTILE_SAMPLE",
     "VIX_SUBSTITUTION",
@@ -78,6 +86,12 @@ def _ist(minute_ts: int) -> dt.datetime:
     )
 
 
+#: Bumped when the derivation changes, so a cache built by the old one is not silently
+#: reused. v2: spot from the index's own bar in session hours, and IV that cannot be a
+#: volatility no longer enters ``atm_iv``.
+DERIVATION = "v3"
+
+
 def build_daily_frame(*, corpus_root: Path, underlying: str) -> pd.DataFrame:
     """Scan every captured session and return one row per session.
 
@@ -92,10 +106,17 @@ def build_daily_frame(*, corpus_root: Path, underlying: str) -> pd.DataFrame:
         frame = pq.read_table(
             path, columns=["minute_ts", "symbol", "iv", "close", "spot"]
         ).to_pandas()
-        spots = frame.dropna(subset=["spot"])
+        spots = underlying_spot(frame, underlying, session_date)
         if spots.empty:
             continue
-        spots = spots.sort_values("minute_ts")
+        # ``open`` and ``close`` here feed the trend, gap and realised-volatility filters —
+        # measurements of what the index *did* while it traded. The closing auction's
+        # equilibrium print is not a minute of trading and does not belong in them, so this
+        # series stops at the continuous close even though the session runs past it.
+        continuous = spots[ist_stamps(spots).dt.time <= CONTINUOUS_CLOSE]
+        if not continuous.empty:
+            spots = continuous
+        frame = session_rows(frame, session_date)
         options = frame[frame.symbol.str.contains("-", regex=False)]
         row: dict[str, object] = {
             "session_date": session_date,
@@ -112,7 +133,10 @@ def build_daily_frame(*, corpus_root: Path, underlying: str) -> pd.DataFrame:
             row["expiry"] = expiry
             row["dte"] = (expiry - session_date).days
             last_minute = options.minute_ts.max()
-            snapshot = options[(options.minute_ts == last_minute) & options.iv.notna()]
+            # An IV of zero is a solver that did not converge, not a quiet option, and this
+            # average gates whether the strategy trades at all (ST-10's percentile floor).
+            usable_iv = options.iv.map(clean_iv)
+            snapshot = options[(options.minute_ts == last_minute) & usable_iv.notna()]
             if not snapshot.empty:
                 spot = float(spots.spot.iloc[-1])
                 atm = snapshot.strike.iloc[(snapshot.strike - spot).abs().argsort()].iloc[0]
@@ -124,7 +148,7 @@ def build_daily_frame(*, corpus_root: Path, underlying: str) -> pd.DataFrame:
 
 
 def _cache_path(root: Path, underlying: str) -> Path:
-    return root / f"daily_context_{underlying}.parquet"
+    return root / f"daily_context_{underlying}_{DERIVATION}.parquet"
 
 
 def load_context(

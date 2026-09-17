@@ -28,9 +28,9 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import pyarrow.parquet as pq
 
+from xman_research.corpus_hygiene import ist_stamps, underlying_spot
 from xman_research.intraday.window_stats import WindowStats
 
 __all__ = ["DEFAULT_EXPORT_DIR", "SCHEMA_VERSION", "export_run"]
@@ -110,13 +110,13 @@ def _spot_path(corpus_root: Path, underlying: str, session_date: str) -> dict[st
     path = corpus_root / underlying / f"{session_date}.parquet"
     if not path.is_file():
         return None
-    frame = pq.read_table(path, columns=["minute_ts", "spot"]).to_pandas()
-    spots = frame.dropna(subset=["spot"]).sort_values("minute_ts")
+    frame = pq.read_table(path, columns=["minute_ts", "symbol", "spot"]).to_pandas()
+    # The index's own bar, in session hours — not the spot stamped on each option row, which
+    # disagrees with itself inside a minute on a third of sessions.
+    spots = underlying_spot(frame, underlying, dt.date.fromisoformat(session_date))
     if spots.empty:
         return None
-    # One print per minute: the corpus repeats spot on every option row of the minute.
-    spots = spots.groupby("minute_ts", as_index=False).spot.last()
-    times = pd.to_datetime(spots.minute_ts, unit="us", utc=True).dt.tz_convert(_IST)
+    times = ist_stamps(spots)
     return {
         "start": times.iloc[0].strftime("%H:%M"),
         "interval_seconds": 60,
@@ -128,8 +128,10 @@ def _anchor_at(path: dict[str, Any], when: dt.time) -> float | None:
     """The price at a given clock time, from a compact path."""
     start = dt.datetime.strptime(path["start"], "%H:%M").time()
     offset = (
-        (when.hour * 60 + when.minute) - (start.hour * 60 + start.minute)
-    ) * 60 // path["interval_seconds"]
+        ((when.hour * 60 + when.minute) - (start.hour * 60 + start.minute))
+        * 60
+        // path["interval_seconds"]
+    )
     values = path["values"]
     if offset < 0 or offset >= len(values):
         return None

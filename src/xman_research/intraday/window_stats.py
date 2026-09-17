@@ -22,13 +22,18 @@ from pathlib import Path
 import pandas as pd
 import pyarrow.parquet as pq
 
+from xman_research.corpus_hygiene import ist_stamps, underlying_spot
+
 __all__ = ["DEFAULT_CACHE_ROOT", "WindowStats", "build_window_frame", "load_window_stats"]
 
 DEFAULT_CACHE_ROOT = Path("/home/qa/runtime/data/research/overlay")
 
 WINDOW_START = dt.time(10, 0)
 WINDOW_END = dt.time(15, 0)
-_IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+
+#: Bumped when the derivation changes, so a cache built by the old one is not silently
+#: reused. v2: spot comes from the index's own bar, in session hours only.
+DERIVATION = "v2"
 
 
 def build_window_frame(
@@ -42,11 +47,11 @@ def build_window_frame(
     rows: list[dict[str, object]] = []
     for path in sorted(glob.glob(str(corpus_root / underlying / "*.parquet"))):
         session_date = dt.date.fromisoformat(os.path.basename(path)[:10])
-        frame = pq.read_table(path, columns=["minute_ts", "spot"]).to_pandas()
-        spots = frame.dropna(subset=["spot"]).sort_values("minute_ts")
+        frame = pq.read_table(path, columns=["minute_ts", "symbol", "spot"]).to_pandas()
+        spots = underlying_spot(frame, underlying, session_date)
         if spots.empty:
             continue
-        times = pd.to_datetime(spots.minute_ts, unit="us", utc=True).dt.tz_convert(_IST).dt.time
+        times = ist_stamps(spots).dt.time
         inside = spots[(times >= start) & (times <= end)]
         if len(inside) < 10:
             continue
@@ -72,7 +77,7 @@ def build_window_frame(
 
 
 def _cache_path(root: Path, underlying: str) -> Path:
-    return root / f"window_stats_{underlying}.parquet"
+    return root / f"window_stats_{underlying}_{DERIVATION}.parquet"
 
 
 def load_window_stats(
@@ -106,9 +111,7 @@ class WindowStats:
 
     def __init__(self, frame: pd.DataFrame) -> None:
         self._frame = (
-            frame.sort_values("session_date").reset_index(drop=True)
-            if not frame.empty
-            else frame
+            frame.sort_values("session_date").reset_index(drop=True) if not frame.empty else frame
         )
         self._index = (
             {row.session_date: i for i, row in enumerate(self._frame.itertuples())}

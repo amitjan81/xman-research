@@ -29,7 +29,7 @@ import pytest
 
 from conftest import IST, SESSION_MINUTES, SESSION_OPEN
 from xman_research.backtest.costs import Confidence
-from xman_research.backtest.market import OptionType, SessionView
+from xman_research.backtest.market import Bar, OptionType, SessionView
 from xman_research.backtest.settlement import (
     METHOD_LAST_UNDERLYING_PRINT,
     SETTLEMENT_RULES,
@@ -251,8 +251,32 @@ def test_a_print_from_hours_after_the_close_is_not_the_close() -> None:
     """
     session = _session(index_rows=_index_rows(EXPIRY, late_print=(dt.time(18, 40), 25_500.0)))
 
-    assert session.underlying_bars()[-1].close == 25_500.0
-    settled = settlement_value(session)
+    # Guard one, at the corpus boundary: the row never becomes a bar at all.
+    assert all(bar.close != 25_500.0 for bar in session.underlying_bars())
+    assert session.underlying_bars()[-1].minute.time() == dt.time(15, 29)
+
+    # Guard two, at the settlement window, exercised on a session built past the boundary
+    # so the second defence is measured rather than assumed. Both are kept deliberately:
+    # the closing window is the rule, and the corpus filter is hygiene, and neither one
+    # being present is a reason to drop the other.
+    stray_minute = dt.datetime.combine(EXPIRY, dt.time(18, 40), tzinfo=IST)
+    bars = dict(session.all_bars())
+    bars[("NIFTY", stray_minute)] = Bar(
+        symbol="NIFTY",
+        minute=stray_minute,
+        open=25_500.0,
+        high=25_500.0,
+        low=25_500.0,
+        close=25_500.0,
+        volume_units=0.0,
+        open_interest_units=0.0,
+        iv=None,
+        spot=25_500.0,
+    )
+    unfiltered = SessionView(EXPIRY, "NIFTY", bars, session.universe)
+    assert unfiltered.underlying_bars()[-1].close == 25_500.0
+
+    settled = settlement_value(unfiltered)
 
     assert settled.value == pytest.approx(CLOSING_PRINT)
     assert settled.window_start.time() == dt.time(15, 29)

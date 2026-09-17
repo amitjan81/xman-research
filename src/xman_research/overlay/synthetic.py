@@ -37,10 +37,16 @@ from pathlib import Path
 
 import pandas as pd
 
+from xman_research.corpus_hygiene import underlying_spot
 from xman_research.overlay.greeks import ObservedQuote, extrapolated_wing_price, year_fraction
 from xman_research.session_store import SessionRef, SessionStore
 
 __all__ = ["DEFAULT_CACHE_ROOT", "SYNTHETIC_WING_STAMP", "SyntheticWingStore"]
+
+#: Bumped when the extension's inputs change, so a cached frame built by an older
+#: derivation is not served. v2: spot comes from the index's own bar rather than the
+#: snapshot on an arbitrary option row (see :mod:`xman_research.corpus_hygiene`).
+DERIVATION = "v2"
 
 #: Where extended session frames are kept between runs. Beside the corpus, never inside the
 #: repository: it is regenerable output, and it is large.
@@ -107,7 +113,7 @@ class SyntheticWingStore(SessionStore):
             None
             if cache_root is None
             else Path(cache_root)
-            / f"ext{int(extend_points)}_m{len(self._minutes)}_h{liquidity_haircut:g}"
+            / f"{DERIVATION}_ext{int(extend_points)}_m{len(self._minutes)}_h{liquidity_haircut:g}"
         )
         self.synthetic_rows = 0
         self.sessions_extended = 0
@@ -120,8 +126,9 @@ class SyntheticWingStore(SessionStore):
         decision grid**, so a sweep of seven arms over the same corpus was rebuilding the
         same frames seven times — about fifty minutes an arm, most of it Black-Scholes on
         bars the previous arm had already priced. The cache key carries the two parameters
-        that change the output; anything else that changes it is a code change, and the
-        cache directory is regenerable output that can simply be deleted.
+        that change the output, and :data:`DERIVATION` carries the ones that are a code
+        change — so a derivation fix invalidates the cache instead of relying on someone
+        remembering to delete it. The directory is regenerable output either way.
         """
         if self._cache_root is None:
             return None
@@ -213,7 +220,10 @@ class SyntheticWingStore(SessionStore):
         options = frame[frame.symbol.str.contains("-", regex=False)]
         if options.empty:
             return frame
-        spot_by_minute = frame.dropna(subset=["spot"]).groupby("minute_ts").spot.last().to_dict()
+        # The index's own bar is the only authority for spot; the column on an option row is
+        # that row's snapshot and disagrees inside a minute on a third of sessions.
+        own = underlying_spot(frame, ref.underlying, ref.session_date)
+        spot_by_minute = dict(zip(own.minute_ts, own.spot, strict=True))
         rows: list[dict[str, object]] = []
         for minute_ts, minute_frame in options.groupby("minute_ts"):
             moment = dt.datetime.fromtimestamp(int(minute_ts) / 1e6, dt.UTC).astimezone(_IST)

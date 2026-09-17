@@ -244,9 +244,7 @@ class DynamicStrangle:
                 width = None if bands.atr_pct is None else bands.atr_pct * params.atr_multiple
             else:
                 width = (
-                    None
-                    if bands.sigma_pct is None
-                    else bands.sigma_pct * params.bollinger_sigma
+                    None if bands.sigma_pct is None else bands.sigma_pct * params.bollinger_sigma
                 )
             if width is None or width <= 0:
                 return None
@@ -357,13 +355,13 @@ class DynamicStrangle:
     def _stopped(self, leg: _Leg, spot: float) -> bool:
         """The index has run further in the direction that hurts this leg."""
         move = (spot - leg.entry_spot) / leg.entry_spot
-        return move >= self.params.stop_move_pct if leg.role == "call" else (
-            move <= -self.params.stop_move_pct
+        return (
+            move >= self.params.stop_move_pct
+            if leg.role == "call"
+            else (move <= -self.params.stop_move_pct)
         )
 
-    def _record(
-        self, leg: _Leg, session: SessionView, minute: dt.datetime, rule: str
-    ) -> None:
+    def _record(self, leg: _Leg, session: SessionView, minute: dt.datetime, rule: str) -> None:
         self._closed.append(
             {
                 "session_date": session.session_date.isoformat(),
