@@ -79,7 +79,9 @@ EXPORTS: list[dict] = [
         "description": (
             "Sell the call only when NIFTY reaches the upper bound and the put only when it "
             "reaches the lower, where the bounds are 0.75x the average 10:00-15:00 range of "
-            "the last 14 sessions, applied to the 10:00 print."
+            "the last 14 sessions, applied to the 10:00 print. On corrected data this arm is "
+            "flat in sample (0.18%/yr on margin, PF 1.13) and strong out (2.40%/yr, PF 1.99) "
+            "\u2014 the signature of noise, and the reason the 1.0x band below is preferred."
         ),
         "kind": "dynamic",
         "params": replace(DYNAMIC, range_method=RangeMethod.ATR_WINDOW, atr_multiple=0.75),
@@ -90,18 +92,32 @@ EXPORTS: list[dict] = [
         "description": (
             "The same sell-on-touch rule with the band set at 1.5 standard deviations of the "
             "in-window close-to-open move rather than the average range. The most consistent "
-            "risk profile in the study: profit factor 3.48 in sample, 3.72 out."
+            "risk profile in the study on corrected data: 1.48%/yr on margin in sample at "
+            "profit factor 3.48, and 2.09%/yr out at 3.66 \u2014 the only arm whose two halves "
+            "agree on both the return and the shape of it."
         ),
         "kind": "dynamic",
         "params": replace(DYNAMIC, range_method=RangeMethod.BOLLINGER, bollinger_sigma=1.5),
+    },
+    {
+        "strategy_id": "dynamic-atr-wide-expiry",
+        "title": "Dynamic strangle \u2014 1.0x ATR band, expiry day",
+        "description": (
+            "The same sell-on-touch rule with the band drawn a full ATR from the 10:00 print "
+            "rather than three quarters of one. Fewer trades and better ones: profit factor "
+            "2.23 in sample and 3.88 out, against 1.13 and 1.99 for the 0.75x band."
+        ),
+        "kind": "dynamic",
+        "params": replace(DYNAMIC, range_method=RangeMethod.ATR_WINDOW, atr_multiple=1.0),
     },
     {
         "strategy_id": "dynamic-atr-all-tenors",
         "title": "Dynamic strangle — ATR band, every session",
         "description": (
             "The ATR rule applied to every session rather than expiry day only. Exported "
-            "because it is the arm that fails: negative in sample, positive out, which is "
-            "the signature of noise rather than edge."
+            "because it is the arm that fails, and every all-tenor arm fails with it: "
+            "-0.69%/yr on margin in sample at profit factor 0.64, positive out at 0.92. A rule "
+            "that loses money on 301 in-sample trades has been measured, not mis-sampled."
         ),
         "kind": "dynamic",
         "params": replace(

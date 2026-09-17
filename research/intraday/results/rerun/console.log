@@ -1,0 +1,69 @@
+=== ATR/Bollinger (owner spec) ===
+IS_CONTROL_static_expiry     n= 174 net    188,260 margin   6.65% dd   1.08% win  77.59% PF  1.39 worst  -0.43%
+IS_CONTROL_static_alltenor   n= 771 net     84,629 margin   2.99% dd   1.66% win  64.46% PF  1.06 worst  -0.43%
+IS_atr0.5_exp                n= 115 net     10,363 margin   0.38% dd   0.49% win  70.43% PF  1.04 worst  -0.40%
+IS_atr0.75_exp               n=  71 net     16,746 margin   0.62% dd   0.38% win  76.06% PF  1.13 worst  -0.38%
+IS_atr1_exp                  n=  42 net     47,576 margin   3.36% dd   0.14% win  73.81% PF  2.23 worst  -0.12%
+IS_boll1_exp                 n=  77 net      4,758 margin   0.18% dd   0.44% win  76.62% PF  1.03 worst  -0.40%
+IS_boll1.5_exp               n=  44 net     72,571 margin   5.21% dd   0.12% win  81.82% PF  3.48 worst  -0.12%
+IS_boll2_exp                 n=  18 net      1,985 margin   0.14% dd   0.15% win  66.67% PF  1.06 worst  -0.15%
+IS_atr0.5_all                n= 550 net    -14,866 margin  -0.36% dd   2.09% win  58.00% PF  0.72 worst  -0.45%
+IS_atr0.75_all               n= 301 net    -65,701 margin  -2.42% dd   1.49% win  56.81% PF  0.64 worst  -0.38%
+IS_atr1_all                  FAILED SettlementWindowError: NIFTY 2023-02-02: the settlement wind
+IS_boll1_all                 n= 355 net   -158,156 margin  -5.82% dd   2.20% win  56.34% PF  0.63 worst  -0.47%
+IS_boll1.5_all               FAILED SettlementWindowError: NIFTY 2023-02-02: the settlement wind
+IS_boll2_all                 FAILED SettlementWindowError: NIFTY 2023-02-02: the settlement wind
+IS_atr0.75_stop0.50_all      n= 301 net    -63,359 margin  -2.33% dd   1.65% win  54.49% PF  0.62 worst  -0.26%
+IS_atr0.75_stop1.00_all      n= 301 net    -61,614 margin  -2.27% dd   1.58% win  57.81% PF  0.65 worst  -0.39%
+IS_atr0.75_stop1.50_all      n= 301 net   -156,688 margin  -5.76% dd   2.50% win  57.81% PF  0.58 worst  -0.56%
+OOS_CONTROL_static_expiry    n=  65 net    160,396 margin   5.71% dd   0.40% win  75.38% PF  2.04 worst  -0.27%
+OOS_CONTROL_static_alltenor  n= 304 net    147,937 margin   5.27% dd   0.44% win  65.13% PF  1.33 worst  -0.34%
+OOS_atr0.5_exp               n=  47 net    144,253 margin   5.49% dd   0.20% win  82.98% PF  3.33 worst  -0.18%
+OOS_atr0.75_exp              n=  27 net     48,630 margin   3.50% dd   0.30% win  77.78% PF  1.99 worst  -0.31%
+OOS_atr1_exp                 n=  16 net     45,038 margin   3.29% dd   0.07% win  75.00% PF  3.88 worst  -0.07%
+OOS_boll1_exp                n=  31 net     41,539 margin   1.58% dd   0.30% win  74.19% PF  1.60 worst  -0.31%
+OOS_boll1.5_exp              n=  16 net     41,710 margin   3.05% dd   0.07% win  75.00% PF  3.66 worst  -0.07%
+OOS_boll2_exp                n=  10 net     -8,665 margin  -0.63% dd   0.28% win  60.00% PF  0.74 worst  -0.21%
+OOS_atr0.5_all               n= 210 net     -7,117 margin  -0.17% dd   1.76% win  57.14% PF  0.96 worst  -0.30%
+OOS_atr0.75_all              n= 129 net     58,621 margin   1.65% dd   0.48% win  61.24% PF  0.92 worst  -0.31%
+OOS_atr1_all                 n=  69 net    113,934 margin   4.81% dd   0.34% win  63.77% PF  1.41 worst  -0.30%
+OOS_boll1_all                n= 144 net     14,673 margin   0.35% dd   0.92% win  59.72% PF  0.78 worst  -0.31%
+OOS_boll1.5_all              n=  69 net    103,406 margin   4.36% dd   0.29% win  62.32% PF  1.32 worst  -0.22%
+OOS_boll2_all                n=  36 net        304 margin   0.02% dd   0.33% win  58.33% PF  0.80 worst  -0.21%
+OOS_atr0.75_stop0.50_all     n= 129 net     46,168 margin   1.30% dd   0.38% win  61.24% PF  0.87 worst  -0.25%
+OOS_atr0.75_stop1.00_all     n= 129 net     73,682 margin   2.07% dd   0.37% win  62.02% PF  0.98 worst  -0.32%
+OOS_atr0.75_stop1.50_all     n= 129 net     61,528 margin   1.73% dd   0.41% win  62.02% PF  0.93 worst  -0.33%
+
+=== Dynamic range methods ===
+IS_CONTROL_static_1200   n= 174 net    235,415 margin   8.32% dd   1.26% win  77.01% PF  1.46 worst  -0.43%
+IS_dyn_openrange_1000    n= 207 net    -89,460 margin  -3.19% dd   1.80% win  77.29% PF  0.86 worst  -0.40%
+IS_dyn_openrange_1030    n= 179 net     34,333 margin   1.25% dd   0.75% win  79.33% PF  1.06 worst  -0.40%
+IS_dyn_openrange_1100    n= 159 net     68,198 margin   2.48% dd   0.52% win  78.62% PF  1.22 worst  -0.40%
+IS_dyn_pct0.3            n= 159 net   -194,623 margin  -6.98% dd   2.13% win  74.84% PF  0.70 worst  -0.40%
+IS_dyn_pct0.4            n= 130 net    -49,052 margin  -1.76% dd   1.24% win  76.92% PF  0.88 worst  -0.40%
+IS_dyn_pct0.6            n=  87 net    100,554 margin   3.73% dd   0.46% win  80.46% PF  1.54 worst  -0.38%
+IS_dyn_pct0.8            n=  54 net    107,329 margin   7.74% dd   0.16% win  87.04% PF  3.27 worst  -0.16%
+IS_dyn_ivmove0.75        n=  18 net     28,027 margin   2.02% dd   0.18% win  88.89% PF  2.17 worst  -0.15%
+IS_dyn_ivmove1           n=   3 net    -10,681 margin  -0.84% dd   0.16% win  66.67% PF  0.35 worst  -0.16%
+IS_dyn_ivmove1.5         n=   0 net          0 margin   n/a  dd   0.00% win   n/a  PF  0.00 worst   0.00%
+IS_dyn_stop0.50          n= 207 net      5,058 margin   0.18% dd   0.77% win  72.46% PF  1.01 worst  -0.32%
+IS_dyn_stop0.75          n= 207 net    -89,460 margin  -3.19% dd   1.80% win  77.29% PF  0.86 worst  -0.40%
+IS_dyn_stop1.00          n= 207 net     21,958 margin   0.78% dd   0.81% win  80.68% PF  1.04 worst  -0.55%
+IS_dyn_stop1.50          n= 207 net    110,364 margin   3.94% dd   0.80% win  82.13% PF  1.22 worst  -0.76%
+IS_dyn_all_tenors        FAILED SettlementWindowError: NIFTY 2023-02-02: the settlement window 15:00:0
+OOS_CONTROL_static_1200  n=  65 net    173,714 margin   6.19% dd   0.39% win  76.92% PF  1.86 worst  -0.27%
+OOS_dyn_openrange_1000   n=  84 net     51,574 margin   1.94% dd   0.64% win  83.33% PF  1.18 worst  -0.35%
+OOS_dyn_openrange_1030   n=  74 net     44,722 margin   1.61% dd   0.67% win  81.08% PF  1.19 worst  -0.35%
+OOS_dyn_openrange_1100   n=  61 net     -2,460 margin  -0.09% dd   0.68% win  78.69% PF  0.99 worst  -0.36%
+OOS_dyn_pct0.3           n=  57 net    115,570 margin   4.23% dd   0.58% win  80.70% PF  1.68 worst  -0.32%
+OOS_dyn_pct0.4           n=  48 net     95,165 margin   3.48% dd   0.47% win  81.25% PF  1.60 worst  -0.34%
+OOS_dyn_pct0.6           n=  25 net     30,294 margin   2.17% dd   0.38% win  76.00% PF  1.35 worst  -0.33%
+OOS_dyn_pct0.8           n=  18 net     33,289 margin   2.39% dd   0.24% win  77.78% PF  1.67 worst  -0.18%
+OOS_dyn_ivmove0.75       n=  18 net     55,090 margin   3.93% dd   0.13% win  83.33% PF  4.37 worst  -0.13%
+OOS_dyn_ivmove1          n=   4 net      8,208 margin   0.60% dd   0.09% win  75.00% PF  1.91 worst  -0.09%
+OOS_dyn_ivmove1.5        n=   1 net        434 margin   0.03% dd   0.00% win 100.00% PF  0.00 worst   0.00%
+OOS_dyn_stop0.50         n=  84 net     83,783 margin   3.15% dd   0.45% win  78.57% PF  1.36 worst  -0.29%
+OOS_dyn_stop0.75         n=  84 net     51,574 margin   1.94% dd   0.64% win  83.33% PF  1.18 worst  -0.35%
+OOS_dyn_stop1.00         n=  84 net    181,521 margin   6.83% dd   0.49% win  88.10% PF  2.00 worst  -0.35%
+OOS_dyn_stop1.50         n=  84 net    158,989 margin   5.98% dd   0.72% win  88.10% PF  1.78 worst  -0.56%
+OOS_dyn_all_tenors       n= 399 net    141,386 margin   2.60% dd   1.86% win  64.16% PF  0.95 worst  -0.41%
