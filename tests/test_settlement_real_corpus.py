@@ -49,7 +49,9 @@ from xman_research.backtest import (
     run_backtest,
     settlement_value,
 )
+from xman_research.backtest.market import Bar
 from xman_research.backtest.strategies import ShortAtmStraddle
+from xman_research.corpus_hygiene import ist_stamps
 from xman_research.session_store import DEFAULT_CORPUS_ROOT, SessionStore
 from xman_research.session_store.trading_calendar import TradingCalendar
 
@@ -195,6 +197,8 @@ def test_after_the_boundary_the_chain_agrees_with_the_closing_print(
     expiries = _expiries(after)
     assert len(expiries) >= 3, "the corpus should reach at least three post-auction expiries"
 
+    superseded_gaps: list[float] = []
+    residuals: list[float] = []
     for session in expiries:
         implied = option_implied_settlement(session)
         assert implied is not None, f"{session.session_date}: no expiring chain to witness"
@@ -203,13 +207,38 @@ def test_after_the_boundary_the_chain_agrees_with_the_closing_print(
         settled = settlement_value(session)
         residual = abs(settled.value - implied.value)
         superseded = abs(_window_mean(session) - implied.value)
+        superseded_gaps.append(superseded)
+        residuals.append(residual)
 
+        # About the code, and therefore asserted on every expiry: the closing print sits
+        # within half a point of what the chain implies, and closer to it than the
+        # superseded window mean is.
         assert residual <= 0.5, f"{session.session_date}: closing print off by {residual}"
-        assert superseded >= 15.0, (
-            f"{session.session_date}: the superseded mean is only {superseded} from the "
-            "chain's view, which would make the two statistics indistinguishable here"
+        assert residual < superseded, (
+            f"{session.session_date}: the superseded window mean ({superseded}) is no "
+            f"further from the chain than the closing print ({residual})"
         )
-        assert residual * 30 < superseded
+
+    # About the *market*, and therefore asserted across the expiries rather than on each
+    # one. The gap between the superseded window mean and the chain's view is how far the
+    # index drifted through the closing auction, and on a quiet expiry it is genuinely
+    # small — 2026-09-08 came in at 7.7 points and turned this red while nothing about the
+    # settlement rule had changed. What the licence for the proxy actually needs is that
+    # the two statistics are distinguishable over the measured expiries, which is what is
+    # asserted here: a material gap somewhere, and a typical gap well clear of the
+    # half-point residual above.
+    assert max(superseded_gaps) >= 15.0, (
+        f"no measured expiry separates the two statistics at all: {superseded_gaps}"
+    )
+    assert statistics.median(superseded_gaps) >= 5.0, (
+        f"the superseded mean tracks the chain too closely to be distinguishable: {superseded_gaps}"
+    )
+    ratios = [
+        gap / max(residual, 0.01) for gap, residual in zip(superseded_gaps, residuals, strict=True)
+    ]
+    assert statistics.median(ratios) >= 30.0, (
+        f"the closing print is typically no better than the window mean: {ratios}"
+    )
 
 
 def test_before_the_boundary_the_chain_agrees_with_the_window_mean_instead(
@@ -245,19 +274,53 @@ def test_the_out_of_hours_print_is_not_taken_for_a_close(store: SessionStore) ->
     The fixture version of this lives in ``test_settlement_cas.py``; this one asserts that
     the corpus really does contain such a row, so the fixture is reproducing a hazard
     rather than inventing one.
+
+    **Two guards stand between that row and a settled value, and this asserts both.** The
+    corpus boundary (:mod:`xman_research.corpus_hygiene`) drops it when the session is built,
+    so it never reaches a strategy at all; the settlement window would refuse it even if it
+    did. Keeping both is the point — the first is new, and a test that only exercised it
+    would stop noticing if the second were ever removed.
     """
-    session = _sessions(store, (dt.date(2026, 8, 19), dt.date(2026, 8, 19)))[0]
+    ref = _refs(store, (dt.date(2026, 8, 19), dt.date(2026, 8, 19)))[0]
+    raw = store.load_session(ref)
+    stamps = ist_stamps(raw)
+    strays = raw[(stamps.dt.time > dt.time(16, 0)) & (raw.symbol == UNDERLYING)]
+    assert not strays.empty, "the 18:40 row is gone from the corpus; drop this test"
+    strays = strays.assign(_ist=ist_stamps(strays)).sort_values("_ist")
+    stray_minute = strays._ist.iloc[-1].to_pydatetime()
 
-    stray = session.underlying_bars()[-1]
-    assert stray.minute.time() > dt.time(16, 0), "the 18:40 row is gone; drop this test"
+    session = SessionView.from_frame(ref.session_date, UNDERLYING, raw, store.load_refdata(ref))
 
-    settled = settlement_value(session)
+    # Guard one: the row is not in the session the backtester sees.
+    assert session.underlying_bars()[-1].minute < stray_minute
+    assert session.minutes()[-1] < stray_minute
+
+    # Guard two: the settlement window would refuse it even if the corpus boundary had not
+    # removed it. This has to be settled on a view that CONTAINS the row — settling the
+    # filtered session would pass whether the window guard existed or not, which is what an
+    # earlier version of this test did while claiming to assert both.
+    bars = dict(session.all_bars())
+    stray_row = strays.iloc[[-1]]
+    bars[(UNDERLYING, stray_minute)] = Bar(
+        symbol=UNDERLYING,
+        minute=stray_minute,
+        open=float(stray_row.open.iloc[0]),
+        high=float(stray_row.high.iloc[0]),
+        low=float(stray_row.low.iloc[0]),
+        close=float(stray_row.close.iloc[0]),
+        volume_units=0.0,
+        open_interest_units=0.0,
+        iv=None,
+        spot=float(stray_row.close.iloc[0]),
+    )
+    unfiltered = SessionView(ref.session_date, UNDERLYING, bars, session.universe)
+    assert unfiltered.underlying_bars()[-1].minute == stray_minute
+
+    settled = settlement_value(unfiltered)
 
     # The stray row happens to repeat the 15:29 close, so comparing *values* would pass
-    # whether the window filtered it or not. What discriminates is which minute was used —
-    # and the reason to hold this at all is that the next out-of-hours row need not be a
-    # repeat. 2026-08-04's feed moved 151 points in its last printed minute.
-    assert settled.window_start != stray.minute
+    # whether the window filtered it or not. What discriminates is which minute was used.
+    assert settled.window_start != stray_minute
     assert settled.window_start.time() < dt.time(15, 45)
 
 

@@ -29,6 +29,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
+from xman_research.corpus_hygiene import clean_iv, clean_size, session_rows
+
 if TYPE_CHECKING:  # pragma: no cover - import cost is paid only by type checkers
     import pandas as pd
 
@@ -244,6 +246,11 @@ class SessionView:
         columns = frame.columns
         has_iv = "iv" in columns
         has_spot = "spot" in columns
+        # The corpus is a vendor artifact with known defects that do not raise — out-of-hours
+        # padding, unusable implied volatility, negative sizes. This is the one place a
+        # session becomes a backtest object, so it is the one place they are neutralised.
+        # See :mod:`xman_research.corpus_hygiene` for what each defect is and its measured extent.
+        frame = session_rows(frame, session_date)
         for row in frame.itertuples(index=False):
             minute = _to_ist(int(row.minute_ts))
             symbol = str(row.symbol)
@@ -254,9 +261,9 @@ class SessionView:
                 high=float(row.high),
                 low=float(row.low),
                 close=float(row.close),
-                volume_units=_finite(row.volume),
-                open_interest_units=_finite(row.oi),
-                iv=_optional(row.iv) if has_iv else None,
+                volume_units=clean_size(_optional(row.volume)),
+                open_interest_units=clean_size(_optional(row.oi)),
+                iv=clean_iv(_optional(row.iv)) if has_iv else None,
                 spot=_optional(row.spot) if has_spot else None,
             )
         return cls(session_date, underlying, bars, universe)
@@ -293,6 +300,10 @@ class SessionView:
     def underlying_bars(self) -> tuple[Bar, ...]:
         """The index's own bars, ascending by minute."""
         return self._underlying_bars
+
+    def all_bars(self) -> Mapping[tuple[str, dt.datetime], Bar]:
+        """Every bar, keyed by symbol and minute — a copy, so a caller cannot mutate one."""
+        return dict(self._bars)
 
     def spot_at(self, minute: dt.datetime) -> float | None:
         bar = self.bar(self._underlying, minute)

@@ -1,0 +1,37 @@
+All checks passed!
+IS_e_d0.08_1000        n= 176  0.14%/yr dd  0.86% win 76.70% R:R  0.03 PF  1.13 onMargin  1.73% worst -0.42% carried 0
+OOS_e_d0.08_1000       n=  74  0.85%/yr dd  0.48% win 77.03% R:R  0.12 PF  1.52 onMargin  4.43% worst -0.37% carried 0
+IS_e_d0.08_1100        n= 176  0.35%/yr dd  0.63% win 80.68% R:R  0.08 PF  1.42 onMargin  4.41% worst -0.35% carried 0
+OOS_e_d0.08_1100       n=  74 -0.26%/yr dd  1.20% win 72.97% R:R -0.03 PF  0.89 onMargin -1.35% worst -0.37% carried 0
+IS_e_d0.08_1200        n= 176  0.54%/yr dd  0.47% win 84.09% R:R  0.16 PF  1.98 onMargin  6.77% worst -0.31% carried 0
+OOS_e_d0.08_1200       n=  74  0.56%/yr dd  0.67% win 78.38% R:R  0.08 PF  1.35 onMargin  2.93% worst -0.40% carried 0
+IS_e_d0.08_1300        n= 173  0.31%/yr dd  0.55% win 86.71% R:R  0.07 PF  1.49 onMargin  3.87% worst -0.37% carried 0
+OOS_e_d0.08_1300       n=  70  0.38%/yr dd  0.77% win 72.86% R:R  0.07 PF  1.27 onMargin  1.96% worst -0.57% carried 0
+IS_e_d0.12_1000        n= 176  0.24%/yr dd  0.84% win 70.45% R:R  0.04 PF  1.14 onMargin  3.02% worst -0.42% carried 0
+OOS_e_d0.12_1000       n=  74  1.01%/yr dd  0.62% win 77.03% R:R  0.10 PF  1.44 onMargin  5.27% worst -0.44% carried 0
+IS_e_d0.12_1100        n= 176  0.62%/yr dd  0.58% win 76.70% R:R  0.12 PF  1.52 onMargin  7.79% worst -0.39% carried 0
+OOS_e_d0.12_1100       n=  74  0.07%/yr dd  0.97% win 71.62% R:R  0.01 PF  1.02 onMargin  0.35% worst -0.56% carried 0
+IS_e_d0.12_1200        n= 175  0.45%/yr dd  1.14% win 81.14% R:R  0.07 PF  1.36 onMargin  5.65% worst -0.43% carried 0
+OOS_e_d0.12_1200       n=  71  0.46%/yr dd  0.70% win 77.46% R:R  0.05 PF  1.22 onMargin  2.39% worst -0.56% carried 0
+IS_e_d0.12_1300        n= 175  0.37%/yr dd  1.00% win 84.57% R:R  0.05 PF  1.33 onMargin  4.63% worst -0.56% carried 0
+OOS_e_d0.12_1300       n=  62  1.09%/yr dd  0.28% win 75.81% R:R  0.29 PF  2.20 onMargin  5.70% worst -0.28% carried 0
+IS_e_d0.15_1000        n= 175  0.10%/yr dd  1.52% win 67.43% R:R  0.01 PF  1.04 onMargin  1.28% worst -0.42% carried 0
+OOS_e_d0.15_1000       n=  74  1.32%/yr dd  0.61% win 75.68% R:R  0.13 PF  1.52 onMargin  6.86% worst -0.44% carried 0
+IS_e_d0.15_1100        n= 174  0.55%/yr dd  0.79% win 75.29% R:R  0.08 PF  1.32 onMargin  6.92% worst -0.39% carried 0
+OOS_e_d0.15_1100       n=  72 -0.90%/yr dd  1.63% win 63.89% R:R -0.09 PF  0.76 onMargin -4.65% worst -0.52% carried 0
+IS_e_d0.15_1200        n= 174  0.66%/yr dd  1.26% win 77.01% R:R  0.10 PF  1.46 onMargin  8.32% worst -0.43% carried 0
+OOS_e_d0.15_1200       n=  65  1.19%/yr dd  0.39% win 76.92% R:R  0.20 PF  1.86 onMargin  6.19% worst -0.27% carried 0
+IS_e_d0.15_1300        n= 169  0.59%/yr dd  1.15% win 84.62% R:R  0.07 PF  1.47 onMargin  7.42% worst -0.56% carried 0
+OOS_e_d0.15_1300       n=  48  0.67%/yr dd  0.33% win 72.92% R:R  0.21 PF  1.76 onMargin  3.53% worst -0.26% carried 0
+IS_e_d0.20_1000        n= 176  0.35%/yr dd  1.32% win 65.34% R:R  0.04 PF  1.12 onMargin  4.40% worst -0.55% carried 0
+OOS_e_d0.20_1000       n=  74  0.71%/yr dd  0.98% win 70.27% R:R  0.06 PF  1.20 onMargin  3.68% worst -0.55% carried 0
+IS_e_d0.20_1100        n= 176  0.50%/yr dd  1.19% win 71.02% R:R  0.06 PF  1.21 onMargin  6.29% worst -0.52% carried 0
+OOS_e_d0.20_1100       n=  74 -0.23%/yr dd  1.41% win 66.22% R:R -0.02 PF  0.94 onMargin -1.17% worst -0.49% carried 0
+IS_e_d0.20_1200        n= 170  0.33%/yr dd  1.42% win 74.12% R:R  0.04 PF  1.14 onMargin  4.09% worst -0.55% carried 0
+OOS_e_d0.20_1200       n=  66  0.25%/yr dd  0.83% win 65.15% R:R  0.04 PF  1.11 onMargin  1.33% worst -0.43% carried 0
+IS_e_d0.20_1300        n= 144  1.03%/yr dd  0.46% win 82.64% R:R  0.16 PF  1.91 onMargin 13.06% worst -0.45% carried 0
+OOS_e_d0.20_1300       n=  50 -0.13%/yr dd  0.94% win 66.00% R:R -0.02 PF  0.93 onMargin -0.69% worst -0.52% carried 0
+
+32 configurations; null to beat is H26's -10.5%/yr intraday
+
+[exited with code 0]

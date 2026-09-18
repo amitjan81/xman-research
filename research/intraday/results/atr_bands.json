@@ -1,0 +1,496 @@
+[
+  {
+    "label": "IS_CONTROL_static_expiry",
+    "trades": 174,
+    "net": 188260.37779776007,
+    "on_margin": 0.06651067829968342,
+    "maxdd": 0.01079155825669901,
+    "win_rate": 0.7758620689655172,
+    "profit_factor": 1.3948698867264493,
+    "worst_trade_pct": -0.004348363177745,
+    "exit_rules": {
+      "exit_time": 134,
+      "stop_move_from_entry": 20,
+      "profit_take": 19,
+      "unknown": 1
+    }
+  },
+  {
+    "label": "IS_CONTROL_static_alltenor",
+    "trades": 771,
+    "net": 84628.9838589672,
+    "on_margin": 0.02989864987055093,
+    "maxdd": 0.01659788629379945,
+    "win_rate": 0.6446173800259404,
+    "profit_factor": 1.0569157277171435,
+    "worst_trade_pct": -0.004348363177745,
+    "exit_rules": {
+      "exit_time": 639,
+      "stop_move_from_entry": 54,
+      "unknown": 30,
+      "profit_take": 16,
+      "carried_overnight_forced_close": 32
+    }
+  },
+  {
+    "label": "IS_atr0.5_exp",
+    "trades": 115,
+    "net": 10363.21722525172,
+    "on_margin": 0.003829852544215214,
+    "maxdd": 0.004921674972488624,
+    "win_rate": 0.7043478260869566,
+    "profit_factor": 1.0437216584864475,
+    "worst_trade_pct": -0.003965400693216,
+    "exit_rules": {
+      "exit_time": 68,
+      "stop_spot_move": 9,
+      "profit_take": 38
+    }
+  },
+  {
+    "label": "IS_atr0.75_exp",
+    "trades": 71,
+    "net": 16745.991756796837,
+    "on_margin": 0.006188684241694794,
+    "maxdd": 0.003783465929110669,
+    "win_rate": 0.7605633802816901,
+    "profit_factor": 1.1258212875073959,
+    "worst_trade_pct": -0.0037889704138399996,
+    "exit_rules": {
+      "exit_time": 48,
+      "profit_take": 17,
+      "stop_spot_move": 6
+    }
+  },
+  {
+    "label": "IS_atr1_exp",
+    "trades": 42,
+    "net": 47575.890577295795,
+    "on_margin": 0.03356188817100669,
+    "maxdd": 0.001412809658543481,
+    "win_rate": 0.7380952380952381,
+    "profit_factor": 2.2281878084374966,
+    "worst_trade_pct": -0.0012393628089449999,
+    "exit_rules": {
+      "profit_take": 10,
+      "exit_time": 30,
+      "stop_spot_move": 2
+    }
+  },
+  {
+    "label": "IS_boll1_exp",
+    "trades": 77,
+    "net": 4757.594998592511,
+    "on_margin": 0.0017582269013243159,
+    "maxdd": 0.004431440572148009,
+    "win_rate": 0.7662337662337663,
+    "profit_factor": 1.0298242259224488,
+    "worst_trade_pct": -0.003965400693216,
+    "exit_rules": {
+      "exit_time": 48,
+      "profit_take": 23,
+      "stop_spot_move": 6
+    }
+  },
+  {
+    "label": "IS_boll1.5_exp",
+    "trades": 44,
+    "net": 72570.6834232714,
+    "on_margin": 0.05209100960886697,
+    "maxdd": 0.00123410584737544,
+    "win_rate": 0.8181818181818182,
+    "profit_factor": 3.484381637878106,
+    "worst_trade_pct": -0.0012393628089449999,
+    "exit_rules": {
+      "profit_take": 11,
+      "exit_time": 32,
+      "stop_spot_move": 1
+    }
+  },
+  {
+    "label": "IS_boll2_exp",
+    "trades": 18,
+    "net": 1985.191450741142,
+    "on_margin": 0.0014390413116101399,
+    "maxdd": 0.0014951990832128433,
+    "win_rate": 0.6666666666666666,
+    "profit_factor": 1.062081645392229,
+    "worst_trade_pct": -0.0014957154118345,
+    "exit_rules": {
+      "exit_time": 13,
+      "stop_spot_move": 1,
+      "profit_take": 4
+    }
+  },
+  {
+    "label": "IS_atr0.5_all",
+    "trades": 550,
+    "net": -17525.43092817068,
+    "on_margin": -0.004298222555540609,
+    "maxdd": 0.020867209888538386,
+    "win_rate": 0.58,
+    "profit_factor": 0.7218746309914957,
+    "worst_trade_pct": -0.004455952244251,
+    "exit_rules": {
+      "exit_time": 448,
+      "stop_spot_move": 44,
+      "filled_away": 20,
+      "profit_take": 38
+    }
+  },
+  {
+    "label": "IS_atr0.75_all",
+    "trades": 301,
+    "net": -65700.8614187967,
+    "on_margin": -0.0241703264495588,
+    "maxdd": 0.014911488845047467,
+    "win_rate": 0.5681063122923588,
+    "profit_factor": 0.6385310423856405,
+    "worst_trade_pct": -0.0037889704138399996,
+    "exit_rules": {
+      "exit_time": 249,
+      "stop_spot_move": 23,
+      "filled_away": 12,
+      "profit_take": 17
+    }
+  },
+  {
+    "label": "IS_atr1_all",
+    "error": "SettlementWindowError: NIFTY 2023-02-02: the settlement window 15:00:00..15:30:00 holds 29 underlying bars, fewer than the 30 the rule requires. Avera"
+  },
+  {
+    "label": "IS_boll1_all",
+    "trades": 355,
+    "net": -158156.04931772687,
+    "on_margin": -0.058183154062700436,
+    "maxdd": 0.0220176910810185,
+    "win_rate": 0.5633802816901409,
+    "profit_factor": 0.6320135357173617,
+    "worst_trade_pct": -0.00473239002409,
+    "exit_rules": {
+      "exit_time": 288,
+      "stop_spot_move": 31,
+      "filled_away": 13,
+      "profit_take": 23
+    }
+  },
+  {
+    "label": "IS_boll1.5_all",
+    "error": "SettlementWindowError: NIFTY 2023-02-02: the settlement window 15:00:00..15:30:00 holds 29 underlying bars, fewer than the 30 the rule requires. Avera"
+  },
+  {
+    "label": "IS_boll2_all",
+    "error": "SettlementWindowError: NIFTY 2023-02-02: the settlement window 15:00:00..15:30:00 holds 29 underlying bars, fewer than the 30 the rule requires. Avera"
+  },
+  {
+    "label": "IS_atr0.75_stop0.50_all",
+    "trades": 301,
+    "net": -63358.66318610683,
+    "on_margin": -0.023308668098797853,
+    "maxdd": 0.01649221766946884,
+    "win_rate": 0.5448504983388704,
+    "profit_factor": 0.6238824944013039,
+    "worst_trade_pct": -0.002568812946948,
+    "exit_rules": {
+      "exit_time": 224,
+      "stop_spot_move": 49,
+      "filled_away": 12,
+      "profit_take": 16
+    }
+  },
+  {
+    "label": "IS_atr0.75_stop1.00_all",
+    "trades": 301,
+    "net": -61613.71411897801,
+    "on_margin": -0.022666728439566988,
+    "maxdd": 0.015846533798171893,
+    "win_rate": 0.5780730897009967,
+    "profit_factor": 0.6477468210392,
+    "worst_trade_pct": -0.0038897680119360004,
+    "exit_rules": {
+      "exit_time": 260,
+      "stop_spot_move": 12,
+      "filled_away": 12,
+      "profit_take": 17
+    }
+  },
+  {
+    "label": "IS_atr0.75_stop1.50_all",
+    "trades": 301,
+    "net": -156688.35517637245,
+    "on_margin": -0.057643212184335775,
+    "maxdd": 0.025007814890365763,
+    "win_rate": 0.5780730897009967,
+    "profit_factor": 0.5760743610905015,
+    "worst_trade_pct": -0.005555116020734501,
+    "exit_rules": {
+      "exit_time": 268,
+      "filled_away": 12,
+      "profit_take": 17,
+      "stop_spot_move": 4
+    }
+  },
+  {
+    "label": "OOS_CONTROL_static_expiry",
+    "trades": 65,
+    "net": 160395.93688106164,
+    "on_margin": 0.05714047203096541,
+    "maxdd": 0.003965997508279729,
+    "win_rate": 0.7538461538461538,
+    "profit_factor": 2.0412016381242366,
+    "worst_trade_pct": -0.0026837915313944,
+    "exit_rules": {
+      "exit_time": 60,
+      "stop_move_from_entry": 5
+    }
+  },
+  {
+    "label": "OOS_CONTROL_static_alltenor",
+    "trades": 304,
+    "net": 147936.5118489135,
+    "on_margin": 0.052701846954699955,
+    "maxdd": 0.004362672604021648,
+    "win_rate": 0.6513157894736842,
+    "profit_factor": 1.3349561393335874,
+    "worst_trade_pct": -0.0034299362107862,
+    "exit_rules": {
+      "exit_time": 263,
+      "stop_move_from_entry": 8,
+      "unknown": 12,
+      "carried_overnight_forced_close": 21
+    }
+  },
+  {
+    "label": "OOS_atr0.5_exp",
+    "trades": 47,
+    "net": 144252.7242764756,
+    "on_margin": 0.054913810538725336,
+    "maxdd": 0.001977690183991222,
+    "win_rate": 0.8297872340425532,
+    "profit_factor": 3.3279151215984064,
+    "worst_trade_pct": -0.0017724114750235,
+    "exit_rules": {
+      "stop_spot_move": 3,
+      "exit_time": 25,
+      "profit_take": 19
+    }
+  },
+  {
+    "label": "OOS_atr0.75_exp",
+    "trades": 27,
+    "net": 48629.78698301874,
+    "on_margin": 0.034983431990582146,
+    "maxdd": 0.0030408304071182527,
+    "win_rate": 0.7777777777777778,
+    "profit_factor": 1.9901569073744234,
+    "worst_trade_pct": -0.0030541418653054,
+    "exit_rules": {
+      "stop_spot_move": 3,
+      "profit_take": 8,
+      "exit_time": 16
+    }
+  },
+  {
+    "label": "OOS_atr1_exp",
+    "trades": 16,
+    "net": 45115.79196583852,
+    "on_margin": 0.032983388731029926,
+    "maxdd": 0.0006714757504751034,
+    "win_rate": 0.75,
+    "profit_factor": 3.894527548602655,
+    "worst_trade_pct": -0.0006687415548928,
+    "exit_rules": {
+      "stop_spot_move": 2,
+      "exit_time": 10,
+      "profit_take": 4
+    }
+  },
+  {
+    "label": "OOS_boll1_exp",
+    "trades": 31,
+    "net": 41539.4745052252,
+    "on_margin": 0.01581315600311434,
+    "maxdd": 0.0030390445583283257,
+    "win_rate": 0.7419354838709677,
+    "profit_factor": 1.5954930463580548,
+    "worst_trade_pct": -0.0030541418653054,
+    "exit_rules": {
+      "stop_spot_move": 3,
+      "profit_take": 11,
+      "exit_time": 17
+    }
+  },
+  {
+    "label": "OOS_boll1.5_exp",
+    "trades": 16,
+    "net": 42682.88123923913,
+    "on_margin": 0.031204729047873258,
+    "maxdd": 0.000673197783202632,
+    "win_rate": 0.75,
+    "profit_factor": 3.7248277181469716,
+    "worst_trade_pct": -0.0006765266215276,
+    "exit_rules": {
+      "stop_spot_move": 2,
+      "profit_take": 6,
+      "exit_time": 8
+    }
+  },
+  {
+    "label": "OOS_boll2_exp",
+    "trades": 10,
+    "net": -8665.372131532058,
+    "on_margin": -0.006335106291157913,
+    "maxdd": 0.0027955455942866303,
+    "win_rate": 0.6,
+    "profit_factor": 0.7411109664204756,
+    "worst_trade_pct": -0.0021336885027091,
+    "exit_rules": {
+      "stop_spot_move": 2,
+      "exit_time": 7,
+      "profit_take": 1
+    }
+  },
+  {
+    "label": "OOS_atr0.5_all",
+    "trades": 210,
+    "net": -6586.88625209406,
+    "on_margin": -0.0016162221460285728,
+    "maxdd": 0.017572118016508487,
+    "win_rate": 0.5761904761904761,
+    "profit_factor": 0.9582379155841904,
+    "worst_trade_pct": -0.0029845535113924002,
+    "exit_rules": {
+      "stop_spot_move": 7,
+      "exit_time": 178,
+      "filled_away": 6,
+      "profit_take": 19
+    }
+  },
+  {
+    "label": "OOS_atr0.75_all",
+    "trades": 128,
+    "net": 56772.47082073428,
+    "on_margin": 0.015969792313446547,
+    "maxdd": 0.004829161913991655,
+    "win_rate": 0.609375,
+    "profit_factor": 0.9087672272993073,
+    "worst_trade_pct": -0.0030541418653054,
+    "exit_rules": {
+      "stop_spot_move": 5,
+      "exit_time": 112,
+      "filled_away": 3,
+      "profit_take": 8
+    }
+  },
+  {
+    "label": "OOS_atr1_all",
+    "trades": 69,
+    "net": 113685.15537781827,
+    "on_margin": 0.04796853900119308,
+    "maxdd": 0.003373770715288206,
+    "win_rate": 0.6376811594202898,
+    "profit_factor": 1.4061046510138167,
+    "worst_trade_pct": -0.0029845535113924002,
+    "exit_rules": {
+      "exit_time": 60,
+      "stop_spot_move": 3,
+      "filled_away": 2,
+      "profit_take": 4
+    }
+  },
+  {
+    "label": "OOS_boll1_all",
+    "trades": 144,
+    "net": 16120.007538262755,
+    "on_margin": 0.0038999902684795,
+    "maxdd": 0.009240023044265055,
+    "win_rate": 0.6041666666666666,
+    "profit_factor": 0.7877468861243269,
+    "worst_trade_pct": -0.0030541418653054,
+    "exit_rules": {
+      "stop_spot_move": 6,
+      "exit_time": 123,
+      "filled_away": 4,
+      "profit_take": 11
+    }
+  },
+  {
+    "label": "OOS_boll1.5_all",
+    "trades": 70,
+    "net": 105467.93936227635,
+    "on_margin": 0.04450135064566166,
+    "maxdd": 0.002775085303311963,
+    "win_rate": 0.6285714285714286,
+    "profit_factor": 1.3406880405351835,
+    "worst_trade_pct": -0.0022275343736812,
+    "exit_rules": {
+      "exit_time": 59,
+      "stop_spot_move": 3,
+      "filled_away": 2,
+      "profit_take": 6
+    }
+  },
+  {
+    "label": "OOS_boll2_all",
+    "trades": 37,
+    "net": 3293.523749200627,
+    "on_margin": 0.0024078392372457683,
+    "maxdd": 0.0033000936895072022,
+    "win_rate": 0.5945945945945946,
+    "profit_factor": 0.8454291417961993,
+    "worst_trade_pct": -0.0021336885027091,
+    "exit_rules": {
+      "exit_time": 32,
+      "stop_spot_move": 2,
+      "filled_away": 2,
+      "profit_take": 1
+    }
+  },
+  {
+    "label": "OOS_atr0.75_stop0.50_all",
+    "trades": 128,
+    "net": 44319.4374837745,
+    "on_margin": 0.012466820658546469,
+    "maxdd": 0.003808245392892108,
+    "win_rate": 0.609375,
+    "profit_factor": 0.8613655449052989,
+    "worst_trade_pct": -0.0024695246652892003,
+    "exit_rules": {
+      "stop_spot_move": 12,
+      "exit_time": 105,
+      "filled_away": 3,
+      "profit_take": 8
+    }
+  },
+  {
+    "label": "OOS_atr0.75_stop1.00_all",
+    "trades": 128,
+    "net": 71833.16283557378,
+    "on_margin": 0.020206284403657442,
+    "maxdd": 0.0036539757746395416,
+    "win_rate": 0.6171875,
+    "profit_factor": 0.9736606880639468,
+    "worst_trade_pct": -0.0032440188012853003,
+    "exit_rules": {
+      "exit_time": 114,
+      "stop_spot_move": 3,
+      "filled_away": 3,
+      "profit_take": 8
+    }
+  },
+  {
+    "label": "OOS_atr0.75_stop1.50_all",
+    "trades": 128,
+    "net": 59679.26241427474,
+    "on_margin": 0.016787457237594252,
+    "maxdd": 0.004097075386510829,
+    "win_rate": 0.6171875,
+    "profit_factor": 0.9234814384467678,
+    "worst_trade_pct": -0.0033396112765090003,
+    "exit_rules": {
+      "exit_time": 117,
+      "filled_away": 3,
+      "profit_take": 8
+    }
+  }
+]

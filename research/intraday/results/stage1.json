@@ -1,0 +1,806 @@
+[
+  {
+    "label": "strike_d0.08",
+    "trades": 845,
+    "annualised": 0.004619822287264652,
+    "maxdd": 0.009169510999075758,
+    "win_rate": 0.6189349112426036,
+    "reward_to_risk": 0.08181455876267743,
+    "profit_factor": 1.2146996961318708,
+    "expectancy": 298.6211589569154,
+    "worst_trade_pct": -0.004095419893684801,
+    "sharpe": 0.7275062179548298,
+    "carried_overnight": 174,
+    "exit_rules": {
+      "stop_move_from_entry": 181,
+      "profit_take": 143,
+      "exit_time": 310,
+      "unknown": 37,
+      "carried_overnight_forced_close": 174
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -669901.285189935,
+      "profit_take": 345013.1745258807,
+      "exit_time": 282524.10318546207,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 294698.8867971858
+    },
+    "median_credit_pct_of_spot": 0.0009568727922052714
+  },
+  {
+    "label": "strike_d0.12",
+    "trades": 1000,
+    "annualised": 0.00513713122396009,
+    "maxdd": 0.013993884489072992,
+    "win_rate": 0.582,
+    "reward_to_risk": 0.06770127468000575,
+    "profit_factor": 1.1619647719617363,
+    "expectancy": 326.975420546913,
+    "worst_trade_pct": -0.0049570155672200005,
+    "sharpe": 0.5310927283410551,
+    "carried_overnight": 118,
+    "exit_rules": {
+      "stop_move_from_entry": 289,
+      "profit_take": 169,
+      "exit_time": 385,
+      "unknown": 39,
+      "carried_overnight_forced_close": 118
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1299439.8689088041,
+      "profit_take": 711848.476993484,
+      "exit_time": 703287.8216355763,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 211278.990826658
+    },
+    "median_credit_pct_of_spot": 0.0015091867037611124
+  },
+  {
+    "label": "strike_d0.15",
+    "trades": 1057,
+    "annualised": 0.002077094254110401,
+    "maxdd": 0.019236771550947013,
+    "win_rate": 0.5789971617786187,
+    "reward_to_risk": 0.019962704379274852,
+    "profit_factor": 1.0474170304020078,
+    "expectancy": 124.01582600495645,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.16792794231536792,
+    "carried_overnight": 72,
+    "exit_rules": {
+      "stop_move_from_entry": 355,
+      "exit_time": 425,
+      "profit_take": 164,
+      "unknown": 41,
+      "carried_overnight_forced_close": 72
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1906195.7395458813,
+      "exit_time": 1116078.4503990284,
+      "profit_take": 873699.6417267206,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 47502.375507372
+    },
+    "median_credit_pct_of_spot": 0.00191931520672289
+  },
+  {
+    "label": "strike_d0.20",
+    "trades": 1136,
+    "annualised": -0.005497382921660576,
+    "maxdd": 0.05153239735624315,
+    "win_rate": 0.5448943661971831,
+    "reward_to_risk": -0.028443122547554787,
+    "profit_factor": 0.9375021523906727,
+    "expectancy": -207.58457080760832,
+    "worst_trade_pct": -0.0107368182501855,
+    "sharpe": -0.3414775007408025,
+    "carried_overnight": 33,
+    "exit_rules": {
+      "stop_move_from_entry": 461,
+      "exit_time": 450,
+      "profit_take": 151,
+      "unknown": 41,
+      "carried_overnight_forced_close": 33
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -2793545.9741029684,
+      "exit_time": 1540617.8153318288,
+      "profit_take": 1099720.0343116503,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": -82607.94797795605
+    },
+    "median_credit_pct_of_spot": 0.0027367594012113732
+  },
+  {
+    "label": "strike_d0.25",
+    "trades": 1190,
+    "annualised": -0.0020048877177968327,
+    "maxdd": 0.04487985899566601,
+    "win_rate": 0.5411764705882353,
+    "reward_to_risk": 0.007300765591727614,
+    "profit_factor": 1.0159119250076114,
+    "expectancy": 59.2062900708375,
+    "worst_trade_pct": -0.011481247045123601,
+    "sharpe": -0.10626787157706921,
+    "carried_overnight": 11,
+    "exit_rules": {
+      "stop_move_from_entry": 516,
+      "exit_time": 472,
+      "profit_take": 150,
+      "unknown": 41,
+      "carried_overnight_forced_close": 11
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -3553557.83344233,
+      "exit_time": 1970504.7695452254,
+      "profit_take": 1403567.67729541,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 249940.87178598595
+    },
+    "median_credit_pct_of_spot": 0.0036411914030040444
+  },
+  {
+    "label": "stop_move0.30pct",
+    "trades": 1081,
+    "annualised": -0.0036645951586498082,
+    "maxdd": 0.038864542207033455,
+    "win_rate": 0.46993524514338575,
+    "reward_to_risk": -0.03767648072679551,
+    "profit_factor": 0.9289209848766738,
+    "expectancy": -143.39824515053886,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": -0.3056866709722329,
+    "carried_overnight": 56,
+    "exit_rules": {
+      "stop_move_from_entry": 696,
+      "exit_time": 183,
+      "profit_take": 105,
+      "unknown": 41,
+      "carried_overnight_forced_close": 56
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1317314.1325539732,
+      "exit_time": 587734.8326462543,
+      "profit_take": 544554.3667140862,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 30011.430185902027
+    },
+    "median_credit_pct_of_spot": 0.0019187216909914444
+  },
+  {
+    "label": "stop_move0.50pct",
+    "trades": 1057,
+    "annualised": 0.002077094254110401,
+    "maxdd": 0.019236771550947013,
+    "win_rate": 0.5789971617786187,
+    "reward_to_risk": 0.019962704379274852,
+    "profit_factor": 1.0474170304020078,
+    "expectancy": 124.01582600495645,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.16792794231536792,
+    "carried_overnight": 72,
+    "exit_rules": {
+      "stop_move_from_entry": 355,
+      "exit_time": 425,
+      "profit_take": 164,
+      "unknown": 41,
+      "carried_overnight_forced_close": 72
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1906195.7395458813,
+      "exit_time": 1116078.4503990284,
+      "profit_take": 873699.6417267206,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 47502.375507372
+    },
+    "median_credit_pct_of_spot": 0.00191931520672289
+  },
+  {
+    "label": "stop_move0.75pct",
+    "trades": 1044,
+    "annualised": 0.00775821415135125,
+    "maxdd": 0.01739995069791751,
+    "win_rate": 0.6551724137931034,
+    "reward_to_risk": 0.04964989458803548,
+    "profit_factor": 1.143984694305303,
+    "expectancy": 403.4706220992069,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.5404996601923563,
+    "carried_overnight": 88,
+    "exit_rules": {
+      "exit_time": 596,
+      "stop_move_from_entry": 121,
+      "profit_take": 198,
+      "unknown": 41,
+      "carried_overnight_forced_close": 88
+    },
+    "exit_pnl": {
+      "exit_time": 914735.4720986735,
+      "stop_move_from_entry": -1466769.3454448362,
+      "profit_take": 1058931.0900909437,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": -85673.88727320853
+    },
+    "median_credit_pct_of_spot": 0.0019206599213475858
+  },
+  {
+    "label": "stop_move1.00pct",
+    "trades": 1036,
+    "annualised": 0.0061857732175345514,
+    "maxdd": 0.024874960779723045,
+    "win_rate": 0.6708494208494209,
+    "reward_to_risk": 0.03668113328366642,
+    "profit_factor": 1.111441800826623,
+    "expectancy": 328.78955169288804,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.40371552243320646,
+    "carried_overnight": 95,
+    "exit_rules": {
+      "exit_time": 649,
+      "stop_move_from_entry": 47,
+      "profit_take": 204,
+      "unknown": 41,
+      "carried_overnight_forced_close": 95
+    },
+    "exit_pnl": {
+      "exit_time": 454669.8427593457,
+      "stop_move_from_entry": -1013774.2797452959,
+      "profit_take": 1080617.3242512876,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": -180886.91171150602
+    },
+    "median_credit_pct_of_spot": 0.0019206599213475858
+  },
+  {
+    "label": "stop_move1.50pct",
+    "trades": 1034,
+    "annualised": 0.002675766291632131,
+    "maxdd": 0.04022582316239364,
+    "win_rate": 0.6750483558994197,
+    "reward_to_risk": 0.015333841099450954,
+    "profit_factor": 1.0471880705262866,
+    "expectancy": 147.2444774148356,
+    "worst_trade_pct": -0.012545913326292001,
+    "sharpe": 0.1571000178873705,
+    "carried_overnight": 102,
+    "exit_rules": {
+      "exit_time": 682,
+      "stop_move_from_entry": 4,
+      "profit_take": 205,
+      "unknown": 41,
+      "carried_overnight_forced_close": 102
+    },
+    "exit_pnl": {
+      "exit_time": -212195.25273004101,
+      "stop_move_from_entry": -182693.996091505,
+      "profit_take": 1079898.7490235576,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": -532758.7105550717
+    },
+    "median_credit_pct_of_spot": 0.0019206599213475858
+  },
+  {
+    "label": "stop_strike50",
+    "trades": 1044,
+    "annualised": 0.006324175695028966,
+    "maxdd": 0.011496284382644882,
+    "win_rate": 0.5881226053639846,
+    "reward_to_risk": 0.05419812261793712,
+    "profit_factor": 1.1315880000305263,
+    "expectancy": 323.0327681490565,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.48398033063086593,
+    "carried_overnight": 89,
+    "exit_rules": {
+      "exit_time": 531,
+      "stop_strike_breach": 264,
+      "profit_take": 119,
+      "unknown": 41,
+      "carried_overnight_forced_close": 89
+    },
+    "exit_pnl": {
+      "exit_time": 1183168.357078757,
+      "stop_strike_breach": -1332172.08015209,
+      "profit_take": 620508.6921223932,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": -134258.75910144357
+    },
+    "median_credit_pct_of_spot": 0.0019188404012988485
+  },
+  {
+    "label": "stop_strike75",
+    "trades": 1037,
+    "annualised": 0.005944387774089455,
+    "maxdd": 0.011723790764617601,
+    "win_rate": 0.6297010607521697,
+    "reward_to_risk": 0.04238547411589918,
+    "profit_factor": 1.1144628558806966,
+    "expectancy": 306.68310673589,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.4303607037240556,
+    "carried_overnight": 97,
+    "exit_rules": {
+      "exit_time": 619,
+      "stop_strike_breach": 122,
+      "profit_take": 158,
+      "unknown": 41,
+      "carried_overnight_forced_close": 97
+    },
+    "exit_pnl": {
+      "exit_time": 927308.7277934448,
+      "stop_strike_breach": -1184022.9332651326,
+      "profit_take": 790917.6106740534,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": -216173.02351724706
+    },
+    "median_credit_pct_of_spot": 0.001920364050056883
+  },
+  {
+    "label": "stop_strike100",
+    "trades": 1034,
+    "annualised": 0.004777660386128257,
+    "maxdd": 0.025345083511111824,
+    "win_rate": 0.6537717601547389,
+    "reward_to_risk": 0.03003135099780264,
+    "profit_factor": 1.086738594781363,
+    "expectancy": 250.10522275417262,
+    "worst_trade_pct": -0.011242278526142499,
+    "sharpe": 0.3112908367263589,
+    "carried_overnight": 100,
+    "exit_rules": {
+      "exit_time": 645,
+      "stop_strike_breach": 63,
+      "profit_take": 185,
+      "unknown": 41,
+      "carried_overnight_forced_close": 100
+    },
+    "exit_pnl": {
+      "exit_time": 638600.5919843367,
+      "stop_strike_breach": -899230.2915083923,
+      "profit_take": 950384.6512203319,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": -431146.1513684622
+    },
+    "median_credit_pct_of_spot": 0.0019206599213475858
+  },
+  {
+    "label": "entry_0920",
+    "trades": 1069,
+    "annualised": 0.004810254895295296,
+    "maxdd": 0.02193566883604481,
+    "win_rate": 0.5724976613657624,
+    "reward_to_risk": 0.0419714854578434,
+    "profit_factor": 1.0981783762679094,
+    "expectancy": 253.54391842431392,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.38739390183831335,
+    "carried_overnight": 73,
+    "exit_rules": {
+      "stop_move_from_entry": 408,
+      "exit_time": 381,
+      "profit_take": 166,
+      "carried_overnight_forced_close": 73,
+      "unknown": 41
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1909015.390565663,
+      "exit_time": 1155340.7322177805,
+      "profit_take": 947182.7881830978,
+      "carried_overnight_forced_close": 77530.31896037603,
+      "unknown": 0.0
+    },
+    "median_credit_pct_of_spot": 0.0019498742139967833
+  },
+  {
+    "label": "entry_0945",
+    "trades": 1057,
+    "annualised": 0.002077094254110401,
+    "maxdd": 0.019236771550947013,
+    "win_rate": 0.5789971617786187,
+    "reward_to_risk": 0.019962704379274852,
+    "profit_factor": 1.0474170304020078,
+    "expectancy": 124.01582600495645,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.16792794231536792,
+    "carried_overnight": 72,
+    "exit_rules": {
+      "stop_move_from_entry": 355,
+      "exit_time": 425,
+      "profit_take": 164,
+      "unknown": 41,
+      "carried_overnight_forced_close": 72
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1906195.7395458813,
+      "exit_time": 1116078.4503990284,
+      "profit_take": 873699.6417267206,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 47502.375507372
+    },
+    "median_credit_pct_of_spot": 0.00191931520672289
+  },
+  {
+    "label": "entry_1015",
+    "trades": 1070,
+    "annualised": -0.0010187372524899097,
+    "maxdd": 0.034699192942424344,
+    "win_rate": 0.5785046728971963,
+    "reward_to_risk": -0.004355849456760839,
+    "profit_factor": 0.9896657230183279,
+    "expectancy": -25.79634305047002,
+    "worst_trade_pct": -0.0076140821073545015,
+    "sharpe": -0.07562410502041596,
+    "carried_overnight": 67,
+    "exit_rules": {
+      "stop_move_from_entry": 318,
+      "exit_time": 487,
+      "profit_take": 157,
+      "unknown": 41,
+      "carried_overnight_forced_close": 67
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1826234.4236823707,
+      "exit_time": 1062044.8831823121,
+      "profit_take": 764460.2807857814,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": -27872.827349726474
+    },
+    "median_credit_pct_of_spot": 0.0019192154648790382
+  },
+  {
+    "label": "entry_1100",
+    "trades": 1077,
+    "annualised": -0.009757349075623312,
+    "maxdd": 0.053402005485218534,
+    "win_rate": 0.596100278551532,
+    "reward_to_risk": -0.0637514149904537,
+    "profit_factor": 0.842160289782256,
+    "expectancy": -405.6900319316063,
+    "worst_trade_pct": -0.007561030048125,
+    "sharpe": -0.8202215150303754,
+    "carried_overnight": 63,
+    "exit_rules": {
+      "stop_move_from_entry": 285,
+      "exit_time": 535,
+      "profit_take": 153,
+      "unknown": 41,
+      "carried_overnight_forced_close": 63
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1951181.775613966,
+      "exit_time": 764857.8824459421,
+      "profit_take": 668578.8858051529,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 80816.84297253103
+    },
+    "median_credit_pct_of_spot": 0.001874355363117084
+  },
+  {
+    "label": "entry_1200",
+    "trades": 1079,
+    "annualised": 0.0017709933536864675,
+    "maxdd": 0.013735729706589369,
+    "win_rate": 0.6190917516218721,
+    "reward_to_risk": 0.020456466504663588,
+    "profit_factor": 1.053704446127815,
+    "expectancy": 97.98770939034937,
+    "worst_trade_pct": -0.004348363177745,
+    "sharpe": 0.19698203880414805,
+    "carried_overnight": 50,
+    "exit_rules": {
+      "stop_move_from_entry": 200,
+      "exit_time": 624,
+      "profit_take": 163,
+      "unknown": 42,
+      "carried_overnight_forced_close": 50
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1288117.1930724583,
+      "exit_time": 507564.21825561766,
+      "profit_take": 646542.0365121374,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 239739.67673689002
+    },
+    "median_credit_pct_of_spot": 0.0018423771039679164
+  },
+  {
+    "label": "entry_1300",
+    "trades": 1086,
+    "annualised": 0.007486501322497396,
+    "maxdd": 0.007714798894699274,
+    "win_rate": 0.6215469613259669,
+    "reward_to_risk": 0.10129360223713631,
+    "profit_factor": 1.2676517081010463,
+    "expectancy": 359.2526928975348,
+    "worst_trade_pct": -0.004332795800153,
+    "sharpe": 1.0334197872158735,
+    "carried_overnight": 40,
+    "exit_rules": {
+      "exit_time": 734,
+      "stop_move_from_entry": 124,
+      "profit_take": 147,
+      "unknown": 41,
+      "carried_overnight_forced_close": 40
+    },
+    "exit_pnl": {
+      "exit_time": 348793.8827297839,
+      "stop_move_from_entry": -795690.066360617,
+      "profit_take": 475413.7450514198,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 361630.8630661359
+    },
+    "median_credit_pct_of_spot": 0.0018107726641207918
+  },
+  {
+    "label": "take25",
+    "trades": 1064,
+    "annualised": -0.0027660090473152765,
+    "maxdd": 0.03784417238612513,
+    "win_rate": 0.6165413533834586,
+    "reward_to_risk": -0.016613544442406238,
+    "profit_factor": 0.9566744821403916,
+    "expectancy": -103.42649035010436,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": -0.20865480107125803,
+    "carried_overnight": 66,
+    "exit_rules": {
+      "stop_move_from_entry": 296,
+      "profit_take": 425,
+      "exit_time": 236,
+      "unknown": 41,
+      "carried_overnight_forced_close": 66
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1762195.7674669132,
+      "profit_take": 1431721.5205376206,
+      "exit_time": 214061.0007397726,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 6367.460457009021
+    },
+    "median_credit_pct_of_spot": 0.0019191371591645715
+  },
+  {
+    "label": "take40",
+    "trades": 1058,
+    "annualised": 0.0021797640993204137,
+    "maxdd": 0.02115127923650429,
+    "win_rate": 0.5907372400756143,
+    "reward_to_risk": 0.02102755321758189,
+    "profit_factor": 1.0513791023191723,
+    "expectancy": 128.77790541035063,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.17928187458158207,
+    "carried_overnight": 70,
+    "exit_rules": {
+      "stop_move_from_entry": 333,
+      "profit_take": 234,
+      "exit_time": 380,
+      "unknown": 41,
+      "carried_overnight_forced_close": 70
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1796510.2245222186,
+      "profit_take": 1056536.0210590824,
+      "exit_time": 840580.8780491195,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 35640.349338167005
+    },
+    "median_credit_pct_of_spot": 0.0019191371591645715
+  },
+  {
+    "label": "take50",
+    "trades": 1057,
+    "annualised": 0.002077094254110401,
+    "maxdd": 0.019236771550947013,
+    "win_rate": 0.5789971617786187,
+    "reward_to_risk": 0.019962704379274852,
+    "profit_factor": 1.0474170304020078,
+    "expectancy": 124.01582600495645,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.16792794231536792,
+    "carried_overnight": 72,
+    "exit_rules": {
+      "stop_move_from_entry": 355,
+      "exit_time": 425,
+      "profit_take": 164,
+      "unknown": 41,
+      "carried_overnight_forced_close": 72
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1906195.7395458813,
+      "exit_time": 1116078.4503990284,
+      "profit_take": 873699.6417267206,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 47502.375507372
+    },
+    "median_credit_pct_of_spot": 0.00191931520672289
+  },
+  {
+    "label": "take70",
+    "trades": 1057,
+    "annualised": 0.002355786959611361,
+    "maxdd": 0.013835556893383151,
+    "win_rate": 0.5676442762535477,
+    "reward_to_risk": 0.021719822103549658,
+    "profit_factor": 1.0502359999200261,
+    "expectancy": 137.27763053679513,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.18574359534383025,
+    "carried_overnight": 72,
+    "exit_rules": {
+      "stop_move_from_entry": 378,
+      "exit_time": 443,
+      "profit_take": 123,
+      "unknown": 41,
+      "carried_overnight_forced_close": 72
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -2002934.7168253278,
+      "exit_time": 1267484.2554191598,
+      "profit_take": 833050.5413761893,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 47502.375507372
+    },
+    "median_credit_pct_of_spot": 0.00191931520672289
+  },
+  {
+    "label": "take90",
+    "trades": 1057,
+    "annualised": 0.005160360827115573,
+    "maxdd": 0.011735812395799001,
+    "win_rate": 0.565752128666036,
+    "reward_to_risk": 0.04305526980586882,
+    "profit_factor": 1.0991490635834495,
+    "expectancy": 271.55600925630273,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.39124316909851914,
+    "carried_overnight": 72,
+    "exit_rules": {
+      "stop_move_from_entry": 389,
+      "exit_time": 462,
+      "profit_take": 93,
+      "unknown": 41,
+      "carried_overnight_forced_close": 72
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1939594.2237095176,
+      "exit_time": 1396436.4198709156,
+      "profit_take": 782690.1301151419,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 47502.375507372
+    },
+    "median_credit_pct_of_spot": 0.00191931520672289
+  },
+  {
+    "label": "dte_all",
+    "trades": 1057,
+    "annualised": 0.002077094254110401,
+    "maxdd": 0.019236771550947013,
+    "win_rate": 0.5789971617786187,
+    "reward_to_risk": 0.019962704379274852,
+    "profit_factor": 1.0474170304020078,
+    "expectancy": 124.01582600495645,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.16792794231536792,
+    "carried_overnight": 72,
+    "exit_rules": {
+      "stop_move_from_entry": 355,
+      "exit_time": 425,
+      "profit_take": 164,
+      "unknown": 41,
+      "carried_overnight_forced_close": 72
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -1906195.7395458813,
+      "exit_time": 1116078.4503990284,
+      "profit_take": 873699.6417267206,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 47502.375507372
+    },
+    "median_credit_pct_of_spot": 0.00191931520672289
+  },
+  {
+    "label": "dte_0_expiry_day",
+    "trades": 250,
+    "annualised": 0.0029006855959796685,
+    "maxdd": 0.007493085913992107,
+    "win_rate": 0.676,
+    "reward_to_risk": 0.07001086734718684,
+    "profit_factor": 1.2160829239110704,
+    "expectancy": 581.8228971110601,
+    "worst_trade_pct": -0.004165398509225901,
+    "sharpe": 0.5594324419761857,
+    "carried_overnight": 0,
+    "exit_rules": {
+      "stop_move_from_entry": 88,
+      "profit_take": 161,
+      "exit_time": 1
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -645243.6480179933,
+      "profit_take": 795727.8909433985,
+      "exit_time": -5028.51864764
+    },
+    "median_credit_pct_of_spot": 0.0010823325156170257
+  },
+  {
+    "label": "dte_1_2",
+    "trades": 421,
+    "annualised": 0.003093674221541054,
+    "maxdd": 0.015055623870948958,
+    "win_rate": 0.5748218527315915,
+    "reward_to_risk": 0.07821921612492413,
+    "profit_factor": 1.1839681004949334,
+    "expectancy": 456.0155874231554,
+    "worst_trade_pct": -0.00877798548425,
+    "sharpe": 0.35363875464245376,
+    "carried_overnight": 19,
+    "exit_rules": {
+      "stop_move_from_entry": 155,
+      "exit_time": 208,
+      "unknown": 20,
+      "profit_take": 19,
+      "carried_overnight_forced_close": 19
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -700539.4167603435,
+      "exit_time": 673119.0757335052,
+      "unknown": 0.0,
+      "profit_take": 192158.48708522398,
+      "carried_overnight_forced_close": 27244.41624676298
+    },
+    "median_credit_pct_of_spot": 0.0017884270479267966
+  },
+  {
+    "label": "dte_3_4",
+    "trades": 232,
+    "annualised": -0.0018714601887490634,
+    "maxdd": 0.023020129078234208,
+    "win_rate": 0.5474137931034483,
+    "reward_to_risk": 0.09645845024607831,
+    "profit_factor": 1.213127242448478,
+    "expectancy": 481.21841427392667,
+    "worst_trade_pct": -0.0043268491771884,
+    "sharpe": -0.30932438700945347,
+    "carried_overnight": 29,
+    "exit_rules": {
+      "stop_move_from_entry": 78,
+      "exit_time": 116,
+      "unknown": 9,
+      "carried_overnight_forced_close": 29
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -313493.13617144246,
+      "exit_time": 284146.38615424954,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 140989.42212874402
+    },
+    "median_credit_pct_of_spot": 0.002307153350960169
+  },
+  {
+    "label": "dte_5_6",
+    "trades": 257,
+    "annualised": 0.0006124405724903248,
+    "maxdd": 0.01716793329200799,
+    "win_rate": 0.5758754863813229,
+    "reward_to_risk": 0.1325215012720033,
+    "profit_factor": 1.3124589525404113,
+    "expectancy": 703.8865761638036,
+    "worst_trade_pct": -0.0051126456003612,
+    "sharpe": 0.08672320200349821,
+    "carried_overnight": 37,
+    "exit_rules": {
+      "stop_move_from_entry": 70,
+      "exit_time": 138,
+      "unknown": 12,
+      "carried_overnight_forced_close": 37
+    },
+    "exit_pnl": {
+      "stop_move_from_entry": -281205.3765609335,
+      "exit_time": 364850.1865889209,
+      "unknown": 0.0,
+      "carried_overnight_forced_close": 97254.04004611002
+    },
+    "median_credit_pct_of_spot": 0.002589999405775453
+  }
+]

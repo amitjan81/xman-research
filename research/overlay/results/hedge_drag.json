@@ -1,0 +1,36 @@
+{
+  "underlying": "NIFTY",
+  "window": [
+    "2021-06-01",
+    "2026-09-15"
+  ],
+  "years": 5.28952772073922,
+  "portfolio_capital": 10000000.0,
+  "assumptions": {
+    "hedge_otm": 0.09,
+    "coverage_of_pc": 0.55,
+    "buy_at_dte": 45,
+    "roll_at_dte": 15,
+    "note": "Black-Scholes, zero rate, no dividend, on the corpus's own spot path; the hedge's implied volatility is assumed because a 9%-OTM monthly put is outside every captured chain. Statutory costs on the hedge are NOT included; they are small beside the premium and would make the drag worse."
+  },
+  "by_volatility": {
+    "16%": {
+      "cycles": 62,
+      "total_cost_rupees": 225628.22876461712,
+      "annual_cost_rupees": 42655.64728585735,
+      "annual_drag_pct_of_pc": 0.004265564728585735
+    },
+    "20%": {
+      "cycles": 62,
+      "total_cost_rupees": 725821.3312690367,
+      "annual_cost_rupees": 137218.5513695733,
+      "annual_drag_pct_of_pc": 0.01372185513695733
+    },
+    "25%": {
+      "cycles": 62,
+      "total_cost_rupees": 1631115.8240020422,
+      "annual_cost_rupees": 308367.00554696994,
+      "annual_drag_pct_of_pc": 0.030836700554696995
+    }
+  }
+}
